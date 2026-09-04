@@ -31,6 +31,10 @@ export const buildOverlayDataUrl = (): string => {
       * { box-sizing: border-box; margin: 0; padding: 0; }
       html, body { overflow: hidden; background: transparent; }
       body {
+        display: flex;
+        flex-direction: column;
+        align-items: flex-end;
+        gap: 6px;
         font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
         color: var(--fg);
         -webkit-font-smoothing: antialiased;
@@ -120,9 +124,12 @@ export const buildOverlayDataUrl = (): string => {
       }
       #pill .more:hover { background: rgba(255, 255, 255, 0.09); color: var(--fg); }
       #pill .working { color: var(--sky); font-weight: 600; }
+      /* In the flow, not absolutely positioned: the shell clips its own
+         content, and in pill mode it is 45px tall, so an absolute menu was
+         clipped out of existence and could never be clicked. */
       #menu {
         -webkit-app-region: no-drag;
-        position: absolute; top: 38px; right: 10px; width: 214px; z-index: 10;
+        width: 214px; flex: none;
         background: rgba(38, 38, 40, 0.98); border: 1px solid rgba(255, 255, 255, 0.16);
         border-radius: 10px; padding: 5px; display: none;
       }
@@ -160,6 +167,7 @@ export const buildOverlayDataUrl = (): string => {
         </div>
         <div id="items"></div>
       </div>
+    </div>
       <div id="menu">
         <div class="head">Hide the overlay</div>
         <div class="row" data-hide="hour">For 1 hour</div>
@@ -168,7 +176,6 @@ export const buildOverlayDataUrl = (): string => {
         <div class="sep"></div>
         <div class="row" data-settings="1">Notification settings…</div>
       </div>
-    </div>
     <script>
       (function () {
         var bridge = window.t3Overlay;
@@ -245,12 +252,20 @@ export const buildOverlayDataUrl = (): string => {
 
         // The window is sized to whatever the document actually needs, so a
         // single row never gets a scrollbar and a long list never gets cut off.
+        var MENU_GAP = 6;
         var lastWidth = 0;
         var lastHeight = 0;
         function measureAndReport() {
           var rect = document.getElementById("shell").getBoundingClientRect();
           var width = Math.ceil(rect.width);
           var height = Math.ceil(rect.height);
+          // The window has to grow for the menu too, or it opens outside the
+          // window bounds and cannot be clicked.
+          if (menu.classList.contains("open")) {
+            var menuRect = menu.getBoundingClientRect();
+            width = Math.max(width, Math.ceil(menuRect.width));
+            height = height + Math.ceil(menuRect.height) + MENU_GAP;
+          }
           if (width <= 0 || height <= 0) return;
           if (width === lastWidth && height === lastHeight) return;
           lastWidth = width;
@@ -300,12 +315,16 @@ export const buildOverlayDataUrl = (): string => {
 
 export const OVERLAY_WIDTH = 340;
 const OVERLAY_MIN_WIDTH = 120;
+/** The hide menu is 214px plus its border, and must never be clipped. */
+const OVERLAY_MENU_WIDTH = 216;
 
 /** Keeps a reported width inside the window's own bounds. */
 export function clampOverlayWidth(width: number): number {
   if (!Number.isFinite(width)) return OVERLAY_WIDTH;
   return Math.min(OVERLAY_WIDTH, Math.max(OVERLAY_MIN_WIDTH, Math.ceil(width)));
 }
+
+export { OVERLAY_MENU_WIDTH };
 /** Enough for the pill until the page reports what it actually needs. */
 export const OVERLAY_INITIAL_HEIGHT = 44;
 const OVERLAY_MIN_HEIGHT = 36;
