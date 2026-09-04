@@ -28,6 +28,7 @@ function makeInput(overrides: Partial<OverlayVisibilityInput> = {}): OverlayVisi
     appFocused: false,
     unseen: [ITEM],
     workingCount: 2,
+    showIdlePill: true,
     ...overrides,
   };
 }
@@ -44,6 +45,15 @@ describe("resolveOverlayState", () => {
     const state = resolveOverlayState(makeInput({ unseen: [] }));
     expect(state.mode).toBe("pill");
     expect(state.workingCount).toBe(2);
+  });
+
+  it("stays away entirely when the idle pill is switched off and nothing is unseen", () => {
+    const state = resolveOverlayState(makeInput({ unseen: [], showIdlePill: false }));
+    expect(state.mode).toBe("hidden");
+  });
+
+  it("still reports unseen threads when the idle pill is switched off", () => {
+    expect(resolveOverlayState(makeInput({ showIdlePill: false })).mode).toBe("full");
   });
 
   it("hides while the user looks at T3 Code, however much is waiting", () => {

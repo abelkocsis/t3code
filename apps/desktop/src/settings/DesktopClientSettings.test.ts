@@ -38,6 +38,7 @@ const clientSettings: ClientSettings = {
   overlayModeEnabled: false,
   overlayHiddenUntil: null,
   overlayKeepAwake: false,
+  overlayShowIdlePill: false,
   overlayPosition: null,
   desktopNotificationsEnabled: false,
   desktopNotificationTrigger: "always",

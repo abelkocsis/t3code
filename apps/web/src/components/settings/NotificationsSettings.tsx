@@ -251,6 +251,33 @@ export function NotificationsSettings() {
         />
 
         <SettingsRow
+          {...searchableSetting("overlay-idle-pill")}
+          description="With this off the overlay stays off screen until something needs you, instead of resting as a small bar."
+          resetAction={
+            settings.overlayShowIdlePill !== DEFAULT_CLIENT_SETTINGS.overlayShowIdlePill ? (
+              <SettingResetButton
+                label="idle pill"
+                onClick={() =>
+                  updateSettings({
+                    overlayShowIdlePill: DEFAULT_CLIENT_SETTINGS.overlayShowIdlePill,
+                  })
+                }
+              />
+            ) : null
+          }
+          control={
+            <Switch
+              checked={settings.overlayShowIdlePill}
+              disabled={!settings.overlayModeEnabled}
+              onCheckedChange={(checked) =>
+                updateSettings({ overlayShowIdlePill: Boolean(checked) })
+              }
+              aria-label="Show the overlay pill when nothing needs you"
+            />
+          }
+        />
+
+        <SettingsRow
           {...searchableSetting("overlay-keep-awake")}
           description="Hold off display sleep while the overlay is on screen. Closing the lid still sleeps the Mac."
           resetAction={

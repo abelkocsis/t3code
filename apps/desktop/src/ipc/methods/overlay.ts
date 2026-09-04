@@ -1,5 +1,6 @@
 import { DesktopOverlayActionSchema, DesktopOverlayStateSchema } from "@t3tools/contracts";
 import * as Effect from "effect/Effect";
+import * as Option from "effect/Option";
 import * as Schema from "effect/Schema";
 
 import { ipcMain } from "electron";
@@ -39,7 +40,20 @@ export const installOverlayActionForwarding = Effect.fn(
       const listener = (_event: Electron.IpcMainEvent, payload: unknown) => {
         const action = decodeOverlayAction(payload);
         if (action._tag === "None") return;
-        runFork(electronWindow.sendAll(IpcChannels.OVERLAY_ACTION_FORWARD_CHANNEL, action.value));
+        runFork(
+          Effect.gen(function* () {
+            // Opening a thread has to bring the app forward. The renderer can
+            // navigate, but it cannot raise its own window, so a click used to
+            // change the route behind whatever the user was actually looking at.
+            if (action.value.kind === "open-thread" || action.value.kind === "open-settings") {
+              const window = yield* electronWindow.currentMainOrFirst;
+              if (Option.isSome(window)) {
+                yield* electronWindow.reveal(window.value);
+              }
+            }
+            yield* electronWindow.sendAll(IpcChannels.OVERLAY_ACTION_FORWARD_CHANNEL, action.value);
+          }),
+        );
       };
       ipcMain.on(IpcChannels.OVERLAY_ACTION_CHANNEL, listener);
       return listener;
