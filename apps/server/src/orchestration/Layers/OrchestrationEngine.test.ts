@@ -514,8 +514,11 @@ describe("OrchestrationEngine", () => {
       });
 
       const sequence = yield* engine.latestSequence;
+      // Auto-settle is the blocked case now: a user settle stops a live
+      // session rather than refusing, while the timer-driven one still
+      // protects work the user never asked to stop.
       const error = yield* engine
-        .dispatch({ type: "thread.settle", commandId, threadId })
+        .dispatch({ type: "thread.auto-settle", commandId, threadId, snapshotSequence: sequence })
         .pipe(Effect.flip);
       const message =
         "This thread still needs attention. Resolve or interrupt it first, then try again.";
