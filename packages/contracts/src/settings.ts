@@ -150,6 +150,13 @@ export const DEFAULT_ENVIRONMENT_IDENTIFICATION_MODE: EnvironmentIdentificationM
  * When a desktop notification is allowed to appear. "unfocused" is the
  * default: a banner for a thread you are already watching is noise.
  */
+/** Where the overlay window sits, in screen coordinates. */
+export const OverlayWindowPosition = Schema.Struct({
+  x: Schema.Int,
+  y: Schema.Int,
+});
+export type OverlayWindowPosition = typeof OverlayWindowPosition.Type;
+
 export const DesktopNotificationTrigger = Schema.Literals(["unfocused", "always", "never"]);
 export type DesktopNotificationTrigger = typeof DesktopNotificationTrigger.Type;
 export const DEFAULT_DESKTOP_NOTIFICATION_TRIGGER: DesktopNotificationTrigger = "unfocused";
@@ -338,6 +345,18 @@ export const ClientSettingsSchema = Schema.Struct({
       modelOrder: Schema.Array(Schema.String).pipe(Schema.withDecodingDefault(Effect.succeed([]))),
     }),
   ).pipe(Schema.withDecodingDefault(Effect.succeed({}))),
+  // Overlay mode: a small always-on-top window listing the threads the user
+  // has not looked at yet. Desktop-only. `overlayModeEnabled` is the switch
+  // the user owns; `overlayHiddenUntil` is a temporary snooze that expires by
+  // itself, so hiding for an hour never leaves the feature silently off.
+  overlayModeEnabled: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(true))),
+  overlayHiddenUntil: Schema.NullOr(TrimmedNonEmptyString).pipe(
+    Schema.withDecodingDefault(Effect.succeed(null)),
+  ),
+  overlayKeepAwake: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(true))),
+  overlayPosition: Schema.NullOr(OverlayWindowPosition).pipe(
+    Schema.withDecodingDefault(Effect.succeed(null)),
+  ),
   // Desktop notifications. Named to match RelayAgentAwarenessPreferences so
   // the Mac and the iPhone describe the same four phase changes with the same
   // words. Desktop-only: a browser tab has no notifier of its own here.
@@ -1288,6 +1307,10 @@ export const ClientSettingsPatch = Schema.Struct({
       }),
     ),
   ),
+  overlayModeEnabled: Schema.optionalKey(Schema.Boolean),
+  overlayHiddenUntil: Schema.optionalKey(Schema.NullOr(TrimmedNonEmptyString)),
+  overlayKeepAwake: Schema.optionalKey(Schema.Boolean),
+  overlayPosition: Schema.optionalKey(Schema.NullOr(OverlayWindowPosition)),
   desktopNotificationsEnabled: Schema.optionalKey(Schema.Boolean),
   desktopNotificationTrigger: Schema.optionalKey(DesktopNotificationTrigger),
   notifyOnApproval: Schema.optionalKey(Schema.Boolean),

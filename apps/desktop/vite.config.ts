@@ -83,6 +83,13 @@ export default defineConfig({
       outExtensions: () => ({ js: ".cjs" }),
       entry: ["src/preview-pip-preload.ts"],
     },
+    {
+      format: "cjs",
+      outDir: "dist-electron",
+      sourcemap: true,
+      outExtensions: () => ({ js: ".cjs" }),
+      entry: ["src/overlay-preload.ts"],
+    },
   ],
   test: {
     // The Windows lane runs workspace suites concurrently; filesystem-heavy

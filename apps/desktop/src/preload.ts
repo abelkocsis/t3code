@@ -81,6 +81,29 @@ contextBridge.exposeInMainWorld("desktopBridge", {
     ipcRenderer.invoke(IpcChannels.FETCH_SSH_SESSION_STATE_CHANNEL, { httpBaseUrl, bearerToken }),
   issueSshWebSocketTicket: (httpBaseUrl, bearerToken) =>
     ipcRenderer.invoke(IpcChannels.ISSUE_SSH_WEBSOCKET_TOKEN_CHANNEL, { httpBaseUrl, bearerToken }),
+  setOverlayState: (state) => ipcRenderer.invoke(IpcChannels.SET_OVERLAY_STATE_CHANNEL, state),
+  onOverlayAction: (listener) => {
+    const wrappedListener = (_event: Electron.IpcRendererEvent, action: unknown) => {
+      if (typeof action !== "object" || action === null) return;
+      listener(action as Parameters<typeof listener>[0]);
+    };
+
+    ipcRenderer.on(IpcChannels.OVERLAY_ACTION_FORWARD_CHANNEL, wrappedListener);
+    return () => {
+      ipcRenderer.removeListener(IpcChannels.OVERLAY_ACTION_FORWARD_CHANNEL, wrappedListener);
+    };
+  },
+  onOverlayMoved: (listener) => {
+    const wrappedListener = (_event: Electron.IpcRendererEvent, position: unknown) => {
+      if (typeof position !== "object" || position === null) return;
+      listener(position as Parameters<typeof listener>[0]);
+    };
+
+    ipcRenderer.on(IpcChannels.OVERLAY_MOVED_CHANNEL, wrappedListener);
+    return () => {
+      ipcRenderer.removeListener(IpcChannels.OVERLAY_MOVED_CHANNEL, wrappedListener);
+    };
+  },
   showThreadNotification: (notification) =>
     ipcRenderer.invoke(IpcChannels.SHOW_THREAD_NOTIFICATION_CHANNEL, notification),
   setAttentionBadgeCount: (count) =>

@@ -88,6 +88,20 @@ export const SETTINGS_SEARCH_ITEMS = [
     desktopOnly: true,
   },
   {
+    id: "overlay-mode",
+    title: "Overlay mode",
+    to: "/settings/notifications",
+    searchTerms: ["floating window always on top picture in picture pip away"],
+    desktopOnly: true,
+  },
+  {
+    id: "overlay-keep-awake",
+    title: "Keep this Mac awake",
+    to: "/settings/notifications",
+    searchTerms: ["display sleep screensaver prevent power"],
+    desktopOnly: true,
+  },
+  {
     id: "notify-on-approval",
     title: "Approval needed",
     to: "/settings/notifications",

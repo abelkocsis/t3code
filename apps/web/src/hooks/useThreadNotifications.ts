@@ -2,8 +2,6 @@ import { useNavigate } from "@tanstack/react-router";
 import { scopedThreadKey, scopeThreadRef } from "@t3tools/client-runtime/environment";
 import {
   detectPhaseChanges,
-  isThreadAttentionUnseen,
-  resolveThreadAttention,
   type ThreadPhaseMap,
 } from "@t3tools/client-runtime/state/thread-attention";
 import type { EnvironmentId, ThreadId } from "@t3tools/contracts";
@@ -12,7 +10,7 @@ import { useEffect, useEffectEvent, useRef } from "react";
 
 import { buildThreadRouteParams } from "../threadRoutes";
 import { useProjects, useThreadShells } from "../state/entities";
-import { useUiStateStore } from "../uiStateStore";
+import { useAttentionThreads } from "./useAttentionThreads";
 import { useClientSettings } from "./useSettings";
 import {
   buildThreadNotifications,
@@ -32,7 +30,8 @@ export function useThreadNotifications(): void {
   const navigate = useNavigate();
   const threads = useThreadShells();
   const projects = useProjects();
-  const threadLastVisitedAtById = useUiStateStore((state) => state.threadLastVisitedAtById);
+  // Shared with overlay mode so the badge and the overlay can never disagree.
+  const { unseen } = useAttentionThreads();
   const appFocused = useWindowFocused();
   const settings = useClientSettings(selectNotificationSettings);
   // Phases as of the last snapshot. A thread absent from this map is one we
@@ -74,23 +73,15 @@ export function useThreadNotifications(): void {
       void window.desktopBridge?.showThreadNotification?.(notification);
     }
 
-    // The badge counts what the user has not looked at, which is the same set
-    // a future overlay window lists. A thread they opened and chose to come
-    // back to stays visible in the sidebar, but stops adding to the count.
-    const unseenCount = threads.reduce((count, thread) => {
-      const attention = resolveThreadAttention(thread);
-      if (attention === null) return count;
-      const key = scopedThreadKey(scopeThreadRef(thread.environmentId, thread.id));
-      return isThreadAttentionUnseen({ attention, lastVisitedAt: threadLastVisitedAtById[key] })
-        ? count + 1
-        : count;
-    }, 0);
-    void window.desktopBridge?.setAttentionBadgeCount?.(unseenCount);
+    // The badge counts what the user has not looked at, the same set the
+    // overlay lists. A thread they opened and chose to come back to stays
+    // visible in the sidebar, but stops adding to the count.
+    void window.desktopBridge?.setAttentionBadgeCount?.(unseen.length);
   });
 
   useEffect(() => {
     syncNotifications();
-  }, [threads, projects, threadLastVisitedAtById, settings, appFocused]);
+  }, [threads, projects, unseen, settings, appFocused]);
 
   useEffect(() => {
     const subscribe = window.desktopBridge?.onThreadNotificationActivated;
