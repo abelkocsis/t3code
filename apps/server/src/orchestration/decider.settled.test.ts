@@ -258,7 +258,7 @@ it.layer(NodeServices.layer)("settled thread decider", (it) => {
     }),
   );
 
-  it.effect("rejects settling a thread with an open approval or user-input request", () =>
+  it.effect("settling cancels an open approval or user-input request", () =>
     Effect.gen(function* () {
       const requestActivity = (kind: string, requestId: string, at: string) =>
         ({
@@ -271,8 +271,10 @@ it.layer(NodeServices.layer)("settled thread decider", (it) => {
           createdAt: at,
         }) as OrchestrationThread["activities"][number];
 
-      // Open approval request: settle rejected.
-      const openError = yield* decideOrchestrationCommand({
+      // An open approval no longer blocks settle. Putting the thread down
+      // cancels the question rather than refusing, so a thread the agent
+      // stopped to ask about can still be set aside.
+      const withOpenApproval = yield* decideOrchestrationCommand({
         command: {
           type: "thread.settle",
           commandId: CommandId.make("cmd-settle-pending"),
@@ -281,14 +283,22 @@ it.layer(NodeServices.layer)("settled thread decider", (it) => {
         readModel: makeReadModel(null, null, null, [
           requestActivity("approval.requested", "req-1", NOW),
         ]),
-      }).pipe(Effect.flip);
-      expect(openError).toMatchObject({
-        _tag: "OrchestrationThreadSettleBlockedError",
-        threadId: ThreadId.make("thread-1"),
-        message: SETTLE_BLOCKED_MESSAGE,
+      });
+      const approvalEvents = Array.isArray(withOpenApproval)
+        ? withOpenApproval
+        : [withOpenApproval];
+      expect(approvalEvents[0]?.type).toBe("thread.settled");
+      const cancellation = approvalEvents.find(
+        (event) => event.type === "thread.activity-appended",
+      );
+      expect(cancellation?.payload).toMatchObject({
+        activity: {
+          kind: "approval.resolved",
+          payload: { requestId: "req-1", outcome: "cancelled", reason: "settled" },
+        },
       });
 
-      // Same request later resolved: settleable again.
+      // A request already resolved needs no cancellation of its own.
       const settled = yield* decideOrchestrationCommand({
         command: {
           type: "thread.settle",
@@ -302,9 +312,10 @@ it.layer(NodeServices.layer)("settled thread decider", (it) => {
       });
       const settledEvents = Array.isArray(settled) ? settled : [settled];
       expect(settledEvents[0]?.type).toBe("thread.settled");
+      expect(settledEvents.some((event) => event.type === "thread.activity-appended")).toBe(false);
 
-      // Open user-input request: also rejected.
-      const inputError = yield* decideOrchestrationCommand({
+      // An open question is cancelled the same way.
+      const withOpenInput = yield* decideOrchestrationCommand({
         command: {
           type: "thread.settle",
           commandId: CommandId.make("cmd-settle-pending-input"),
@@ -313,11 +324,12 @@ it.layer(NodeServices.layer)("settled thread decider", (it) => {
         readModel: makeReadModel(null, null, null, [
           requestActivity("user-input.requested", "req-2", NOW),
         ]),
-      }).pipe(Effect.flip);
-      expect(inputError).toMatchObject({
-        _tag: "OrchestrationThreadSettleBlockedError",
-        threadId: ThreadId.make("thread-1"),
-        message: SETTLE_BLOCKED_MESSAGE,
+      });
+      const inputEvents = Array.isArray(withOpenInput) ? withOpenInput : [withOpenInput];
+      expect(
+        inputEvents.find((event) => event.type === "thread.activity-appended")?.payload,
+      ).toMatchObject({
+        activity: { kind: "user-input.resolved", payload: { requestId: "req-2" } },
       });
     }),
   );
@@ -466,8 +478,9 @@ it.layer(NodeServices.layer)("settled thread decider", (it) => {
       const settledEvents = Array.isArray(settled) ? settled : [settled];
       expect(settledEvents[0]?.type).toBe("thread.settled");
 
-      // A non-stale respond failure (transient provider error) keeps the
-      // request open: the user can retry, so it is still blocked-on-you.
+      // A non-stale respond failure (transient provider error) leaves the
+      // request open, so settling has to cancel it like any other. The stale
+      // check still matters: a stale failure needs no cancellation at all.
       const stillOpen = yield* decideOrchestrationCommand({
         command: {
           type: "thread.settle",
@@ -480,11 +493,12 @@ it.layer(NodeServices.layer)("settled thread decider", (it) => {
             detail: "provider connection reset",
           }),
         ]),
-      }).pipe(Effect.flip);
-      expect(stillOpen).toMatchObject({
-        _tag: "OrchestrationThreadSettleBlockedError",
-        threadId: ThreadId.make("thread-1"),
-        message: SETTLE_BLOCKED_MESSAGE,
+      });
+      const stillOpenEvents = Array.isArray(stillOpen) ? stillOpen : [stillOpen];
+      expect(
+        stillOpenEvents.find((event) => event.type === "thread.activity-appended")?.payload,
+      ).toMatchObject({
+        activity: { payload: { requestId: "req-3", outcome: "cancelled" } },
       });
     }),
   );
