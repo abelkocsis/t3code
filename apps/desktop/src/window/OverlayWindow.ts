@@ -125,12 +125,15 @@ export const make = Effect.gen(function* () {
             hasShadow: false,
             alwaysOnTop: true,
             autoHideMenuBar: true,
-            // Never takes key status. As a focusable macOS panel it stole key
-            // from the main window, whose renderer then reported itself
-            // unfocused — so the overlay kept showing while the user was
-            // looking straight at T3 Code. A non-focusable window still
-            // receives clicks.
-            focusable: false,
+            // Must stay focusable. A non-focusable window on macOS is
+            // click-through: the panel swallowed nothing and every click
+            // landed on whatever sat behind it, so the menu could not be
+            // opened and clicking the overlay raised the main window instead.
+            focusable: true,
+            // macOS swallows the first click on a window that is not key, so
+            // the overlay needed clicking twice: once to focus, once to act.
+            // The overlay is a glance-and-act surface; every click must count.
+            acceptFirstMouse: true,
             fullscreenable: false,
             maximizable: false,
             minimizable: false,
