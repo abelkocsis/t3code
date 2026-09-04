@@ -198,6 +198,49 @@ export const DesktopThreadNotificationSchema = Schema.Struct({
 });
 export type DesktopThreadNotification = typeof DesktopThreadNotificationSchema.Type;
 
+/**
+ * One row in the overlay window.
+ *
+ * The renderer sends finished text, not thread state: the overlay is a dumb
+ * view with no connection of its own, so it never derives a phase or a label.
+ */
+export const DesktopOverlayItemSchema = Schema.Struct({
+  environmentId: Schema.String,
+  threadId: Schema.String,
+  threadTitle: Schema.String,
+  projectTitle: Schema.NullOr(Schema.String),
+  phaseLabel: Schema.String,
+  /** Drives the row's accent colour. */
+  phase: Schema.Literals(["waiting_for_approval", "waiting_for_input", "completed", "failed"]),
+});
+export type DesktopOverlayItem = typeof DesktopOverlayItemSchema.Type;
+
+export const DesktopOverlayStateSchema = Schema.Struct({
+  mode: Schema.Literals(["hidden", "pill", "full"]),
+  items: Schema.Array(DesktopOverlayItemSchema),
+  workingCount: Schema.Int,
+  /** Whether to hold off display sleep while the overlay shows. */
+  keepAwake: Schema.Boolean,
+  /** Where the user last dragged the overlay, or null for the default corner. */
+  position: Schema.NullOr(Schema.Struct({ x: Schema.Int, y: Schema.Int })),
+});
+export type DesktopOverlayState = typeof DesktopOverlayStateSchema.Type;
+
+/** What the user did in the overlay window. The renderer owns every response. */
+export const DesktopOverlayActionSchema = Schema.Union([
+  Schema.Struct({
+    kind: Schema.Literal("open-thread"),
+    environmentId: Schema.String,
+    threadId: Schema.String,
+  }),
+  Schema.Struct({
+    kind: Schema.Literal("hide"),
+    duration: Schema.Literals(["hour", "tomorrow", "indefinitely"]),
+  }),
+  Schema.Struct({ kind: Schema.Literal("open-settings") }),
+]);
+export type DesktopOverlayAction = typeof DesktopOverlayActionSchema.Type;
+
 /** Which thread the user clicked a banner for. */
 export const DesktopThreadNotificationTargetSchema = Schema.Struct({
   environmentId: Schema.String,
@@ -1150,6 +1193,15 @@ export interface DesktopBridge {
   showThreadNotification?: (notification: DesktopThreadNotification) => Promise<void>;
   /** Dock badge count. Zero clears it. Optional for the same interop reason. */
   setAttentionBadgeCount?: (count: number) => Promise<void>;
+  /**
+   * Drive the always-on-top overlay window. Optional so a newer web client
+   * keeps working inside an older desktop shell, which simply shows no overlay.
+   */
+  setOverlayState?: (state: DesktopOverlayState) => Promise<void>;
+  /** Fires when the user acts in the overlay. Returns an unsubscribe. */
+  onOverlayAction?: (listener: (action: DesktopOverlayAction) => void) => () => void;
+  /** Remembers where the user dragged the overlay. Returns an unsubscribe. */
+  onOverlayMoved?: (listener: (position: { x: number; y: number }) => void) => () => void;
   /** Fires when the user clicks a notification banner. Returns an unsubscribe. */
   onThreadNotificationActivated?: (
     listener: (target: DesktopThreadNotificationTarget) => void,

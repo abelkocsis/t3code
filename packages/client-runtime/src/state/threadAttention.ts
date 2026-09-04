@@ -93,6 +93,20 @@ export function isPhaseNotifiable(
   }
 }
 
+/** Compact phase label for narrow surfaces such as the overlay rows. */
+export function shortAttentionLabel(phase: AttentionPhase): string {
+  switch (phase) {
+    case "waiting_for_approval":
+      return "Approval";
+    case "waiting_for_input":
+      return "Input";
+    case "completed":
+      return "Finished";
+    case "failed":
+      return "Failed";
+  }
+}
+
 export type ThreadPhaseMap = ReadonlyMap<string, AgentAwarenessPhase | null>;
 
 export interface PhaseChangeInput {

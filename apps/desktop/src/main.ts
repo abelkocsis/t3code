@@ -29,6 +29,7 @@ import * as ElectronProtocol from "./electron/ElectronProtocol.ts";
 import * as ElectronSafeStorage from "./electron/ElectronSafeStorage.ts";
 import * as ElectronShell from "./electron/ElectronShell.ts";
 import * as ElectronNotifier from "./electron/ElectronNotifier.ts";
+import * as OverlayWindow from "./window/OverlayWindow.ts";
 import * as ElectronTheme from "./electron/ElectronTheme.ts";
 import * as ElectronUpdater from "./electron/ElectronUpdater.ts";
 import * as ElectronWindow from "./electron/ElectronWindow.ts";
@@ -160,9 +161,14 @@ const desktopPreviewLayer = PreviewManager.layer.pipe(
   Layer.provideMerge(desktopFoundationLayer),
 );
 
-const desktopWindowLayer = DesktopWindow.layer.pipe(
+// Overlay mode needs ElectronWindow to forward drags back to the renderer and
+// DesktopEnvironment to find its preload, so it composes here rather than in
+// the parallel electron merge, where neither would be available yet.
+const desktopWindowLayer = OverlayWindow.layer.pipe(
+  Layer.provideMerge(DesktopWindow.layer),
   Layer.provideMerge(desktopServerExposureLayer),
   Layer.provideMerge(desktopPreviewLayer),
+  Layer.provideMerge(ElectronWindow.layer),
 );
 
 const desktopAppActivationLayer = DesktopAppActivation.layer.pipe(
