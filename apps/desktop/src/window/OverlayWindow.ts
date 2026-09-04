@@ -15,6 +15,7 @@ import * as IpcChannels from "../ipc/channels.ts";
 import {
   buildOverlayDataUrl,
   clampOverlayHeight,
+  estimateOverlayHeight,
   OVERLAY_INITIAL_HEIGHT,
   OVERLAY_WIDTH,
 } from "./OverlayWindowHtml.ts";
@@ -181,8 +182,14 @@ export const make = Effect.gen(function* () {
   const applyState = (window: BrowserWindow, state: DesktopOverlayState) =>
     Effect.try({
       try: () => {
-        // No height is computed here: the page measures its own content and
-        // asks for the size it needs.
+        // An estimate first, the page's own measurement second. The estimate is
+        // rough, but it means a lost or late measurement leaves a usable window
+        // rather than a 44px sliver.
+        const estimate = estimateOverlayHeight(state.mode === "pill" ? 0 : state.items.length);
+        const [, currentHeight] = window.getSize();
+        if (currentHeight !== estimate) {
+          window.setSize(OVERLAY_WIDTH, estimate, false);
+        }
         window.webContents.send(IpcChannels.OVERLAY_RENDER_CHANNEL, state);
         if (!window.isVisible()) {
           // showInactive keeps focus where the user is working. An overlay that
@@ -213,15 +220,11 @@ export const make = Effect.gen(function* () {
       }
       const existing = yield* readWindow;
       const window = existing ?? (yield* create(state.position));
-      // The page only renders once its script is running; a state pushed into a
-      // still-loading window is lost, so wait for the first load to settle.
-      if (window.webContents.isLoading()) {
-        yield* Effect.callback<void>((resume) => {
-          window.webContents.once("did-finish-load", () => {
-            resume(Effect.void);
-          });
-        });
-      }
+      // No waiting for the load here. `create` already awaits loadURL, which
+      // resolves on did-finish-load, so the page is ready. An extra
+      // `once("did-finish-load")` waits for an event that has already fired and
+      // never resumes, and under the sync permit that deadlocks every later
+      // update — the overlay stops appearing at all.
       yield* applyState(window, state);
       yield* powerSaveBlocker.hold(state.keepAwake);
     }).pipe(Effect.catchTag("OverlayWindowError", logAndContinue));
