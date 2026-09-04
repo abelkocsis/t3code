@@ -1382,16 +1382,21 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: {
     // color are stacked as background images.
     props.sortable?.isDragging &&
       "bg-[linear-gradient(var(--sidebar-row-active),var(--sidebar-row-active)),linear-gradient(var(--sidebar),var(--sidebar))] text-sidebar-foreground opacity-100 shadow-lg",
-    // Unread attention gets a coloured edge and a faint tint. A colour change
-    // on the title alone reads as nothing across a room, which is exactly when
-    // this matters.
+    // An unread row is meant to shout. It carries a full-height bar in the
+    // colour of what it wants, a wash of that same colour, and a ring, so it
+    // is unmistakable from across the room. Everything here keys off unread
+    // alone: the status word is untouched, and opening the thread drops the
+    // whole treatment while the word stays.
     unseenPhase !== null &&
-      "before:absolute before:inset-y-1.5 before:left-0 before:w-[3px] before:rounded-full before:content-['']",
-    unseenPhase !== null && !props.isActive && !isSelected && "bg-foreground/[0.045]",
-    unseenPhase === "waiting_for_approval" && "before:bg-amber-500 dark:before:bg-amber-300/90",
-    unseenPhase === "waiting_for_input" && "before:bg-indigo-500 dark:before:bg-indigo-300/90",
-    unseenPhase === "failed" && "before:bg-red-500 dark:before:bg-red-400/90",
-    unseenPhase === "completed" && "before:bg-emerald-500 dark:before:bg-emerald-300/90",
+      "before:absolute before:inset-y-0 before:left-0 before:w-[4px] before:content-[''] ring-1 ring-inset",
+    unseenPhase === "waiting_for_approval" &&
+      "before:bg-amber-500 dark:before:bg-amber-300 bg-amber-500/15 dark:bg-amber-300/15 ring-amber-500/35 dark:ring-amber-300/30",
+    unseenPhase === "waiting_for_input" &&
+      "before:bg-indigo-500 dark:before:bg-indigo-300 bg-indigo-500/15 dark:bg-indigo-300/15 ring-indigo-500/35 dark:ring-indigo-300/30",
+    unseenPhase === "failed" &&
+      "before:bg-red-500 dark:before:bg-red-400 bg-red-500/15 dark:bg-red-400/15 ring-red-500/35 dark:ring-red-400/30",
+    unseenPhase === "completed" &&
+      "before:bg-emerald-500 dark:before:bg-emerald-300 bg-emerald-500/15 dark:bg-emerald-300/15 ring-emerald-500/35 dark:ring-emerald-300/30",
   );
   // dnd-kit props for the row root. Same bag on both variants: every row in
   // the list translates around the gap as the drag passes it.

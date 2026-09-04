@@ -44,6 +44,10 @@ export const buildOverlayDataUrl = (): string => {
       #full.hidden { display: none; }
       #shell {
         width: 100%;
+        /* The whole panel is a drag handle. Only the parts that do something
+           opt out, so grabbing anywhere else moves the window instead of
+           opening a thread. */
+        -webkit-app-region: drag;
         background: var(--bg);
         border: 1px solid rgba(255, 255, 255, 0.16);
         border-radius: 14px;
@@ -83,6 +87,7 @@ export const buildOverlayDataUrl = (): string => {
       #items::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.14); border-radius: 3px; }
       #items::-webkit-scrollbar-track { background: transparent; }
       .item {
+        -webkit-app-region: no-drag;
         display: flex; align-items: center; gap: 9px;
         border: 1px solid var(--border); border-radius: 9px;
         padding: 8px 10px; background: rgba(255, 255, 255, 0.035);
@@ -116,6 +121,7 @@ export const buildOverlayDataUrl = (): string => {
       #pill .more:hover { background: rgba(255, 255, 255, 0.09); color: var(--fg); }
       #pill .working { color: var(--sky); font-weight: 600; }
       #menu {
+        -webkit-app-region: no-drag;
         position: absolute; top: 38px; right: 10px; width: 214px; z-index: 10;
         background: rgba(38, 38, 40, 0.98); border: 1px solid rgba(255, 255, 255, 0.16);
         border-radius: 10px; padding: 5px; display: none;
@@ -213,7 +219,19 @@ export const buildOverlayDataUrl = (): string => {
             phase.className = "phase " + item.phase;
             phase.textContent = item.phaseLabel || labelFor(item.phase);
             row.append(bar, text, phase);
-            row.addEventListener("click", function () {
+            // Only a real click opens a thread. Without this a drag that
+            // happens to finish over a row navigates, so the window can never
+            // be moved by grabbing one.
+            var pressX = 0;
+            var pressY = 0;
+            row.addEventListener("mousedown", function (event) {
+              pressX = event.screenX;
+              pressY = event.screenY;
+            });
+            row.addEventListener("click", function (event) {
+              var moved =
+                Math.abs(event.screenX - pressX) > 4 || Math.abs(event.screenY - pressY) > 4;
+              if (moved) return;
               bridge.send({
                 kind: "open-thread",
                 environmentId: item.environmentId,
