@@ -2,7 +2,11 @@
 import type { DesktopOverlayAction, DesktopOverlayState } from "@t3tools/contracts";
 import { contextBridge, ipcRenderer } from "electron";
 
-import { OVERLAY_ACTION_CHANNEL, OVERLAY_RENDER_CHANNEL } from "./ipc/channels.ts";
+import {
+  OVERLAY_ACTION_CHANNEL,
+  OVERLAY_HEIGHT_CHANNEL,
+  OVERLAY_RENDER_CHANNEL,
+} from "./ipc/channels.ts";
 
 contextBridge.exposeInMainWorld("t3Overlay", {
   onState: (listener: (state: DesktopOverlayState) => void) => {
@@ -15,5 +19,8 @@ contextBridge.exposeInMainWorld("t3Overlay", {
   },
   send: (action: DesktopOverlayAction) => {
     ipcRenderer.send(OVERLAY_ACTION_CHANNEL, action);
+  },
+  reportHeight: (height: number) => {
+    ipcRenderer.send(OVERLAY_HEIGHT_CHANNEL, height);
   },
 });
