@@ -18,6 +18,7 @@ export const OVERLAY_RENDER_CHANNEL = "desktop:overlay-render";
 export const OVERLAY_ACTION_CHANNEL = "desktop:overlay-action";
 export const OVERLAY_ACTION_FORWARD_CHANNEL = "desktop:overlay-action-forward";
 export const OVERLAY_MOVED_CHANNEL = "desktop:overlay-moved";
+export const OVERLAY_HEIGHT_CHANNEL = "desktop:overlay-height";
 export const SHOW_THREAD_NOTIFICATION_CHANNEL = "desktop:show-thread-notification";
 export const SET_ATTENTION_BADGE_COUNT_CHANNEL = "desktop:set-attention-badge-count";
 export const THREAD_NOTIFICATION_ACTIVATED_CHANNEL = "desktop:thread-notification-activated";

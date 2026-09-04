@@ -95,6 +95,13 @@ export const SETTINGS_SEARCH_ITEMS = [
     desktopOnly: true,
   },
   {
+    id: "overlay-idle-pill",
+    title: "Show the pill when nothing needs you",
+    to: "/settings/notifications",
+    searchTerms: ["idle resting bar hide quiet only when"],
+    desktopOnly: true,
+  },
+  {
     id: "overlay-keep-awake",
     title: "Keep this Mac awake",
     to: "/settings/notifications",

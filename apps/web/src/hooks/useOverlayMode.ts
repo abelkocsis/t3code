@@ -37,6 +37,7 @@ export function useOverlayMode(): void {
   const hiddenUntil = useClientSettings((settings) => settings.overlayHiddenUntil);
   const keepAwake = useClientSettings((settings) => settings.overlayKeepAwake);
   const position = useClientSettings((settings) => settings.overlayPosition);
+  const showIdlePill = useClientSettings((settings) => settings.overlayShowIdlePill);
 
   const state = useMemo<DesktopOverlayState>(() => {
     const resolved = resolveOverlayState({
@@ -46,6 +47,7 @@ export function useOverlayMode(): void {
       appFocused,
       unseen,
       workingCount,
+      showIdlePill,
     });
     return {
       mode: resolved.mode,
@@ -61,7 +63,17 @@ export function useOverlayMode(): void {
       keepAwake,
       position,
     };
-  }, [appFocused, enabled, hiddenUntil, keepAwake, nowMinute, position, unseen, workingCount]);
+  }, [
+    appFocused,
+    enabled,
+    hiddenUntil,
+    keepAwake,
+    nowMinute,
+    position,
+    showIdlePill,
+    unseen,
+    workingCount,
+  ]);
 
   useEffect(() => {
     void window.desktopBridge?.setOverlayState?.(state);
