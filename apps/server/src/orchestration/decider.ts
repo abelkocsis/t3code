@@ -466,24 +466,18 @@ export const decideOrchestrationCommand = Effect.fn("decideOrchestrationCommand"
           }),
         );
       }
-      // The server owns settle eligibility. A stale command must not settle
-      // a thread whose session is coming alive or working.
-      if (thread.session?.status === "starting" || thread.session?.status === "running") {
-        return yield* new OrchestrationThreadSettleBlockedError({ threadId: command.threadId });
-      }
       const pendingRequests = openRequests(thread);
-      // Manual settlement dismisses async questions without answering them.
-      // Native callbacks and approvals still need a response or interruption.
-      if (
-        Array.from(pendingRequests.values()).some(
-          (activity) =>
-            command.type === "thread.auto-settle" ||
-            activity.kind !== "user-input.requested" ||
-            !Predicate.isObject(activity.payload) ||
-            activity.payload.responseMode !== "message",
-        )
-      ) {
-        return yield* new OrchestrationThreadSettleBlockedError({ threadId: command.threadId });
+      // Automatic settlement fires on a timer rather than a decision, so it
+      // must never stop live work or dismiss a request the user has not seen.
+      // A settle the user asked for is the opposite: it stops the agent and
+      // cancels whatever it was waiting on, below.
+      if (command.type === "thread.auto-settle") {
+        if (thread.session?.status === "starting" || thread.session?.status === "running") {
+          return yield* new OrchestrationThreadSettleBlockedError({ threadId: command.threadId });
+        }
+        if (pendingRequests.size > 0) {
+          return yield* new OrchestrationThreadSettleBlockedError({ threadId: command.threadId });
+        }
       }
       const occurredAt = yield* nowIso;
       // Settling inside the adoption window would hide just-requested work.
@@ -529,15 +523,49 @@ export const decideOrchestrationCommand = Effect.fn("decideOrchestrationCommand"
           type: "thread.activity-appended",
           payload: {
             threadId: command.threadId,
+            // Upstream only let async questions through here, so the
+            // resolution was always a user-input one. Approvals reach this
+            // point too now, and must be resolved as approvals or the pending
+            // accounting never clears them.
             activity: {
               id: EventId.make(`settle:${command.commandId}:${requestId}`),
-              kind: "user-input.resolved",
-              summary: "User input dismissed",
-              tone: "info",
+              kind:
+                request.kind === "approval.requested" ? "approval.resolved" : "user-input.resolved",
+              summary:
+                request.kind === "approval.requested"
+                  ? "Approval dismissed by settling the thread"
+                  : "User input dismissed",
+              tone: request.kind === "approval.requested" ? "approval" : "info",
               turnId: request.turnId,
               createdAt: occurredAt,
-              payload: { requestId, responseMode: "message" },
+              payload:
+                request.kind === "approval.requested"
+                  ? { requestId, outcome: "cancelled", reason: "settled" }
+                  : { requestId, responseMode: "message" },
             },
+          },
+        });
+      }
+      // Stop the agent as well. A dismissed request with a live session leaves
+      // it blocked on an answer the user has just thrown away, and a running
+      // agent would keep working on a thread they have put down.
+      if (
+        command.type !== "thread.auto-settle" &&
+        thread.session != null &&
+        thread.session.status !== "stopped" &&
+        thread.session.status !== "error"
+      ) {
+        companionEvents.push({
+          ...(yield* withEventBase({
+            aggregateKind: "thread",
+            aggregateId: command.threadId,
+            occurredAt,
+            commandId: command.commandId,
+          })),
+          type: "thread.session-stop-requested" as const,
+          payload: {
+            threadId: command.threadId,
+            createdAt: occurredAt,
           },
         });
       }
