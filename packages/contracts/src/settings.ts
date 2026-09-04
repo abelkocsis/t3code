@@ -354,6 +354,9 @@ export const ClientSettingsSchema = Schema.Struct({
     Schema.withDecodingDefault(Effect.succeed(null)),
   ),
   overlayKeepAwake: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(true))),
+  // Whether the overlay rests as a pill when nothing needs the user. Off means
+  // it only appears when it has something to say.
+  overlayShowIdlePill: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(true))),
   overlayPosition: Schema.NullOr(OverlayWindowPosition).pipe(
     Schema.withDecodingDefault(Effect.succeed(null)),
   ),
@@ -1310,6 +1313,7 @@ export const ClientSettingsPatch = Schema.Struct({
   overlayModeEnabled: Schema.optionalKey(Schema.Boolean),
   overlayHiddenUntil: Schema.optionalKey(Schema.NullOr(TrimmedNonEmptyString)),
   overlayKeepAwake: Schema.optionalKey(Schema.Boolean),
+  overlayShowIdlePill: Schema.optionalKey(Schema.Boolean),
   overlayPosition: Schema.optionalKey(Schema.NullOr(OverlayWindowPosition)),
   desktopNotificationsEnabled: Schema.optionalKey(Schema.Boolean),
   desktopNotificationTrigger: Schema.optionalKey(DesktopNotificationTrigger),

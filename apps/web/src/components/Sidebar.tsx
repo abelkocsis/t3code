@@ -134,6 +134,7 @@ import type { SidebarThreadSummary } from "../types";
 import { cn } from "~/lib/utils";
 import { EnvironmentMachineIcon } from "./EnvironmentMachineIcon";
 import { buildThreadActionMenuItems } from "./threadActionMenu.logic";
+import { resolveThreadAttention } from "@t3tools/client-runtime/state/thread-attention";
 import {
   animateSidebarLayoutChanges,
   applySidebarThreadDrop,
@@ -1085,6 +1086,10 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: {
   // Same semantics as the legacy sidebar (never-visited counts as read):
   // switching sidebars must not light up every historical thread as unread.
   const isUnread = hasUnseenAttention({ ...thread, lastVisitedAt });
+  // The phase behind an unread row, so the accent names what is waiting rather
+  // than only that something is. Null once the user opens the thread: a row
+  // they read but have not answered keeps its status pill and nothing louder.
+  const unseenPhase = isUnread ? (resolveThreadAttention(thread)?.phase ?? null) : null;
   const status = resolveSidebarThreadStatus(thread);
   const isInFlight =
     status === "working" || status === "monitoring" || status === "approval" || status === "input";
@@ -1377,6 +1382,16 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: {
     // color are stacked as background images.
     props.sortable?.isDragging &&
       "bg-[linear-gradient(var(--sidebar-row-active),var(--sidebar-row-active)),linear-gradient(var(--sidebar),var(--sidebar))] text-sidebar-foreground opacity-100 shadow-lg",
+    // Unread attention gets a coloured edge and a faint tint. A colour change
+    // on the title alone reads as nothing across a room, which is exactly when
+    // this matters.
+    unseenPhase !== null &&
+      "before:absolute before:inset-y-1.5 before:left-0 before:w-[3px] before:rounded-full before:content-['']",
+    unseenPhase !== null && !props.isActive && !isSelected && "bg-foreground/[0.045]",
+    unseenPhase === "waiting_for_approval" && "before:bg-amber-500 dark:before:bg-amber-300/90",
+    unseenPhase === "waiting_for_input" && "before:bg-indigo-500 dark:before:bg-indigo-300/90",
+    unseenPhase === "failed" && "before:bg-red-500 dark:before:bg-red-400/90",
+    unseenPhase === "completed" && "before:bg-emerald-500 dark:before:bg-emerald-300/90",
   );
   // dnd-kit props for the row root. Same bag on both variants: every row in
   // the list translates around the gap as the drag passes it.
@@ -1424,7 +1439,7 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: {
     <span
       className={cn(
         "min-w-0 flex-1 text-sm transition-opacity motion-reduce:transition-none",
-        shouldRecede ? "font-normal" : "font-medium",
+        unseenPhase !== null ? "font-semibold" : shouldRecede ? "font-normal" : "font-medium",
         variant === "card"
           ? cn(
               "truncate",
