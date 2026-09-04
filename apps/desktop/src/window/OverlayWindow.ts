@@ -1,3 +1,4 @@
+// @effect-diagnostics globalTimers:off -- Electron emits "moved" outside any Effect runtime; the drag settles on a plain timer.
 import type { DesktopOverlayState } from "@t3tools/contracts";
 import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
@@ -63,6 +64,8 @@ export function defaultOverlayPosition(input: {
 }
 
 const DEFAULT_MARGIN = 24;
+/** How long a drag must rest before its position is written to settings. */
+const MOVE_PERSIST_DELAY_MS = 400;
 
 export const make = Effect.gen(function* () {
   const environment = yield* DesktopEnvironment.DesktopEnvironment;
@@ -178,10 +181,21 @@ export const make = Effect.gen(function* () {
             });
           });
           // The position belongs in client settings, which only the main
-          // renderer can write, so the move is forwarded rather than stored here.
+          // renderer can write, so the move is forwarded rather than stored
+          // here. "moved" fires for every pixel of a drag, so the write waits
+          // until the drag settles: one settings write per move, not hundreds.
+          let movedTimer: NodeJS.Timeout | null = null;
           window.on("moved", () => {
-            const [x, y] = window.getPosition();
-            runFork(electronWindow.sendAll(IpcChannels.OVERLAY_MOVED_CHANNEL, { x, y }));
+            if (movedTimer !== null) clearTimeout(movedTimer);
+            movedTimer = setTimeout(() => {
+              movedTimer = null;
+              if (window.isDestroyed()) return;
+              const [x, y] = window.getPosition();
+              runFork(electronWindow.sendAll(IpcChannels.OVERLAY_MOVED_CHANNEL, { x, y }));
+            }, MOVE_PERSIST_DELAY_MS);
+          });
+          window.on("closed", () => {
+            if (movedTimer !== null) clearTimeout(movedTimer);
           });
           window.on("closed", () => {
             runFork(Ref.set(windowRef, null));
