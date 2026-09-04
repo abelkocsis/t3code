@@ -26,12 +26,13 @@ export function NotificationsSettings() {
   const settings = useClientSettings();
   const updateSettings = useUpdateClientSettings();
   const phaseSwitchesDisabled = !settings.desktopNotificationsEnabled;
+  const overlayHiddenUntil = settings.overlayHiddenUntil;
 
   return (
     <SettingsPageContainer>
       <SettingsSection title="Notifications">
         <p className="px-3 pb-1 text-[13px] leading-[1.45] text-muted-foreground/80 sm:px-4">
-          {isElectron()
+          {isElectron
             ? "T3 Code tells you when a thread changes phase: an agent finishes, asks for approval, asks a question, or fails."
             : "Notification banners come from the desktop app. In a browser tab the sidebar marks the same changes instead."}
         </p>
@@ -84,7 +85,7 @@ export function NotificationsSettings() {
             <Select
               value={settings.desktopNotificationTrigger}
               onValueChange={(value) => {
-                if (isNotificationTrigger(value)) {
+                if (value !== null && isNotificationTrigger(value)) {
                   updateSettings({ desktopNotificationTrigger: value });
                 }
               }}
@@ -203,6 +204,85 @@ export function NotificationsSettings() {
           }
         />
       </SettingsSection>
+
+      <SettingsSection title="Overlay mode">
+        <p className="px-3 pb-1 text-[13px] leading-[1.45] text-muted-foreground/80 sm:px-4">
+          A small window that floats over your other apps and lists the threads you have not looked
+          at. It hides itself while you are in T3 Code, and shrinks to a pill when nothing needs
+          you.
+        </p>
+
+        <SettingsRow
+          {...searchableSetting("overlay-mode")}
+          description="Show the floating overlay window."
+          status={
+            overlayHiddenUntil === null ? null : (
+              <span>Hidden until {formatHiddenUntil(overlayHiddenUntil)}.</span>
+            )
+          }
+          resetAction={
+            settings.overlayModeEnabled !== DEFAULT_CLIENT_SETTINGS.overlayModeEnabled ||
+            overlayHiddenUntil !== null ? (
+              <SettingResetButton
+                label="overlay mode"
+                onClick={() =>
+                  updateSettings({
+                    overlayModeEnabled: DEFAULT_CLIENT_SETTINGS.overlayModeEnabled,
+                    overlayHiddenUntil: null,
+                  })
+                }
+              />
+            ) : null
+          }
+          control={
+            <Switch
+              checked={settings.overlayModeEnabled}
+              onCheckedChange={(checked) =>
+                // Switching it back on clears a temporary hide too, otherwise
+                // the overlay would stay invisible and read as broken.
+                updateSettings({
+                  overlayModeEnabled: Boolean(checked),
+                  ...(checked ? { overlayHiddenUntil: null } : {}),
+                })
+              }
+              aria-label="Show overlay mode"
+            />
+          }
+        />
+
+        <SettingsRow
+          {...searchableSetting("overlay-keep-awake")}
+          description="Hold off display sleep while the overlay is on screen. Closing the lid still sleeps the Mac."
+          resetAction={
+            settings.overlayKeepAwake !== DEFAULT_CLIENT_SETTINGS.overlayKeepAwake ? (
+              <SettingResetButton
+                label="keep awake"
+                onClick={() =>
+                  updateSettings({ overlayKeepAwake: DEFAULT_CLIENT_SETTINGS.overlayKeepAwake })
+                }
+              />
+            ) : null
+          }
+          control={
+            <Switch
+              checked={settings.overlayKeepAwake}
+              disabled={!settings.overlayModeEnabled}
+              onCheckedChange={(checked) => updateSettings({ overlayKeepAwake: Boolean(checked) })}
+              aria-label="Keep this Mac awake while the overlay shows"
+            />
+          }
+        />
+      </SettingsSection>
     </SettingsPageContainer>
   );
+}
+
+function formatHiddenUntil(value: string): string {
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) return "later";
+  return parsed.toLocaleString(undefined, {
+    weekday: "short",
+    hour: "numeric",
+    minute: "2-digit",
+  });
 }
