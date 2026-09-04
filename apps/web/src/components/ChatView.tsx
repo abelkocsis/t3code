@@ -133,6 +133,7 @@ import {
   togglePendingUserInputOptionSelection,
   type PendingUserInputDraftAnswer,
 } from "../pendingUserInput";
+import { useWindowFocused } from "../hooks/useWindowFocused";
 import { useUiStateStore } from "../uiStateStore";
 import {
   latestWorkspaceMutationId,
@@ -1480,6 +1481,7 @@ export default function ChatView(props: ChatViewProps) {
     };
   }, [routeKind, routeThreadRef, routeThreadState]);
   const markThreadVisited = useUiStateStore((store) => store.markThreadVisited);
+  const windowFocused = useWindowFocused();
   const settings = useEnvironmentSettings(environmentId);
   const primaryServerSettings = useAtomValue(primaryServerSettingsAtom);
   const setStickyComposerModelSelection = useComposerDraftStore(
@@ -1962,7 +1964,15 @@ export default function ChatView(props: ChatViewProps) {
   // exactly the completion the user is looking at: a wake or completion that
   // lands later still gets its signal (markThreadVisited never moves the
   // timestamp backwards).
+  //
+  // A thread being on screen is not the same as the user reading it. Without
+  // the focus check, a turn finishing while the user works in another
+  // application counted as read the instant it landed, so the completion never
+  // reached the overlay, the dock badge or the sidebar highlight — the one
+  // case where those signals matter most. Focus returning re-runs this effect,
+  // so the visit is recorded as soon as the user is actually looking.
   useEffect(() => {
+    if (!windowFocused) return;
     const completedAt = serverThread?.latestTurn?.completedAt;
     if (!serverThread?.id || !completedAt) return;
     markThreadVisited(
@@ -1974,6 +1984,7 @@ export default function ChatView(props: ChatViewProps) {
     serverThread?.environmentId,
     serverThread?.id,
     serverThread?.latestTurn?.completedAt,
+    windowFocused,
   ]);
   useEffect(() => {
     setMountedTerminalThreadKeys((currentThreadIds) => {

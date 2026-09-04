@@ -227,24 +227,24 @@ it.layer(NodeServices.layer)("settled thread decider", (it) => {
     }),
   );
 
-  it.effect("rejects settling a thread with a live session", () =>
+  it.effect("a user settle stops a live session instead of refusing", () =>
     Effect.gen(function* () {
       for (const status of ["starting", "running"] as const) {
-        const error = yield* decideOrchestrationCommand({
+        const settledLive = yield* decideOrchestrationCommand({
           command: {
             type: "thread.settle",
             commandId: CommandId.make(`cmd-settle-live-${status}`),
             threadId: ThreadId.make("thread-1"),
           },
           readModel: makeReadModel(null, null, makeSession(status)),
-        }).pipe(Effect.flip);
-        expect(error).toMatchObject({
-          _tag: "OrchestrationThreadSettleBlockedError",
-          threadId: ThreadId.make("thread-1"),
-          message: SETTLE_BLOCKED_MESSAGE,
         });
+        const liveEvents = Array.isArray(settledLive) ? settledLive : [settledLive];
+        expect(liveEvents[0]?.type).toBe("thread.settled");
+        expect(liveEvents.some((event) => event.type === "thread.session-stop-requested")).toBe(
+          true,
+        );
       }
-      // Stopped/error sessions are settleable — only live work is protected.
+      // A stopped session needs no stop of its own.
       const settled = yield* decideOrchestrationCommand({
         command: {
           type: "thread.settle",
@@ -255,6 +255,29 @@ it.layer(NodeServices.layer)("settled thread decider", (it) => {
       });
       const settledEvents = Array.isArray(settled) ? settled : [settled];
       expect(settledEvents[0]?.type).toBe("thread.settled");
+      expect(settledEvents.some((event) => event.type === "thread.session-stop-requested")).toBe(
+        false,
+      );
+    }),
+  );
+
+  it.effect("an automatic settle still refuses to stop live work", () =>
+    Effect.gen(function* () {
+      // Auto-settle fires on a timer rather than a decision, so it must never
+      // kill work the user did not ask it to stop.
+      const error = yield* decideOrchestrationCommand({
+        command: {
+          type: "thread.auto-settle",
+          commandId: CommandId.make("cmd-auto-settle-live"),
+          threadId: ThreadId.make("thread-1"),
+          snapshotSequence: 0,
+        },
+        readModel: makeReadModel(null, null, makeSession("running")),
+      }).pipe(Effect.flip);
+      expect(error).toMatchObject({
+        _tag: "OrchestrationThreadSettleBlockedError",
+        threadId: ThreadId.make("thread-1"),
+      });
     }),
   );
 
