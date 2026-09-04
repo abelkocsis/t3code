@@ -223,13 +223,19 @@ export const buildOverlayDataUrl = (): string => {
         // The window is sized to whatever the document actually needs, so a
         // single row never gets a scrollbar and a long list never gets cut off.
         var lastReportedHeight = 0;
+        function measureAndReport() {
+          var height = Math.ceil(document.getElementById("shell").getBoundingClientRect().height);
+          if (height <= 0 || height === lastReportedHeight) return;
+          lastReportedHeight = height;
+          bridge.reportHeight(height);
+        }
         function reportHeight() {
-          requestAnimationFrame(function () {
-            var height = Math.ceil(document.getElementById("shell").getBoundingClientRect().height);
-            if (height <= 0 || height === lastReportedHeight) return;
-            lastReportedHeight = height;
-            bridge.reportHeight(height);
-          });
+          // Measure straight away, because requestAnimationFrame does not fire
+          // in a window that has never been shown, and the first render happens
+          // before the window appears. The extra frame then corrects the value
+          // once layout has settled.
+          measureAndReport();
+          requestAnimationFrame(measureAndReport);
         }
 
         function toggleMenu(event) {
@@ -269,6 +275,25 @@ export const OVERLAY_WIDTH = 340;
 export const OVERLAY_INITIAL_HEIGHT = 44;
 const OVERLAY_MIN_HEIGHT = 36;
 const OVERLAY_MAX_HEIGHT = 520;
+
+const OVERLAY_PILL_HEIGHT = 44;
+const OVERLAY_CHROME_HEIGHT = 117;
+const OVERLAY_ROW_HEIGHT = 48;
+const OVERLAY_ROW_GAP = 7;
+const OVERLAY_ESTIMATE_MAX_ROWS = 5;
+
+/**
+ * A first guess at the height, used until the page measures itself.
+ *
+ * Only ever a starting point: the page reports its real height a frame later
+ * and that wins. Its job is to keep the window usable if the measurement is
+ * late or never arrives.
+ */
+export function estimateOverlayHeight(itemCount: number): number {
+  if (itemCount <= 0) return OVERLAY_PILL_HEIGHT;
+  const rows = Math.min(itemCount, OVERLAY_ESTIMATE_MAX_ROWS);
+  return OVERLAY_CHROME_HEIGHT + rows * OVERLAY_ROW_HEIGHT + (rows - 1) * OVERLAY_ROW_GAP;
+}
 
 /**
  * Keeps a reported height sane. The page measures itself, so this only guards
