@@ -9,6 +9,7 @@ import {
   setConnectionCatalog,
 } from "./methods/connectionCatalog.ts";
 import { setAttentionBadgeCount, showThreadNotification } from "./methods/notifications.ts";
+import { installOverlayActionForwarding, setOverlayState } from "./methods/overlay.ts";
 import {
   getLocalEnvironmentEnabled,
   setLocalEnvironmentEnabled,
@@ -76,6 +77,7 @@ export const installDesktopIpcHandlers = Effect.fn("desktop.ipc.installHandlers"
   const ipc = yield* DesktopIpc.DesktopIpc;
   yield* installNotificationBadge();
   yield* PreviewIpc.installPreviewEventForwarding();
+  yield* installOverlayActionForwarding();
 
   yield* ipc.handle(AppActivationIpc.setReady);
   yield* ipc.handle(AppActivationIpc.complete);
@@ -143,6 +145,7 @@ export const installDesktopIpcHandlers = Effect.fn("desktop.ipc.installHandlers"
   yield* ipc.handle(checkForUpdate);
   yield* ipc.handle(showThreadNotification);
   yield* ipc.handle(setAttentionBadgeCount);
+  yield* ipc.handle(setOverlayState);
   for (const previewMethod of PreviewIpc.methods) {
     yield* ipc.handle(previewMethod);
   }

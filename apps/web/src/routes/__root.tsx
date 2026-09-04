@@ -45,6 +45,7 @@ import { resolveAndPersistPreferredEditor } from "../editorPreferences";
 import { applyAppearanceFontVariables } from "~/appearanceFonts";
 import { applyAppearanceContrast } from "~/appearanceContrast";
 import { useClientSettings } from "../hooks/useSettings";
+import { useOverlayMode } from "../hooks/useOverlayMode";
 import { useThreadNotifications } from "../hooks/useThreadNotifications";
 import { PlanAgentSelectionHeal } from "../planAgentSelectionHeal";
 import {
@@ -245,9 +246,10 @@ function RootRouteView() {
   );
 }
 
-/** Desktop banners and the dock badge. Renders nothing. */
+/** Desktop banners, the dock badge, and overlay mode. Renders nothing. */
 function ThreadNotifications() {
   useThreadNotifications();
+  useOverlayMode();
   return null;
 }
 
