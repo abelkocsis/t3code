@@ -221,6 +221,13 @@ export const NotificationMode = Schema.Literals([
   "notifications-and-sound",
 ]);
 export type NotificationMode = typeof NotificationMode.Type;
+/**
+ * When a desktop notification is allowed to appear. "unfocused" is the
+ * default: a banner for a thread you are already watching is noise.
+ */
+export const DesktopNotificationTrigger = Schema.Literals(["unfocused", "always", "never"]);
+export type DesktopNotificationTrigger = typeof DesktopNotificationTrigger.Type;
+export const DEFAULT_DESKTOP_NOTIFICATION_TRIGGER: DesktopNotificationTrigger = "unfocused";
 
 export const QuitConfirmationMode = Schema.Literals(["direct", "hold", "double-click"]);
 export type QuitConfirmationMode = typeof QuitConfirmationMode.Type;
@@ -420,6 +427,19 @@ export const ClientSettingsSchema = Schema.Struct({
     TrimmedNonEmptyString,
     PullRequestMergeMethod,
   ).pipe(Schema.withDecodingDefault(Effect.succeed({}))),
+  // Desktop notifications. Named to match RelayAgentAwarenessPreferences so
+  // the Mac and the iPhone describe the same four phase changes with the same
+  // words. Desktop-only: a browser tab has no notifier of its own here.
+  desktopNotificationsEnabled: Schema.Boolean.pipe(
+    Schema.withDecodingDefault(Effect.succeed(true)),
+  ),
+  desktopNotificationTrigger: DesktopNotificationTrigger.pipe(
+    Schema.withDecodingDefault(Effect.succeed(DEFAULT_DESKTOP_NOTIFICATION_TRIGGER)),
+  ),
+  notifyOnApproval: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(true))),
+  notifyOnInput: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(true))),
+  notifyOnCompletion: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(true))),
+  notifyOnFailure: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(true))),
   // Legacy plan mode. The composer's Build/Plan toggle was removed from the
   // default UI; this beta flag restores it (plus the /plan and /default slash
   // commands) for users who still rely on the old workflow.
@@ -1499,6 +1519,12 @@ export const ClientSettingsPatch = Schema.Struct({
   pullRequestMergeMethodOverrides: Schema.optionalKey(
     Schema.Record(TrimmedNonEmptyString, PullRequestMergeMethod),
   ),
+  desktopNotificationsEnabled: Schema.optionalKey(Schema.Boolean),
+  desktopNotificationTrigger: Schema.optionalKey(DesktopNotificationTrigger),
+  notifyOnApproval: Schema.optionalKey(Schema.Boolean),
+  notifyOnInput: Schema.optionalKey(Schema.Boolean),
+  notifyOnCompletion: Schema.optionalKey(Schema.Boolean),
+  notifyOnFailure: Schema.optionalKey(Schema.Boolean),
   planModeEnabled: Schema.optionalKey(Schema.Boolean),
   contextWindowMeterEnabled: Schema.optionalKey(Schema.Boolean),
   composerCollapseOnScroll: Schema.optionalKey(Schema.Boolean),

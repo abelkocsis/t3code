@@ -27,20 +27,23 @@ export interface AgentAwarenessState {
   readonly deepLink: string;
 }
 
+/** The thread fields every awareness derivation reads. */
+export type AwarenessThreadShell = Pick<
+  OrchestrationThreadShell,
+  | "id"
+  | "title"
+  | "modelSelection"
+  | "session"
+  | "latestTurn"
+  | "updatedAt"
+  | "hasPendingApprovals"
+  | "hasPendingUserInput"
+>;
+
 export interface ProjectThreadAwarenessInput {
   readonly environmentId: EnvironmentId;
   readonly project: Pick<OrchestrationProjectShell, "title">;
-  readonly thread: Pick<
-    OrchestrationThreadShell,
-    | "id"
-    | "title"
-    | "modelSelection"
-    | "session"
-    | "latestTurn"
-    | "updatedAt"
-    | "hasPendingApprovals"
-    | "hasPendingUserInput"
-  >;
+  readonly thread: AwarenessThreadShell;
 }
 
 function buildAgentAwarenessDeepLink(input: {
@@ -74,8 +77,13 @@ export function projectThreadAwareness(
   };
 }
 
-function resolveThreadAwarenessPhase(
-  thread: ProjectThreadAwarenessInput["thread"],
+/**
+ * The phase a thread is in, or null when it has never run. Exported because
+ * every client derives the same phase locally: the desktop notifier and the
+ * sidebar must agree with what the relay pushes to the phone.
+ */
+export function resolveThreadAwarenessPhase(
+  thread: AwarenessThreadShell,
 ): AgentAwarenessPhase | null {
   if (thread.hasPendingApprovals) {
     return "waiting_for_approval";
@@ -116,7 +124,8 @@ function resolveThreadAwarenessPhase(
   return null;
 }
 
-function headlineForPhase(phase: AgentAwarenessPhase): string {
+/** The one-line title for a phase. Shared so every surface says the same words. */
+export function headlineForPhase(phase: AgentAwarenessPhase): string {
   switch (phase) {
     case "starting":
       return "Starting agent";
@@ -137,7 +146,7 @@ function headlineForPhase(phase: AgentAwarenessPhase): string {
 
 function detailForPhase(
   phase: AgentAwarenessPhase,
-  thread: ProjectThreadAwarenessInput["thread"],
+  thread: AwarenessThreadShell,
 ): string | undefined {
   if (phase === "failed") {
     return thread.session?.lastError ?? undefined;
