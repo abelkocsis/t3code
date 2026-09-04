@@ -29,7 +29,7 @@ export const buildOverlayDataUrl = (): string => {
         --sky: #7dd3fc;
       }
       * { box-sizing: border-box; margin: 0; padding: 0; }
-      html, body { height: 100%; overflow: hidden; background: transparent; }
+      html, body { overflow: hidden; background: transparent; }
       body {
         font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
         color: var(--fg);
@@ -37,8 +37,9 @@ export const buildOverlayDataUrl = (): string => {
         user-select: none;
         cursor: default;
       }
+      #full { display: flex; flex-direction: column; min-height: 0; }
+      #full.hidden { display: none; }
       #shell {
-        height: 100%;
         background: var(--bg);
         border: 1px solid rgba(255, 255, 255, 0.16);
         border-radius: 14px;
@@ -70,7 +71,13 @@ export const buildOverlayDataUrl = (): string => {
       #summary .count { font-size: 24px; font-weight: 600; letter-spacing: -0.02em; }
       #summary .count em { color: var(--amber); font-style: normal; font-size: 29px; }
       #summary .sub { font-size: 11.5px; color: var(--muted); margin-top: 3px; }
-      #items { padding: 10px 12px 12px; display: flex; flex-direction: column; gap: 7px; overflow-y: auto; }
+      #items {
+        padding: 10px 12px 12px; display: flex; flex-direction: column; gap: 7px;
+        overflow-y: auto; max-height: 320px;
+      }
+      #items::-webkit-scrollbar { width: 6px; }
+      #items::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.14); border-radius: 3px; }
+      #items::-webkit-scrollbar-track { background: transparent; }
       .item {
         display: flex; align-items: center; gap: 9px;
         border: 1px solid var(--border); border-radius: 9px;
@@ -94,9 +101,15 @@ export const buildOverlayDataUrl = (): string => {
       .bar.completed { background: var(--emerald); }
       .bar.failed { background: var(--red); }
       #pill {
-        height: 100%; display: flex; align-items: center; gap: 9px;
-        padding: 0 14px; font-size: 12px; color: #c8c8c8; -webkit-app-region: drag;
+        display: flex; align-items: center; gap: 9px;
+        padding: 12px 10px 12px 14px; font-size: 12px; color: #c8c8c8;
+        -webkit-app-region: drag;
       }
+      #pill .more {
+        margin-left: auto; color: var(--muted); font-size: 15px; line-height: 1;
+        padding: 2px 6px; border-radius: 6px; -webkit-app-region: no-drag;
+      }
+      #pill .more:hover { background: rgba(255, 255, 255, 0.09); color: var(--fg); }
       #pill .working { color: var(--sky); font-weight: 600; }
       #menu {
         position: absolute; top: 38px; right: 10px; width: 214px; z-index: 10;
@@ -123,8 +136,9 @@ export const buildOverlayDataUrl = (): string => {
       <div id="pill" class="hidden">
         <span class="working" id="pill-working"></span>
         <span id="pill-rest"></span>
+        <span class="more" id="pill-more">&#8943;</span>
       </div>
-      <div id="full" class="hidden" style="display:flex;flex-direction:column;min-height:0">
+      <div id="full" class="hidden">
         <header>
           <span class="logo">T3</span>
           <span class="label">T3 Code</span>
@@ -162,11 +176,11 @@ export const buildOverlayDataUrl = (): string => {
           pill.classList.toggle("hidden", !isPill);
           full.classList.toggle("hidden", isPill);
           if (isPill) {
-            menu.classList.remove("open");
             document.getElementById("pill-working").textContent =
               state.workingCount > 0 ? state.workingCount + " working" : "";
             document.getElementById("pill-rest").textContent =
               state.workingCount > 0 ? "\\u00b7 nothing needs you" : "Nothing needs you";
+            reportHeight();
             return;
           }
           document.getElementById("count").textContent = String(state.items.length);
@@ -203,12 +217,30 @@ export const buildOverlayDataUrl = (): string => {
             });
             items.appendChild(row);
           });
+          reportHeight();
         }
 
-        document.getElementById("more").addEventListener("click", function (event) {
+        // The window is sized to whatever the document actually needs, so a
+        // single row never gets a scrollbar and a long list never gets cut off.
+        var lastReportedHeight = 0;
+        function reportHeight() {
+          requestAnimationFrame(function () {
+            var height = Math.ceil(document.getElementById("shell").getBoundingClientRect().height);
+            if (height <= 0 || height === lastReportedHeight) return;
+            lastReportedHeight = height;
+            bridge.reportHeight(height);
+          });
+        }
+
+        function toggleMenu(event) {
           event.stopPropagation();
           menu.classList.toggle("open");
-        });
+          reportHeight();
+        }
+        document.getElementById("more").addEventListener("click", toggleMenu);
+        // The pill needs the menu as much as the full card does: with nothing
+        // waiting there is no other way to send the overlay away.
+        document.getElementById("pill-more").addEventListener("click", toggleMenu);
         document.body.addEventListener("click", function () {
           menu.classList.remove("open");
         });
@@ -224,6 +256,7 @@ export const buildOverlayDataUrl = (): string => {
         });
 
         bridge.onState(render);
+        window.addEventListener("resize", reportHeight);
       })();
     </script>
   </body>
@@ -232,14 +265,18 @@ export const buildOverlayDataUrl = (): string => {
 };
 
 export const OVERLAY_WIDTH = 340;
-export const OVERLAY_PILL_HEIGHT = 44;
-export const OVERLAY_HEADER_HEIGHT = 96;
-export const OVERLAY_ROW_HEIGHT = 56;
-export const OVERLAY_MAX_ROWS = 5;
+/** Enough for the pill until the page reports what it actually needs. */
+export const OVERLAY_INITIAL_HEIGHT = 44;
+const OVERLAY_MIN_HEIGHT = 36;
+const OVERLAY_MAX_HEIGHT = 520;
 
-/** Height for a given row count, so the window never leaves empty space. */
-export function overlayHeightForItems(itemCount: number): number {
-  if (itemCount === 0) return OVERLAY_PILL_HEIGHT;
-  const rows = Math.min(itemCount, OVERLAY_MAX_ROWS);
-  return OVERLAY_HEADER_HEIGHT + rows * OVERLAY_ROW_HEIGHT;
+/**
+ * Keeps a reported height sane. The page measures itself, so this only guards
+ * against a zero during a reflow and against a list long enough to cover the
+ * screen; the max is above the list's own scroll limit, so it never truncates
+ * content that would otherwise fit.
+ */
+export function clampOverlayHeight(height: number): number {
+  if (!Number.isFinite(height)) return OVERLAY_INITIAL_HEIGHT;
+  return Math.min(OVERLAY_MAX_HEIGHT, Math.max(OVERLAY_MIN_HEIGHT, Math.ceil(height)));
 }

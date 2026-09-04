@@ -35,6 +35,8 @@ export interface OverlayVisibilityInput {
   readonly unseen: readonly OverlayItem[];
   /** Threads with an agent still running, for the resting pill. */
   readonly workingCount: number;
+  /** False keeps the overlay off screen until something needs the user. */
+  readonly showIdlePill: boolean;
 }
 
 /**
@@ -50,6 +52,7 @@ export function resolveOverlayState(input: OverlayVisibilityInput): OverlayState
   if (!input.enabled) return hidden;
   if (isOverlayHiddenNow({ hiddenUntil: input.hiddenUntil, now: input.now })) return hidden;
   if (input.appFocused) return hidden;
+  if (input.unseen.length === 0 && !input.showIdlePill) return hidden;
   return {
     mode: input.unseen.length === 0 ? "pill" : "full",
     items: input.unseen,

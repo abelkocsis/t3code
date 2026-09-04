@@ -3,6 +3,7 @@ import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as Ref from "effect/Ref";
+import * as Semaphore from "effect/Semaphore";
 import * as Schema from "effect/Schema";
 
 import { BrowserWindow, screen } from "electron";
@@ -11,7 +12,12 @@ import * as DesktopEnvironment from "../app/DesktopEnvironment.ts";
 import * as ElectronPowerSaveBlocker from "../electron/ElectronPowerSaveBlocker.ts";
 import * as ElectronWindow from "../electron/ElectronWindow.ts";
 import * as IpcChannels from "../ipc/channels.ts";
-import { buildOverlayDataUrl, overlayHeightForItems, OVERLAY_WIDTH } from "./OverlayWindowHtml.ts";
+import {
+  buildOverlayDataUrl,
+  clampOverlayHeight,
+  OVERLAY_INITIAL_HEIGHT,
+  OVERLAY_WIDTH,
+} from "./OverlayWindowHtml.ts";
 
 export class OverlayWindowError extends Schema.TaggedErrorClass<OverlayWindowError>()(
   "OverlayWindowError",
@@ -61,6 +67,10 @@ export const make = Effect.gen(function* () {
   const powerSaveBlocker = yield* ElectronPowerSaveBlocker.ElectronPowerSaveBlocker;
   const electronWindow = yield* ElectronWindow.ElectronWindow;
   const windowRef = yield* Ref.make<BrowserWindow | null>(null);
+  // The renderer pushes state on every change, so two syncs can overlap. Without
+  // a mutex both see no window and both create one: the second wins the ref and
+  // the first is orphaned on screen, which is why the overlay came and went.
+  const syncSemaphore = yield* Semaphore.make(1);
   const preloadPath = environment.path.join(environment.dirname, "overlay-preload.cjs");
   const runFork = Effect.runForkWith(yield* Effect.context<ElectronWindow.ElectronWindow>());
 
@@ -97,7 +107,7 @@ export const make = Effect.gen(function* () {
         try: () =>
           new BrowserWindow({
             width: OVERLAY_WIDTH,
-            height: overlayHeightForItems(0),
+            height: OVERLAY_INITIAL_HEIGHT,
             x: position.x,
             y: position.y,
             title: "T3 Code overlay",
@@ -138,6 +148,15 @@ export const make = Effect.gen(function* () {
               skipTransformProcessType: true,
             });
           }
+          // The page measures its own content and asks for a height, so a
+          // single row never gets a scrollbar and a long list never gets cut.
+          window.webContents.ipc.on(IpcChannels.OVERLAY_HEIGHT_CHANNEL, (_event, height) => {
+            if (typeof height !== "number" || window.isDestroyed()) return;
+            const next = clampOverlayHeight(height);
+            const [, currentHeight] = window.getSize();
+            if (currentHeight === next) return;
+            window.setSize(OVERLAY_WIDTH, next, false);
+          });
           // The position belongs in client settings, which only the main
           // renderer can write, so the move is forwarded rather than stored here.
           window.on("moved", () => {
@@ -162,14 +181,8 @@ export const make = Effect.gen(function* () {
   const applyState = (window: BrowserWindow, state: DesktopOverlayState) =>
     Effect.try({
       try: () => {
-        const height =
-          state.mode === "pill"
-            ? overlayHeightForItems(0)
-            : overlayHeightForItems(state.items.length);
-        const [width, currentHeight] = window.getSize();
-        if (width !== OVERLAY_WIDTH || currentHeight !== height) {
-          window.setSize(OVERLAY_WIDTH, height, false);
-        }
+        // No height is computed here: the page measures its own content and
+        // asks for the size it needs.
         window.webContents.send(IpcChannels.OVERLAY_RENDER_CHANNEL, state);
         if (!window.isVisible()) {
           // showInactive keeps focus where the user is working. An overlay that
@@ -180,10 +193,21 @@ export const make = Effect.gen(function* () {
       catch: (cause) => new OverlayWindowError({ operation: "update", cause }),
     });
 
-  const sync: OverlayWindowServices["sync"] = (state) =>
+  const syncUnsafe = (state: DesktopOverlayState) =>
     Effect.gen(function* () {
       if (state.mode === "hidden") {
-        yield* destroy;
+        // Hide rather than destroy: the overlay hides every time the user looks
+        // at T3 Code, and rebuilding the window on every focus change made it
+        // slow to come back and easy to lose.
+        const open = yield* readWindow;
+        if (open !== null && open.isVisible()) {
+          yield* Effect.try({
+            try: () => {
+              open.hide();
+            },
+            catch: (cause) => new OverlayWindowError({ operation: "update", cause }),
+          });
+        }
         yield* powerSaveBlocker.hold(false);
         return;
       }
@@ -201,6 +225,9 @@ export const make = Effect.gen(function* () {
       yield* applyState(window, state);
       yield* powerSaveBlocker.hold(state.keepAwake);
     }).pipe(Effect.catchTag("OverlayWindowError", logAndContinue));
+
+  const sync: OverlayWindowServices["sync"] = (state) =>
+    Semaphore.withPermit(syncSemaphore)(syncUnsafe(state));
 
   return OverlayWindow.of({
     sync,
