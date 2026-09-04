@@ -12,6 +12,7 @@ import {
 } from "react";
 import {
   ArchiveIcon,
+  BellIcon,
   BlocksIcon,
   BotIcon,
   GitBranchIcon,
@@ -75,6 +76,7 @@ const SETTINGS_SECTION_ICONS: Readonly<
   "/settings/appearance": PaletteIcon,
   "/settings/projects": PanelsTopLeftIcon,
   "/settings/keybindings": KeyboardIcon,
+  "/settings/notifications": BellIcon,
   "/settings/providers": BotIcon,
   "/settings/integrations": BlocksIcon,
   "/settings/source-control": GitBranchIcon,

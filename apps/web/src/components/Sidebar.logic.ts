@@ -5,6 +5,11 @@ import {
   type AtomCommandResult,
 } from "@t3tools/client-runtime/state/runtime";
 import type { ContextMenuItem } from "@t3tools/contracts";
+import {
+  isThreadAttentionUnseen,
+  resolveThreadAttention,
+} from "@t3tools/client-runtime/state/thread-attention";
+import type { AwarenessThreadShell } from "@t3tools/shared/agentAwareness";
 import type { SidebarProjectSortOrder, SidebarThreadSortOrder } from "@t3tools/contracts/settings";
 import type { AsyncResult } from "effect/unstable/reactivity";
 import { planPinnedReorder } from "@t3tools/client-runtime/state/thread-sort";
@@ -610,6 +615,11 @@ export function useThreadJumpHintVisibility(): {
   };
 }
 
+/**
+ * Whether a finished turn is newer than the user's last visit. Narrower than
+ * hasUnseenAttention on purpose: it drives the trailing "Completed" pill,
+ * which must not appear for a thread that failed.
+ */
 export function hasUnseenCompletion(thread: ThreadStatusInput): boolean {
   if (!thread.latestTurn?.completedAt) return false;
   const completedAt = Date.parse(thread.latestTurn.completedAt);
@@ -619,6 +629,26 @@ export function hasUnseenCompletion(thread: ThreadStatusInput): boolean {
   const lastVisitedAt = Date.parse(thread.lastVisitedAt);
   if (Number.isNaN(lastVisitedAt)) return true;
   return completedAt > lastVisitedAt;
+}
+
+export type ThreadAttentionInput = AwarenessThreadShell & {
+  lastVisitedAt?: string | undefined;
+};
+
+/**
+ * Whether the thread entered its current attention phase after the user last
+ * looked at it.
+ *
+ * Covers all four phases the notifier announces, not just a finished turn: a
+ * thread blocked on an approval the user has never seen is exactly as unread
+ * as one that finished. A thread the user opened and left blocked stops
+ * counting as unread — the row keeps its coloured phase label, so it stays
+ * findable without shouting.
+ */
+export function hasUnseenAttention(thread: ThreadAttentionInput): boolean {
+  const attention = resolveThreadAttention(thread);
+  if (attention === null) return false;
+  return isThreadAttentionUnseen({ attention, lastVisitedAt: thread.lastVisitedAt });
 }
 
 export function shouldClearThreadSelectionOnMouseDown(target: HTMLElement | null): boolean {

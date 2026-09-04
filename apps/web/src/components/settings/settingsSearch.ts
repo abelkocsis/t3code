@@ -6,6 +6,7 @@ export type SettingsPath =
   | "/settings/general"
   | "/settings/appearance"
   | "/settings/keybindings"
+  | "/settings/notifications"
   | "/settings/providers"
   | "/settings/integrations"
   | "/settings/source-control"
@@ -52,6 +53,7 @@ export const SETTINGS_SECTION_LABELS: Readonly<Record<SettingsPath, string>> = {
   "/settings/appearance": "Appearance",
   "/settings/projects": "Projects",
   "/settings/keybindings": "Keybindings",
+  "/settings/notifications": "Notifications",
   "/settings/providers": "Providers",
   "/settings/integrations": "Integrations",
   "/settings/source-control": "Source Control",
@@ -72,6 +74,46 @@ export const SETTINGS_SEARCH_ITEMS = [
     searchTerms: [
       "model workspace browser machines projects inheritance automatic pull checkout grouping actions scripts",
     ],
+    id: "desktop-notifications",
+    title: "Show notifications",
+    to: "/settings/notifications",
+    searchTerms: ["banner alert notify macos notification centre center"],
+    desktopOnly: true,
+  },
+  {
+    id: "notification-trigger",
+    title: "When to notify",
+    to: "/settings/notifications",
+    searchTerms: ["unfocused focused background always never quiet"],
+    desktopOnly: true,
+  },
+  {
+    id: "notify-on-approval",
+    title: "Approval needed",
+    to: "/settings/notifications",
+    searchTerms: ["notify permission ask blocked"],
+    desktopOnly: true,
+  },
+  {
+    id: "notify-on-input",
+    title: "Waiting for my input",
+    to: "/settings/notifications",
+    searchTerms: ["notify question ask answer"],
+    desktopOnly: true,
+  },
+  {
+    id: "notify-on-completion",
+    title: "Agent finished",
+    to: "/settings/notifications",
+    searchTerms: ["notify done complete finished turn"],
+    desktopOnly: true,
+  },
+  {
+    id: "notify-on-failure",
+    title: "Agent failed",
+    to: "/settings/notifications",
+    searchTerms: ["notify error crash failure"],
+    desktopOnly: true,
   },
   {
     id: "color-scheme",
