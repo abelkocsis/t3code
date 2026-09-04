@@ -20,7 +20,7 @@ contextBridge.exposeInMainWorld("t3Overlay", {
   send: (action: DesktopOverlayAction) => {
     ipcRenderer.send(OVERLAY_ACTION_CHANNEL, action);
   },
-  reportHeight: (height: number) => {
-    ipcRenderer.send(OVERLAY_HEIGHT_CHANNEL, height);
+  reportSize: (width: number, height: number) => {
+    ipcRenderer.send(OVERLAY_HEIGHT_CHANNEL, { width, height });
   },
 });

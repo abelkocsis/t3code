@@ -37,9 +37,13 @@ export const buildOverlayDataUrl = (): string => {
         user-select: none;
         cursor: default;
       }
+      /* The pill is a few words wide, so the window shrinks to it rather than
+         leaving a long empty bar across the corner of the screen. */
+      #shell.pill { width: max-content; max-width: 340px; }
       #full { display: flex; flex-direction: column; min-height: 0; }
       #full.hidden { display: none; }
       #shell {
+        width: 100%;
         background: var(--bg);
         border: 1px solid rgba(255, 255, 255, 0.16);
         border-radius: 14px;
@@ -173,6 +177,7 @@ export const buildOverlayDataUrl = (): string => {
 
         function render(state) {
           var isPill = state.mode === "pill";
+          document.getElementById("shell").classList.toggle("pill", isPill);
           pill.classList.toggle("hidden", !isPill);
           full.classList.toggle("hidden", isPill);
           if (isPill) {
@@ -222,12 +227,17 @@ export const buildOverlayDataUrl = (): string => {
 
         // The window is sized to whatever the document actually needs, so a
         // single row never gets a scrollbar and a long list never gets cut off.
-        var lastReportedHeight = 0;
+        var lastWidth = 0;
+        var lastHeight = 0;
         function measureAndReport() {
-          var height = Math.ceil(document.getElementById("shell").getBoundingClientRect().height);
-          if (height <= 0 || height === lastReportedHeight) return;
-          lastReportedHeight = height;
-          bridge.reportHeight(height);
+          var rect = document.getElementById("shell").getBoundingClientRect();
+          var width = Math.ceil(rect.width);
+          var height = Math.ceil(rect.height);
+          if (width <= 0 || height <= 0) return;
+          if (width === lastWidth && height === lastHeight) return;
+          lastWidth = width;
+          lastHeight = height;
+          bridge.reportSize(width, height);
         }
         function reportHeight() {
           // Measure straight away, because requestAnimationFrame does not fire
@@ -271,6 +281,13 @@ export const buildOverlayDataUrl = (): string => {
 };
 
 export const OVERLAY_WIDTH = 340;
+const OVERLAY_MIN_WIDTH = 120;
+
+/** Keeps a reported width inside the window's own bounds. */
+export function clampOverlayWidth(width: number): number {
+  if (!Number.isFinite(width)) return OVERLAY_WIDTH;
+  return Math.min(OVERLAY_WIDTH, Math.max(OVERLAY_MIN_WIDTH, Math.ceil(width)));
+}
 /** Enough for the pill until the page reports what it actually needs. */
 export const OVERLAY_INITIAL_HEIGHT = 44;
 const OVERLAY_MIN_HEIGHT = 36;

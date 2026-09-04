@@ -15,6 +15,7 @@ import * as IpcChannels from "../ipc/channels.ts";
 import {
   buildOverlayDataUrl,
   clampOverlayHeight,
+  clampOverlayWidth,
   estimateOverlayHeight,
   OVERLAY_INITIAL_HEIGHT,
   OVERLAY_WIDTH,
@@ -115,10 +116,18 @@ export const make = Effect.gen(function* () {
             show: false,
             frame: false,
             transparent: true,
-            hasShadow: true,
+            // macOS draws the shadow around the whole window rectangle, not the
+            // visible content, so a hugged pill inside a wider window trailed a
+            // dark smear. The panel's own border carries the edge instead.
+            hasShadow: false,
             alwaysOnTop: true,
             autoHideMenuBar: true,
-            focusable: true,
+            // Never takes key status. As a focusable macOS panel it stole key
+            // from the main window, whose renderer then reported itself
+            // unfocused — so the overlay kept showing while the user was
+            // looking straight at T3 Code. A non-focusable window still
+            // receives clicks.
+            focusable: false,
             fullscreenable: false,
             maximizable: false,
             minimizable: false,
@@ -151,12 +160,22 @@ export const make = Effect.gen(function* () {
           }
           // The page measures its own content and asks for a height, so a
           // single row never gets a scrollbar and a long list never gets cut.
-          window.webContents.ipc.on(IpcChannels.OVERLAY_HEIGHT_CHANNEL, (_event, height) => {
-            if (typeof height !== "number" || window.isDestroyed()) return;
-            const next = clampOverlayHeight(height);
-            const [, currentHeight] = window.getSize();
-            if (currentHeight === next) return;
-            window.setSize(OVERLAY_WIDTH, next, false);
+          window.webContents.ipc.on(IpcChannels.OVERLAY_HEIGHT_CHANNEL, (_event, size) => {
+            if (typeof size !== "object" || size === null || window.isDestroyed()) return;
+            const { width, height } = size as { width: unknown; height: unknown };
+            if (typeof width !== "number" || typeof height !== "number") return;
+            const nextWidth = clampOverlayWidth(width);
+            const nextHeight = clampOverlayHeight(height);
+            const bounds = window.getBounds();
+            if (bounds.width === nextWidth && bounds.height === nextHeight) return;
+            // Anchor the right edge: the overlay sits in a corner, so growing
+            // from the left keeps it where the user put it.
+            window.setBounds({
+              x: bounds.x + (bounds.width - nextWidth),
+              y: bounds.y,
+              width: nextWidth,
+              height: nextHeight,
+            });
           });
           // The position belongs in client settings, which only the main
           // renderer can write, so the move is forwarded rather than stored here.
@@ -182,12 +201,13 @@ export const make = Effect.gen(function* () {
   const applyState = (window: BrowserWindow, state: DesktopOverlayState) =>
     Effect.try({
       try: () => {
-        // An estimate first, the page's own measurement second. The estimate is
-        // rough, but it means a lost or late measurement leaves a usable window
-        // rather than a 44px sliver.
-        const estimate = estimateOverlayHeight(state.mode === "pill" ? 0 : state.items.length);
-        const [, currentHeight] = window.getSize();
-        if (currentHeight !== estimate) {
+        // The estimate only seeds the very first show, so a lost measurement
+        // still leaves a usable window. After that the page owns the size:
+        // re-forcing it here stretched the window back to full width behind a
+        // hugged pill, and the page would not re-report because its own
+        // measurement had not changed.
+        if (!window.isVisible()) {
+          const estimate = estimateOverlayHeight(state.mode === "pill" ? 0 : state.items.length);
           window.setSize(OVERLAY_WIDTH, estimate, false);
         }
         window.webContents.send(IpcChannels.OVERLAY_RENDER_CHANNEL, state);
