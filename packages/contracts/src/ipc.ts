@@ -182,6 +182,29 @@ export const DesktopUpdateStatusSchema = Schema.Literals([
   "error",
 ]);
 export const DesktopRuntimeArchSchema = Schema.Literals(["arm64", "x64", "other"]);
+/**
+ * One desktop notification about one thread.
+ *
+ * The renderer owns the words: it already derives the awareness phase and the
+ * project and thread titles, and the main process must not need a second copy
+ * of that logic to write a banner.
+ */
+export const DesktopThreadNotificationSchema = Schema.Struct({
+  environmentId: Schema.String,
+  threadId: Schema.String,
+  title: Schema.String,
+  body: Schema.String,
+  subtitle: Schema.optional(Schema.String),
+});
+export type DesktopThreadNotification = typeof DesktopThreadNotificationSchema.Type;
+
+/** Which thread the user clicked a banner for. */
+export const DesktopThreadNotificationTargetSchema = Schema.Struct({
+  environmentId: Schema.String,
+  threadId: Schema.String,
+});
+export type DesktopThreadNotificationTarget = typeof DesktopThreadNotificationTargetSchema.Type;
+
 export const DesktopThemeSchema = Schema.Literals(["light", "dark", "system"]);
 export const DesktopUpdateChannelSchema = Schema.Literals(["latest", "nightly"]);
 export const DesktopAppStageLabelSchema = Schema.Literals(["Alpha", "Dev", "Nightly"]);
@@ -1120,6 +1143,17 @@ export interface DesktopBridge {
    * web callers fall back to a plain file input.
    */
   pickThemeFiles?: () => Promise<readonly PickedThemeFile[] | null>;
+  /**
+   * Show an OS notification for a thread. Optional so a newer web client keeps
+   * working inside an older desktop shell; callers fall back to no banner.
+   */
+  showThreadNotification?: (notification: DesktopThreadNotification) => Promise<void>;
+  /** Dock badge count. Zero clears it. Optional for the same interop reason. */
+  setAttentionBadgeCount?: (count: number) => Promise<void>;
+  /** Fires when the user clicks a notification banner. Returns an unsubscribe. */
+  onThreadNotificationActivated?: (
+    listener: (target: DesktopThreadNotificationTarget) => void,
+  ) => () => void;
   setTheme: (theme: DesktopTheme) => Promise<void>;
   showContextMenu: <T extends string>(
     items: readonly ContextMenuItem<T>[],

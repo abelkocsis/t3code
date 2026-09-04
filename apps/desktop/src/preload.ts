@@ -81,6 +81,24 @@ contextBridge.exposeInMainWorld("desktopBridge", {
     ipcRenderer.invoke(IpcChannels.FETCH_SSH_SESSION_STATE_CHANNEL, { httpBaseUrl, bearerToken }),
   issueSshWebSocketTicket: (httpBaseUrl, bearerToken) =>
     ipcRenderer.invoke(IpcChannels.ISSUE_SSH_WEBSOCKET_TOKEN_CHANNEL, { httpBaseUrl, bearerToken }),
+  showThreadNotification: (notification) =>
+    ipcRenderer.invoke(IpcChannels.SHOW_THREAD_NOTIFICATION_CHANNEL, notification),
+  setAttentionBadgeCount: (count) =>
+    ipcRenderer.invoke(IpcChannels.SET_ATTENTION_BADGE_COUNT_CHANNEL, count),
+  onThreadNotificationActivated: (listener) => {
+    const wrappedListener = (_event: Electron.IpcRendererEvent, target: unknown) => {
+      if (typeof target !== "object" || target === null) return;
+      listener(target as Parameters<typeof listener>[0]);
+    };
+
+    ipcRenderer.on(IpcChannels.THREAD_NOTIFICATION_ACTIVATED_CHANNEL, wrappedListener);
+    return () => {
+      ipcRenderer.removeListener(
+        IpcChannels.THREAD_NOTIFICATION_ACTIVATED_CHANNEL,
+        wrappedListener,
+      );
+    };
+  },
   onSshPasswordPrompt: (listener) => {
     const wrappedListener = (_event: Electron.IpcRendererEvent, request: unknown) => {
       if (typeof request !== "object" || request === null) return;
