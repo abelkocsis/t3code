@@ -23,6 +23,7 @@ import {
   type MouseEvent as ReactMouseEvent,
 } from "react";
 import { createPortal } from "react-dom";
+import { isElectron } from "../../env";
 import GitActionsControl from "../GitActionsControl";
 import { isTrailingDoubleClick } from "../Sidebar.logic";
 import { type DraftId } from "~/composerDraftStore";
@@ -495,8 +496,13 @@ export const ChatHeader = memo(function ChatHeader({
           // Reserve two panel toggles (32px, 28px at sm) with their 4px gap and 1px edge inset,
           // plus the same gap the actions keep between themselves (gap-2, gap-3 at @3xl) so the
           // terminal toggle does not sit against the last action. The page header adds 8px more
-          // right padding at sm.
-          rightPanelOpen ? "pr-0" : "pr-19.25 sm:pr-15.25 @3xl/header-actions:pr-16.25",
+          // right padding at sm. The desktop build carries a third control, the step away
+          // button, so it reserves one more 32px toggle and its 4px gap.
+          rightPanelOpen
+            ? "pr-0"
+            : isElectron
+              ? "pr-28.25 sm:pr-24.25 @3xl/header-actions:pr-25.25"
+              : "pr-19.25 sm:pr-15.25 @3xl/header-actions:pr-16.25",
           "[[data-panel-animations=true]_&]:motion-safe:transition-[padding-right] [[data-panel-animations=true]_&]:motion-safe:duration-(--panel-animation-duration) [[data-panel-animations=true]_&]:motion-safe:ease-out",
         )}
       >
