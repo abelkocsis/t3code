@@ -2632,7 +2632,17 @@ export const createBuildConfig = Effect.fn("createBuildConfig")(function* (
           schemes: ["t3code", "t3code-dev"],
         },
       ],
-      ...(signed ? { sign: path.join(repoRoot, "scripts/sign-macos.ts") } : {}),
+      ...(signed
+        ? { sign: path.join(repoRoot, "scripts/sign-macos.ts") }
+        : // Ad-hoc rather than nothing. Left unsigned, electron-builder ships
+          // the linker's placeholder signature: the bundle reports itself as
+          // "Electron", its Info.plist is not bound and its resources are not
+          // sealed, so macOS has no stable identity to attach permissions to
+          // and Notification Center never registers the app. Ad-hoc signing is
+          // free, needs no Apple account, and gives the bundle its real
+          // identity. It does not satisfy Gatekeeper, which still needs the
+          // quarantine flag cleared by hand.
+          { identity: "-" }),
       ...(macPasskeySigning
         ? {
             entitlements: macPasskeySigning.entitlementsPath,
