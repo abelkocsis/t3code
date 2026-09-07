@@ -54,6 +54,7 @@ import {
   repositoryConventionsTextGenerationPolicy,
 } from "../textGeneration/TextGenerationPresets.ts";
 import * as ProjectSetupScriptRunner from "../project/ProjectSetupScriptRunner.ts";
+import * as ProviderWorkspaceStateService from "../provider/ProviderWorkspaceStateService.ts";
 import * as ProviderRegistry from "../provider/Services/ProviderRegistry.ts";
 import { extractBranchNameFromRemoteRef } from "./remoteRefs.ts";
 import * as ServerSettings from "../serverSettings.ts";
@@ -655,6 +656,7 @@ export const make = Effect.gen(function* () {
   const textGeneration = yield* TextGeneration.TextGeneration;
   const providerRegistry = yield* ProviderRegistry.ProviderRegistry;
   const projectSetupScriptRunner = yield* ProjectSetupScriptRunner.ProjectSetupScriptRunner;
+  const providerWorkspaceState = yield* ProviderWorkspaceStateService.ProviderWorkspaceStateService;
   const crypto = yield* Crypto.Crypto;
   const fileSystem = yield* FileSystem.FileSystem;
   const path = yield* Path.Path;
@@ -2236,6 +2238,11 @@ export const make = Effect.gen(function* () {
   const preparePullRequestThread: GitManager["Service"]["preparePullRequestThread"] = Effect.fn(
     "preparePullRequestThread",
   )(function* (input) {
+    // A pull-request worktree is a new path too, so the provider state that
+    // is filed under a path has to be carried the same way a thread worktree
+    // carries it.
+    const carryProviderState = (worktreePath: string) =>
+      providerWorkspaceState.linkForWorktree({ projectPath: input.cwd, worktreePath });
     const maybeRunSetupScript = (worktreePath: string) => {
       if (!input.threadId) {
         return Effect.void;
@@ -2487,6 +2494,7 @@ export const make = Effect.gen(function* () {
         path: null,
       });
       yield* ensureExistingWorktreeUpstream(worktree.worktree.path);
+      yield* carryProviderState(worktree.worktree.path);
       yield* maybeRunSetupScript(worktree.worktree.path);
 
       return {

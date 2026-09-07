@@ -158,6 +158,7 @@ import * as VcsProvisioningService from "./vcs/VcsProvisioningService.ts";
 import * as VcsProcess from "./vcs/VcsProcess.ts";
 import * as GitWorkflowService from "./git/GitWorkflowService.ts";
 import * as ReviewService from "./review/ReviewService.ts";
+import * as ProviderWorkspaceStateService from "./provider/ProviderWorkspaceStateService.ts";
 import * as SourceControlIssueService from "./sourceControl/SourceControlIssueService.ts";
 import * as SourceControlRepositoryService from "./sourceControl/SourceControlRepositoryService.ts";
 import * as ServerSecretStore from "./auth/ServerSecretStore.ts";
@@ -517,6 +518,9 @@ const buildAppUnderTest = (options?: {
     >;
     sourceControlIssueService?: Partial<
       SourceControlIssueService.SourceControlIssueService["Service"]
+    >;
+    providerWorkspaceState?: Partial<
+      ProviderWorkspaceStateService.ProviderWorkspaceStateService["Service"]
     >;
     reviewService?: Partial<ReviewService.ReviewService["Service"]>;
     vcsStatusBroadcaster?: Partial<VcsStatusBroadcaster.VcsStatusBroadcaster["Service"]>;
@@ -905,6 +909,12 @@ const buildAppUnderTest = (options?: {
           }),
           Layer.mock(SourceControlIssueService.SourceControlIssueService)({
             ...options?.layers?.sourceControlIssueService,
+          }),
+          // Carrying provider memory into a worktree touches the real
+          // ~/.claude, so the seam is stubbed rather than exercised here.
+          Layer.mock(ProviderWorkspaceStateService.ProviderWorkspaceStateService)({
+            linkForWorktree: () => Effect.void,
+            ...options?.layers?.providerWorkspaceState,
           }),
         ),
       ),

@@ -41,6 +41,7 @@ import type { SourceControlProvider } from "../sourceControl/SourceControlProvid
 import * as SourceControlProviderRegistry from "../sourceControl/SourceControlProviderRegistry.ts";
 import * as ServerConfig from "../config.ts";
 import * as ProjectSetupScriptRunner from "../project/ProjectSetupScriptRunner.ts";
+import * as ProviderWorkspaceStateService from "../provider/ProviderWorkspaceStateService.ts";
 import * as ProviderRegistry from "../provider/Services/ProviderRegistry.ts";
 import * as ServerSettings from "../serverSettings.ts";
 import * as GitManager from "./GitManager.ts";
@@ -711,6 +712,11 @@ function makeManager(input?: {
         runForThread: () => Effect.succeed({ status: "no-script" as const }),
       },
     ),
+    // Carrying provider memory writes into the real provider config dir, so
+    // these tests stub the seam rather than exercising it.
+    Layer.mock(ProviderWorkspaceStateService.ProviderWorkspaceStateService)({
+      linkForWorktree: () => Effect.void,
+    }),
     vcsDriverLayer,
     serverSettingsLayer,
   ).pipe(Layer.provideMerge(sourceControlRegistryLayer), Layer.provideMerge(NodeServices.layer));
