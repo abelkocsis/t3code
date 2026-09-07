@@ -99,6 +99,15 @@ FEED="release/latest-mac.yml"
 # missing it silently strands everyone on the version they already have.
 [ -f "$FEED" ] || die "No ${FEED}. The update feed was not generated; do not publish this."
 
+# Named one by one rather than globbed: `release/` keeps every build ever made,
+# so a glob would attach last month's files to this release. The expansion below
+# is written the long way because macOS ships bash 3.2, where `"${ASSETS[@]}"`
+# on an empty array is an unbound variable under `set -u`.
+ASSETS=()
+for extra in "${DMG}.blockmap" "${ZIP}.blockmap"; do
+  [ -f "$extra" ] && ASSETS+=("$extra")
+done
+
 if [ "$DRY_RUN" = "1" ]; then
   say "Dry run. Built ${DMG} and left the tag and the release alone."
   exit 0
@@ -127,7 +136,6 @@ gh release create "$TAG" \
 
 Later versions install themselves: the app checks this repository's releases
 and offers the update." \
-  "$DMG" "$ZIP" "$FEED" \
-  release/*.blockmap
+  "$DMG" "$ZIP" "$FEED" ${ASSETS[@]+"${ASSETS[@]}"}
 
 say "Published ${TAG}. Colleagues on an earlier build will be offered it."
