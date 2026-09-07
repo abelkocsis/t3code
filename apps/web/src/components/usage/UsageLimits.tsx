@@ -14,7 +14,7 @@ import {
   formatResetsIn,
   type LimitPace,
   paceOf,
-  remainingPercent,
+  spentPercent,
 } from "@t3tools/shared/usageLimits";
 import { GaugeIcon, TrendingDownIcon, TrendingUpIcon } from "lucide-react";
 import { Fragment, useState } from "react";
@@ -74,11 +74,11 @@ export function PaceIcon({ pace }: { readonly pace: LimitPace }) {
 
 /**
  * One window as a full-width bar from the moment it opened to its reset.
- * The fill is the share of quota spent; the hairline is how far into the
+ * The fill grows with the quota spent; the hairline is how far into the
  * window the clock is, which is also where even spending would have put the
  * fill. Hover for the exact figures and reset time.
  */
-function WindowBar({
+export function WindowBar({
   color,
   window,
   now,
@@ -88,16 +88,16 @@ function WindowBar({
   readonly now: number;
 }) {
   const timestampFormat = usePrimarySettings((settings) => settings.timestampFormat);
-  const remaining = remainingPercent(window);
+  const spent = spentPercent(window);
   const elapsed = elapsedShare(window, now);
-  // The fill is quota left, so the even-spending mark is the time left.
-  const timeLeft = elapsed === null ? null : Math.round((1 - elapsed) * 100);
+  // The fill is quota spent, so the even-spending mark is the elapsed time.
+  const timeElapsed = elapsed === null ? null : Math.round(elapsed * 100);
   const resetsIn = formatResetsIn(window, now);
   const resetsAt = window.resetsAt
     ? formatUpcomingTimestamp(window.resetsAt, timestampFormat, now)
     : null;
-  const summary = `${window.label}: ${remaining}% left${
-    timeLeft === null ? "" : `, ${timeLeft}% of the window left`
+  const summary = `${window.label}: ${spent}% used${
+    timeElapsed === null ? "" : `, ${timeElapsed}% of the window elapsed`
   }${resetsIn ? `, ${resetsIn}` : ""}`;
 
   return (
@@ -113,26 +113,27 @@ function WindowBar({
         }
       >
         <div className="absolute inset-x-0 inset-y-1.5 rounded-full bg-muted" />
-        {remaining > 0 ? (
+        {spent > 0 ? (
           <div
             className="absolute inset-y-1.5 left-0 rounded-full"
-            style={{ width: `${remaining}%`, backgroundColor: color }}
+            style={{ width: `${spent}%`, backgroundColor: color }}
           />
         ) : null}
-        {timeLeft !== null ? (
+        {timeElapsed !== null ? (
           <span
             aria-hidden
             className="absolute inset-y-0.5 w-px -translate-x-1/2 bg-foreground/60"
-            style={{ left: `${timeLeft}%` }}
+            style={{ left: `${timeElapsed}%` }}
           />
         ) : null}
       </TooltipTrigger>
       <TooltipPopup side="top" className="max-w-72 text-xs">
         <div className="flex flex-col gap-0.5">
           <span className="text-foreground">
-            {remaining}% left{timeLeft !== null ? ` · ${timeLeft}% of the window left` : ""}
+            {spent}% used
+            {timeElapsed !== null ? ` · ${timeElapsed}% of the window elapsed` : ""}
           </span>
-          {timeLeft !== null ? (
+          {timeElapsed !== null ? (
             <span className="text-muted-foreground">The line is where even spending would be.</span>
           ) : null}
           {resetsAt ? (
@@ -179,7 +180,7 @@ export function LimitWindows({
             <span className="flex min-w-0 items-center gap-2 text-xs">
               <span className="truncate text-muted-foreground">{window.label}</span>
               <span className="ms-auto shrink-0 font-medium text-foreground tabular-nums">
-                {remainingPercent(window)}% left
+                {spentPercent(window)}%
               </span>
             </span>
             <WindowBar color={color} window={window} now={now} />
@@ -188,6 +189,46 @@ export function LimitWindows({
               <span className="ms-auto shrink-0">{resetsIn ?? ""}</span>
             </span>
           </Fragment>
+        );
+      })}
+    </div>
+  );
+}
+
+/**
+ * The same windows stacked two lines to a row: label, countdown and percent
+ * over a full-width bar. The grid above needs about 20rem of width; this fits
+ * the composer popover, where the bar is the thing worth the space.
+ */
+export function LimitWindowsStacked({
+  driver,
+  windows,
+  now,
+}: {
+  readonly driver: ServerProvider["driver"];
+  readonly windows: ReadonlyArray<ServerProviderUsageWindow>;
+  readonly now: number;
+}) {
+  const color = barColor(driver);
+  return (
+    <div className="flex flex-col gap-1.5">
+      {windows.map((window) => {
+        const pace = paceOf(window, now);
+        const resetsIn = formatResetsIn(window, now);
+        return (
+          <div key={window.id} className="flex flex-col">
+            <div className="flex min-w-0 items-center gap-2 text-[11px] leading-4">
+              <span className="truncate text-muted-foreground">{window.label}</span>
+              <span className="ms-auto flex shrink-0 items-center gap-1.5 text-muted-foreground tabular-nums">
+                {resetsIn ? <span>{resetsIn}</span> : null}
+                {pace ? <PaceIcon pace={pace} /> : null}
+              </span>
+              <span className="shrink-0 font-medium text-foreground tabular-nums">
+                {spentPercent(window)}%
+              </span>
+            </div>
+            <WindowBar color={color} window={window} now={now} />
+          </div>
         );
       })}
     </div>

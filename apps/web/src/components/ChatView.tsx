@@ -2707,6 +2707,22 @@ export default function ChatView(props: ChatViewProps) {
       usageLimitsPanel,
     ],
   );
+  // The meter popover shows the same numbers as the /usage-limits banner, so
+  // it reads the same collection. Only `createdAt` depends on the clock, and
+  // the popover does not render it, so this recomputes with the snapshots
+  // rather than with time.
+  const contextWindowUsageLimits = useMemo(
+    () =>
+      activeProviderInstanceId === null
+        ? null
+        : collectProviderUsageLimits(
+            activeProviderInstanceId,
+            providerStatuses,
+            usageLimitSources,
+            Date.now(),
+          ),
+    [activeProviderInstanceId, providerStatuses, usageLimitSources],
+  );
   const usageLimitsBanner = useMemo(
     () =>
       usageLimitsReport !== null && usageLimitsPanel !== null
@@ -8120,6 +8136,7 @@ export default function ChatView(props: ChatViewProps) {
                             activeProjectDefaultModelSelection={activeProjectDefaultModelSelection}
                             activeThreadModelSelection={activeThread?.modelSelection}
                             activeContextWindow={activeContextWindow}
+                            contextWindowUsageLimits={contextWindowUsageLimits}
                             compactThreadUnavailable={compactThreadUnavailable}
                             compactDisabled={compactDisabled}
                             compactDisabledReason={compactDisabledReason}
