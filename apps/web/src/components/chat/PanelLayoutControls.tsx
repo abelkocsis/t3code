@@ -1,6 +1,14 @@
-import { Maximize2Icon, Minimize2Icon, PanelBottomIcon, PanelRightIcon } from "lucide-react";
+import {
+  CoffeeIcon,
+  Maximize2Icon,
+  Minimize2Icon,
+  PanelBottomIcon,
+  PanelRightIcon,
+} from "lucide-react";
 import { memo } from "react";
 
+import { isElectron } from "../../env";
+import { useStepAwayStore } from "../../stepAwayStore";
 import { Toggle } from "../ui/toggle";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
 
@@ -37,6 +45,7 @@ export const PanelLayoutControls = memo(function PanelLayoutControls({
       className="flex h-full shrink-0 items-center gap-1 [-webkit-app-region:no-drag]"
       data-panel-layout-controls
     >
+      <StepAwayToggle />
       {showTerminalControl ? (
         <Tooltip>
           <TooltipTrigger render={<span className="flex shrink-0" />}>
@@ -131,3 +140,38 @@ export const RightPanelMaximizeControl = memo(function RightPanelMaximizeControl
     </Tooltip>
   );
 });
+
+/**
+ * Turns step away mode on: the overlay window grows to a size that reads from
+ * across a room, and the display is held awake while it shows.
+ *
+ * Desktop only, because the overlay is an Electron window. A browser tab has
+ * nothing to grow, so the control is not offered there rather than being
+ * offered and doing nothing.
+ */
+function StepAwayToggle() {
+  const active = useStepAwayStore((state) => state.active);
+  const toggle = useStepAwayStore((state) => state.toggle);
+  if (!isElectron) return null;
+  return (
+    <Tooltip>
+      <TooltipTrigger render={<span className="flex shrink-0" />}>
+        <Toggle
+          className="shrink-0 [-webkit-app-region:no-drag]"
+          pressed={active}
+          onPressedChange={toggle}
+          aria-label={active ? "Leave step away mode" : "Step away mode"}
+          variant="ghost"
+          size="sm"
+        >
+          <CoffeeIcon className="size-4" />
+        </Toggle>
+      </TooltipTrigger>
+      <TooltipPopup side="bottom">
+        {active
+          ? "Leave step away mode"
+          : "Step away mode: a large overlay you can read from across the room"}
+      </TooltipPopup>
+    </Tooltip>
+  );
+}

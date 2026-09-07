@@ -6,9 +6,10 @@ import type { AttentionPhase } from "./threadAttention.ts";
  *
  * "full" lists the threads the user has not seen. "pill" is the resting state:
  * a small bar proving the overlay is alive without covering the screen.
- * "hidden" puts nothing on screen at all.
+ * "hidden" puts nothing on screen at all. "stepAway" is the same content at a
+ * size that reads from across a room, for a user who has left the machine.
  */
-export type OverlayMode = "hidden" | "pill" | "full";
+export type OverlayMode = "hidden" | "pill" | "full" | "stepAway";
 
 export interface OverlayItem {
   readonly environmentId: string;
@@ -37,18 +38,31 @@ export interface OverlayVisibilityInput {
   readonly workingCount: number;
   /** False keeps the overlay off screen until something needs the user. */
   readonly showIdlePill: boolean;
+  /** The user said they are leaving the machine, so show everything, large. */
+  readonly stepAway: boolean;
 }
 
 /**
  * What the overlay should show right now.
  *
- * The order of the rules is the design: the user's own switch outranks
- * everything, a temporary hide outranks the content, and looking at T3 Code
- * outranks having something to report — the sidebar already says it, so a
- * floating window over the app would only repeat itself.
+ * The order of the rules is the design. Step away is a request the user just
+ * made, so it outranks the standing switch and every hide: someone walking
+ * away from the machine wants the window whatever they set an hour ago.
+ *
+ * After that, the user's own switch outranks everything, a temporary hide
+ * outranks the content, and looking at T3 Code outranks having something to
+ * report — the sidebar already says it, so a floating window over the app
+ * would only repeat itself.
+ *
+ * Step away deliberately ignores focus. The user often leaves with T3 Code in
+ * front of them, so hiding on focus would hide the window at the moment it is
+ * turned on, which is the one thing it must not do.
  */
 export function resolveOverlayState(input: OverlayVisibilityInput): OverlayState {
   const hidden: OverlayState = { mode: "hidden", items: [], workingCount: 0 };
+  if (input.stepAway) {
+    return { mode: "stepAway", items: input.unseen, workingCount: input.workingCount };
+  }
   if (!input.enabled) return hidden;
   if (isOverlayHiddenNow({ hiddenUntil: input.hiddenUntil, now: input.now })) return hidden;
   if (input.appFocused) return hidden;
