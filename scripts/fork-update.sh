@@ -77,7 +77,7 @@ else
   BACKUP="backup/${BRANCH##*/}-$(date +%Y%m%d-%H%M%S)"
   git branch "$BACKUP"
   say "Branch backed up as $BACKUP"
-  say "Replaying onto $LATEST_TAG…"
+  say "Replaying onto ${LATEST_TAG}…"
   if ! git rebase --onto "$LATEST_TAG" "$BASE_TAG" "$BRANCH"; then
     printf '\n\033[33m%s\033[0m\n' "Conflicts. Resolve them, 'git add' each file, then re-run this script."
     git --no-pager diff --name-only --diff-filter=U | sed 's/^/  /'
