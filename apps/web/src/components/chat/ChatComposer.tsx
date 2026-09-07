@@ -31,6 +31,7 @@ import type {
   ServerProvider,
   ThreadId,
   SnapShotSource,
+  UsageLimitsReport,
 } from "@t3tools/contracts";
 import {
   ProviderDriverKind,
@@ -1150,6 +1151,7 @@ const ComposerFooterPrimaryActions = memo(function ComposerFooterPrimaryActions(
   compact: boolean;
   activeContextWindow: ContextWindowSnapshot | null;
   reserveContextWindowMeter: boolean;
+  contextWindowUsageLimits: UsageLimitsReport | null;
   activeThreadModelDisplayName: string | null;
   isPreparingWorktree: boolean;
   pendingAction: {
@@ -1180,6 +1182,7 @@ const ComposerFooterPrimaryActions = memo(function ComposerFooterPrimaryActions(
       {props.activeContextWindow ? (
         <ContextWindowMeter
           usage={props.activeContextWindow}
+          usageLimits={props.contextWindowUsageLimits}
           modelDisplayName={props.activeThreadModelDisplayName}
           onCompact={props.onCompactContext}
           compactDisabled={props.compactDisabled}
@@ -1357,6 +1360,8 @@ export interface ChatComposerProps {
 
   // Context window
   activeContextWindow: ContextWindowSnapshot | null;
+  /** Subscription limits for the selected provider, shown in the meter popover. */
+  contextWindowUsageLimits: UsageLimitsReport | null;
   compactThreadUnavailable: boolean;
   compactDisabled: boolean;
   compactDisabledReason: string | null;
@@ -1477,6 +1482,7 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
     activeProjectDefaultModelSelection,
     activeThreadModelSelection,
     activeContextWindow,
+    contextWindowUsageLimits,
     compactThreadUnavailable,
     compactDisabled,
     compactDisabledReason,
@@ -6827,6 +6833,7 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
                       settings.contextWindowMeterEnabled ? activeContextWindow : null
                     }
                     reserveContextWindowMeter={reserveContextWindowMeter}
+                    contextWindowUsageLimits={contextWindowUsageLimits}
                     activeThreadModelDisplayName={activeThreadModelDisplayName}
                     pendingAction={pendingPrimaryAction}
                     isRunning={phase === "running"}
