@@ -485,9 +485,18 @@ export function limitsNotice(limits: ServerProviderUsageLimits): string | null {
   return limits.windows.length === 0 ? "No limits reported." : null;
 }
 
-/** Quota left in the window, 0..100. Bars and labels show what remains, as Codex does. */
+/** Quota left in the window, 0..100. The pooled bars show what remains, as Codex does. */
 export function remainingPercent(window: ServerProviderUsageWindow): number {
-  return Math.round(100 - Math.max(0, Math.min(100, window.usedPercent)));
+  return Math.round(100 - spentPercent(window));
+}
+
+/**
+ * Quota spent in the window, 0..100. The per-account bars fill as the quota
+ * goes, which is the direction every subscription meter uses and the one a
+ * glance reads as "how close am I to the wall".
+ */
+export function spentPercent(window: ServerProviderUsageWindow): number {
+  return Math.round(Math.max(0, Math.min(100, window.usedPercent)));
 }
 
 function resetMillis(window: ServerProviderUsageWindow): number | null {

@@ -24,6 +24,7 @@ import {
   paceOf,
   providersWithLimits,
   remainingPercent,
+  spentPercent,
 } from "./usageLimits.ts";
 
 const now = Date.parse("2026-09-03T12:00:00.000Z");
@@ -1093,6 +1094,22 @@ describe("remainingPercent", () => {
     expect(remainingPercent({ ...window, usedPercent: 0 })).toBe(100);
     expect(remainingPercent({ ...window, usedPercent: 100 })).toBe(0);
     expect(remainingPercent({ ...window, usedPercent: 33.4 })).toBe(67);
+  });
+});
+
+describe("spentPercent", () => {
+  it("rounds and clamps the reported usage without inverting it", () => {
+    expect(spentPercent(window)).toBe(40);
+    expect(spentPercent({ ...window, usedPercent: 0 })).toBe(0);
+    expect(spentPercent({ ...window, usedPercent: 100 })).toBe(100);
+    expect(spentPercent({ ...window, usedPercent: 33.4 })).toBe(33);
+  });
+
+  it("stays the complement of the remaining share the pooled bars use", () => {
+    for (const usedPercent of [0, 12.5, 40, 67.5, 100]) {
+      const each = { ...window, usedPercent };
+      expect(spentPercent(each) + remainingPercent(each)).toBe(100);
+    }
   });
 });
 
