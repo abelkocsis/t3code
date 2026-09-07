@@ -161,6 +161,7 @@ import { pullRequestSyncKey } from "./pullRequest/pullRequestSyncKey.ts";
 import * as SqlClient from "effect/unstable/sql/SqlClient";
 import * as PullRequestSyncReactor from "./orchestration/PullRequestSyncReactor.ts";
 import * as SourceControlDiscovery from "./sourceControl/SourceControlDiscovery.ts";
+import * as SourceControlIssueService from "./sourceControl/SourceControlIssueService.ts";
 import * as SourceControlRepositoryService from "./sourceControl/SourceControlRepositoryService.ts";
 import * as AzureDevOpsCli from "./sourceControl/AzureDevOpsCli.ts";
 import * as BitbucketApi from "./sourceControl/BitbucketApi.ts";
@@ -654,6 +655,7 @@ const makeWsRpcLayer = (
       );
       const sourceControlRepositories =
         yield* SourceControlRepositoryService.SourceControlRepositoryService;
+      const sourceControlIssues = yield* SourceControlIssueService.SourceControlIssueService;
       const pullRequests = yield* PullRequestService.PullRequestService;
       const withPullRequestViewer = pullRequests.withRoutingCredential;
       const pullRequestSync = yield* PullRequestSyncReactor.PullRequestSyncReactor;
@@ -2855,6 +2857,22 @@ const makeWsRpcLayer = (
           observeRpcEffect(
             WS_METHODS.sourceControlLookupRepository,
             sourceControlRepositories.lookupRepository(input),
+            {
+              "rpc.aggregate": "source-control",
+            },
+          ),
+        [WS_METHODS.sourceControlSearchIssues]: (input) =>
+          observeRpcEffect(
+            WS_METHODS.sourceControlSearchIssues,
+            sourceControlIssues.searchIssues(input),
+            {
+              "rpc.aggregate": "source-control",
+            },
+          ),
+        [WS_METHODS.sourceControlIssueDetails]: (input) =>
+          observeRpcEffect(
+            WS_METHODS.sourceControlIssueDetails,
+            sourceControlIssues.getIssueDetails(input),
             {
               "rpc.aggregate": "source-control",
             },

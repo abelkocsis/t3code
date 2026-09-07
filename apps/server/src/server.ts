@@ -106,6 +106,7 @@ import * as VcsStatusBroadcaster from "./vcs/VcsStatusBroadcaster.ts";
 import * as ProjectCloneTracker from "./project/ProjectCloneTracker.ts";
 import * as GitWorkflowService from "./git/GitWorkflowService.ts";
 import * as ReviewService from "./review/ReviewService.ts";
+import * as SourceControlIssueService from "./sourceControl/SourceControlIssueService.ts";
 import * as SourceControlProviderRegistry from "./sourceControl/SourceControlProviderRegistry.ts";
 import * as PullRequestReadCache from "./pullRequest/PullRequestReadCache.ts";
 import * as SourceControlRateLimit from "./sourceControl/SourceControlRateLimit.ts";
@@ -359,6 +360,10 @@ const SourceControlRepositoryServiceLayerLive = SourceControlRepositoryService.l
 
 const ProjectCloneTrackerLayerLive = ProjectCloneTracker.layer.pipe(
   Layer.provide(SourceControlRepositoryServiceLayerLive),
+// `gh` is the only client it needs, so it does not carry the git driver and
+// provider registry the repository service does.
+const SourceControlIssueServiceLayerLive = SourceControlIssueService.layer.pipe(
+  Layer.provide(GitHubCli.layer.pipe(Layer.provide(VcsProcess.layer))),
 );
 
 const ReviewLayerLive = ReviewService.layer.pipe(
@@ -374,6 +379,7 @@ const VcsLayerLive = Layer.empty.pipe(
   Layer.provideMerge(ReviewLayerLive),
   Layer.provideMerge(SourceControlRepositoryServiceLayerLive),
   Layer.provideMerge(ProjectCloneTrackerLayerLive),
+  Layer.provideMerge(SourceControlIssueServiceLayerLive),
   Layer.provideMerge(
     VcsStatusBroadcaster.layer.pipe(
       Layer.provide(GitWorkflowLayerLive),

@@ -263,6 +263,11 @@ import {
   SourceControlDiscoveryResult,
   SourceControlPublishRepositoryInput,
   SourceControlPublishRepositoryResult,
+  SourceControlIssueDetailsInput,
+  SourceControlIssueDetailsResult,
+  SourceControlIssueError,
+  SourceControlIssueSearchInput,
+  SourceControlIssueSearchResult,
   SourceControlRepositoryError,
   SourceControlRepositoryInfo,
   SourceControlRepositoryLookupInput,
@@ -419,6 +424,8 @@ export const WS_METHODS = {
   projectCloneCancel: "projectClone.cancel",
   projectCloneRetry: "projectClone.retry",
   subscribeProjectClones: "subscribeProjectClones",
+  sourceControlSearchIssues: "sourceControl.searchIssues",
+  sourceControlIssueDetails: "sourceControl.issueDetails",
 
   // Streaming subscriptions
   subscribeVcsStatus: "subscribeVcsStatus",
@@ -889,6 +896,18 @@ const WsSourceControlPublishRepositoryRpc = Rpc.make(WS_METHODS.sourceControlPub
   payload: SourceControlPublishRepositoryInput,
   success: SourceControlPublishRepositoryResult,
   error: Schema.Union([SourceControlRepositoryError, EnvironmentAuthorizationError]),
+});
+
+const WsSourceControlSearchIssuesRpc = Rpc.make(WS_METHODS.sourceControlSearchIssues, {
+  payload: SourceControlIssueSearchInput,
+  success: SourceControlIssueSearchResult,
+  error: Schema.Union([SourceControlIssueError, EnvironmentAuthorizationError]),
+});
+
+const WsSourceControlIssueDetailsRpc = Rpc.make(WS_METHODS.sourceControlIssueDetails, {
+  payload: SourceControlIssueDetailsInput,
+  success: SourceControlIssueDetailsResult,
+  error: Schema.Union([SourceControlIssueError, EnvironmentAuthorizationError]),
 });
 
 const WsProjectsSearchEntriesRpc = Rpc.make(WS_METHODS.projectsSearchEntries, {
@@ -1426,6 +1445,8 @@ export const WsRpcGroup = RpcGroup.make(
   WsProjectCloneCancelRpc,
   WsProjectCloneRetryRpc,
   WsSubscribeProjectClonesRpc,
+  WsSourceControlSearchIssuesRpc,
+  WsSourceControlIssueDetailsRpc,
   WsProjectsListEntriesRpc,
   WsProjectsReadFileRpc,
   WsProjectsSearchContentsRpc,

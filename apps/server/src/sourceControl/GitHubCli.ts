@@ -10,11 +10,21 @@ import * as Schema from "effect/Schema";
 
 import {
   TrimmedNonEmptyString,
+  type SourceControlIssueDetail,
+  type SourceControlIssueRef,
   type SourceControlRepositoryVisibility,
   type VcsError,
 } from "@t3tools/contracts";
 
 import * as VcsProcess from "../vcs/VcsProcess.ts";
+import {
+  buildGitHubIssueDetailArgs,
+  buildGitHubIssueSearchArgs,
+  decodeGitHubIssueDetailJson,
+  decodeGitHubIssueSearchJson,
+  type GitHubIssueSearchArgsInput,
+  type GitHubIssueSearchBatch,
+} from "./gitHubIssues.ts";
 import {
   decodeGitHubPullRequestJson,
   decodeGitHubPullRequestListJson,
@@ -22,6 +32,10 @@ import {
 } from "./gitHubPullRequests.ts";
 
 const DEFAULT_TIMEOUT_MS = 30_000;
+/** A cross-repository search reaches further than a lookup in one repository. */
+const ISSUE_SEARCH_TIMEOUT_MS = 45_000;
+const ISSUE_SEARCH_MAX_OUTPUT_BYTES = 16 * 1024 * 1024;
+const ISSUE_DETAIL_MAX_OUTPUT_BYTES = 4 * 1024 * 1024;
 
 /** Server-local credential scope; never put its value in RPC payloads or cache keys. */
 export const PinnedGitHubCredential = Context.Reference<{
@@ -186,6 +200,32 @@ export class GitHubRepositoryDecodeError extends Schema.TaggedError<GitHubReposi
   }
 }
 
+export class GitHubIssueSearchDecodeError extends Schema.TaggedErrorClass<GitHubIssueSearchDecodeError>()(
+  "GitHubIssueSearchDecodeError",
+  gitHubCliDecodeFields,
+) {
+  get detail(): string {
+    return "GitHub CLI returned invalid issue search JSON.";
+  }
+
+  override get message(): string {
+    return `GitHub CLI failed in searchIssues: ${this.detail}`;
+  }
+}
+
+export class GitHubIssueDecodeError extends Schema.TaggedErrorClass<GitHubIssueDecodeError>()(
+  "GitHubIssueDecodeError",
+  gitHubCliDecodeFields,
+) {
+  get detail(): string {
+    return "GitHub CLI returned invalid issue JSON.";
+  }
+
+  override get message(): string {
+    return `GitHub CLI failed in getIssue: ${this.detail}`;
+  }
+}
+
 export const GitHubCliError = Schema.Union([
   GitHubCliUnavailableError,
   GitHubCliAuthenticationError,
@@ -196,6 +236,8 @@ export const GitHubCliError = Schema.Union([
   GitHubChangeRequestListDecodeError,
   GitHubPullRequestDecodeError,
   GitHubRepositoryDecodeError,
+  GitHubIssueSearchDecodeError,
+  GitHubIssueDecodeError,
 ]);
 export type GitHubCliError = typeof GitHubCliError.Type;
 
@@ -315,6 +357,20 @@ export class GitHubCli extends Context.Service<
       readonly reference: string;
       readonly force?: boolean;
     }) => Effect.Effect<void, GitHubCliError>;
+
+    /**
+     * Open issues the signed-in account can read. `cwd` only decides which
+     * `gh` configuration applies; the search itself is not scoped to whatever
+     * repository that directory happens to hold.
+     */
+    readonly searchIssues: (
+      input: GitHubIssueSearchArgsInput & { readonly cwd: string },
+    ) => Effect.Effect<GitHubIssueSearchBatch, GitHubCliError>;
+
+    /** One issue with its whole body, which is what seeds a thread. */
+    readonly getIssue: (
+      input: SourceControlIssueRef & { readonly cwd: string },
+    ) => Effect.Effect<SourceControlIssueDetail, GitHubCliError>;
   }
 >()("t3/sourceControl/GitHubCli") {}
 
@@ -545,6 +601,64 @@ export const make = Effect.gen(function* () {
         cwd: input.cwd,
         args: ["pr", "checkout", input.reference, ...(input.force ? ["--force"] : [])],
       }).pipe(Effect.asVoid),
+    searchIssues: (input) =>
+      execute({
+        cwd: input.cwd,
+        args: buildGitHubIssueSearchArgs(input),
+        // Bodies of a hundred issues arrive on this pipe before the previews
+        // are cut from them, which is well past the default ceiling.
+        maxOutputBytes: ISSUE_SEARCH_MAX_OUTPUT_BYTES,
+        timeoutMs: ISSUE_SEARCH_TIMEOUT_MS,
+      }).pipe(
+        Effect.map((result) => result.stdout.trim()),
+        Effect.flatMap((raw) =>
+          // A search that matched nothing prints nothing on some gh versions
+          // and an empty array on others. Both mean no issues, not a failure.
+          raw.length === 0
+            ? Effect.succeed<GitHubIssueSearchBatch>({ issues: [], rawCount: 0 })
+            : Effect.sync(() => decodeGitHubIssueSearchJson(raw)).pipe(
+                Effect.flatMap((decoded) =>
+                  Result.isSuccess(decoded)
+                    ? Effect.succeed(decoded.success)
+                    : Effect.fail(
+                        new GitHubIssueSearchDecodeError({
+                          command: "gh",
+                          cwd: input.cwd,
+                          cause: decoded.failure,
+                        }),
+                      ),
+                ),
+              ),
+        ),
+      ),
+    getIssue: (input) =>
+      execute({
+        cwd: input.cwd,
+        args: buildGitHubIssueDetailArgs(input),
+        maxOutputBytes: ISSUE_DETAIL_MAX_OUTPUT_BYTES,
+      }).pipe(
+        Effect.map((result) => result.stdout.trim()),
+        Effect.flatMap((raw) =>
+          Effect.sync(() =>
+            decodeGitHubIssueDetailJson(raw, {
+              repository: input.repository,
+              number: input.number,
+            }),
+          ).pipe(
+            Effect.flatMap((decoded) =>
+              Result.isSuccess(decoded)
+                ? Effect.succeed(decoded.success)
+                : Effect.fail(
+                    new GitHubIssueDecodeError({
+                      command: "gh",
+                      cwd: input.cwd,
+                      cause: decoded.failure,
+                    }),
+                  ),
+            ),
+          ),
+        ),
+      ),
   });
 });
 
