@@ -584,6 +584,24 @@ function createGitHubCliWithFakeGh(scenario: FakeGhScenario = {}): {
           cwd: input.cwd,
           args: ["pr", "checkout", input.reference, ...(input.force ? ["--force"] : [])],
         }).pipe(Effect.asVoid),
+      // Git workflows never read issues; these exist so the stub satisfies the
+      // service, and fail loudly if one ever starts.
+      searchIssues: (input) =>
+        Effect.fail(
+          new GitHubCli.GitHubCliCommandError({
+            command: "gh",
+            cwd: input.cwd,
+            cause: new Error("Unexpected issue search"),
+          }),
+        ),
+      getIssue: (input) =>
+        Effect.fail(
+          new GitHubCli.GitHubCliCommandError({
+            command: "gh",
+            cwd: input.cwd,
+            cause: new Error(`Unexpected issue lookup: ${input.repository}#${input.number}`),
+          }),
+        ),
     },
     ghCalls,
   };
