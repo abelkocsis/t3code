@@ -176,6 +176,7 @@ import * as GitHubCli from "./sourceControl/GitHubCli.ts";
 import * as VcsProcess from "./vcs/VcsProcess.ts";
 import * as GitWorkflowService from "./git/GitWorkflowService.ts";
 import * as ReviewService from "./review/ReviewService.ts";
+import * as SourceControlIssueService from "./sourceControl/SourceControlIssueService.ts";
 import * as SourceControlRepositoryService from "./sourceControl/SourceControlRepositoryService.ts";
 import { REPLAY_MARKER_MAX_AGE } from "./auth/replayMarkers.ts";
 import * as ServerSecretStore from "./auth/ServerSecretStore.ts";
@@ -539,6 +540,9 @@ const buildAppUnderTest = (options?: {
     gitManager?: Partial<GitManager.GitManager["Service"]>;
     sourceControlRepositoryService?: Partial<
       SourceControlRepositoryService.SourceControlRepositoryService["Service"]
+    >;
+    sourceControlIssueService?: Partial<
+      SourceControlIssueService.SourceControlIssueService["Service"]
     >;
     reviewService?: Partial<ReviewService.ReviewService["Service"]>;
     vcsStatusBroadcaster?: Partial<VcsStatusBroadcaster.VcsStatusBroadcaster["Service"]>;
@@ -943,9 +947,14 @@ const buildAppUnderTest = (options?: {
       Layer.provide(reviewLayer),
       Layer.provide(vcsProvisioningLayer),
       Layer.provide(
-        Layer.mock(SourceControlRepositoryService.SourceControlRepositoryService)({
-          ...options?.layers?.sourceControlRepositoryService,
-        }),
+        Layer.mergeAll(
+          Layer.mock(SourceControlRepositoryService.SourceControlRepositoryService)({
+            ...options?.layers?.sourceControlRepositoryService,
+          }),
+          Layer.mock(SourceControlIssueService.SourceControlIssueService)({
+            ...options?.layers?.sourceControlIssueService,
+          }),
+        ),
       ),
       Layer.provideMerge(vcsStatusBroadcasterLayer),
       Layer.provide(
