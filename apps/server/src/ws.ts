@@ -142,6 +142,7 @@ import * as UsageService from "./usage/UsageService.ts";
 import * as TraceDiagnostics from "./diagnostics/TraceDiagnostics.ts";
 import * as PullRequestService from "./pullRequest/PullRequestService.ts";
 import * as SourceControlDiscovery from "./sourceControl/SourceControlDiscovery.ts";
+import * as SourceControlIssueService from "./sourceControl/SourceControlIssueService.ts";
 import * as SourceControlRepositoryService from "./sourceControl/SourceControlRepositoryService.ts";
 import * as AzureDevOpsCli from "./sourceControl/AzureDevOpsCli.ts";
 import * as BitbucketApi from "./sourceControl/BitbucketApi.ts";
@@ -602,6 +603,7 @@ const makeWsRpcLayer = (
       );
       const sourceControlRepositories =
         yield* SourceControlRepositoryService.SourceControlRepositoryService;
+      const sourceControlIssues = yield* SourceControlIssueService.SourceControlIssueService;
       const pullRequests = yield* PullRequestService.PullRequestService;
       const bootstrapCredentials = yield* PairingGrantStore.PairingGrantStore;
       const sessions = yield* SessionStore.SessionStore;
@@ -2230,6 +2232,22 @@ const makeWsRpcLayer = (
           observeRpcEffect(
             WS_METHODS.sourceControlLookupRepository,
             sourceControlRepositories.lookupRepository(input),
+            {
+              "rpc.aggregate": "source-control",
+            },
+          ),
+        [WS_METHODS.sourceControlSearchIssues]: (input) =>
+          observeRpcEffect(
+            WS_METHODS.sourceControlSearchIssues,
+            sourceControlIssues.searchIssues(input),
+            {
+              "rpc.aggregate": "source-control",
+            },
+          ),
+        [WS_METHODS.sourceControlIssueDetails]: (input) =>
+          observeRpcEffect(
+            WS_METHODS.sourceControlIssueDetails,
+            sourceControlIssues.getIssueDetails(input),
             {
               "rpc.aggregate": "source-control",
             },

@@ -1,5 +1,12 @@
 import * as Schema from "effect/Schema";
-import { PositiveInt, TrimmedNonEmptyString } from "./baseSchemas.ts";
+import {
+  ForwardCompatibleArray,
+  IsoDateTime,
+  NonNegativeInt,
+  PositiveInt,
+  TrimmedNonEmptyString,
+  TrimmedString,
+} from "./baseSchemas.ts";
 import { VcsDriverKind } from "./vcs.ts";
 
 export const SourceControlProviderKind = Schema.Literals([
@@ -183,5 +190,109 @@ export class SourceControlRepositoryError extends Schema.TaggedErrorClass<Source
 ) {
   override get message(): string {
     return `Source control repository operation ${this.operation} failed for ${this.provider}: ${this.detail}`;
+  }
+}
+
+/**
+ * The most issue rows one search may return. GitHub's own search pages at a
+ * hundred, and a picker that shows more than this is a list nobody reads.
+ */
+export const SOURCE_CONTROL_ISSUE_SEARCH_MAX_ROWS = 100;
+
+/** How many characters of an issue body a search row carries. */
+export const SOURCE_CONTROL_ISSUE_SUMMARY_MAX_LENGTH = 280;
+
+export const SourceControlIssueState = Schema.Literals(["open", "closed"]);
+export type SourceControlIssueState = typeof SourceControlIssueState.Type;
+
+/** Six hex digits without the leading `#`, as every host reports them. */
+export const SourceControlIssueLabel = Schema.Struct({
+  name: TrimmedNonEmptyString,
+  color: TrimmedString,
+});
+export type SourceControlIssueLabel = typeof SourceControlIssueLabel.Type;
+
+/** A repository in `owner/name` form plus the number that identifies an issue in it. */
+export const SourceControlIssueRef = Schema.Struct({
+  repository: TrimmedNonEmptyString,
+  number: PositiveInt,
+});
+export type SourceControlIssueRef = typeof SourceControlIssueRef.Type;
+
+/**
+ * One row of a search. Bodies are left out on purpose: fifty issue bodies is a
+ * payload nobody reading a list needs, so a row carries only `summary`, and the
+ * full text arrives from `getIssues` for the few issues a user picks.
+ */
+export const SourceControlIssueSummary = Schema.Struct({
+  repository: TrimmedNonEmptyString,
+  number: PositiveInt,
+  title: TrimmedNonEmptyString,
+  url: TrimmedNonEmptyString,
+  state: SourceControlIssueState,
+  labels: ForwardCompatibleArray(SourceControlIssueLabel),
+  assignees: Schema.Array(TrimmedNonEmptyString),
+  authorLogin: Schema.NullOr(TrimmedNonEmptyString),
+  commentCount: NonNegativeInt,
+  createdAt: IsoDateTime,
+  updatedAt: IsoDateTime,
+  /** First lines of the body, bounded by SOURCE_CONTROL_ISSUE_SUMMARY_MAX_LENGTH. */
+  summary: TrimmedString,
+});
+export type SourceControlIssueSummary = typeof SourceControlIssueSummary.Type;
+
+/** A picked issue with the whole body, which is what seeds a thread. */
+export const SourceControlIssueDetail = Schema.Struct({
+  ...SourceControlIssueSummary.fields,
+  body: Schema.String,
+});
+export type SourceControlIssueDetail = typeof SourceControlIssueDetail.Type;
+
+/**
+ * `assignedToViewer` is its own field rather than text the caller appends,
+ * because the picker's filter must survive a user typing their own qualifiers
+ * into `query` and must never be defeated by them.
+ */
+export const SourceControlIssueSearchInput = Schema.Struct({
+  provider: SourceControlProviderKind,
+  query: TrimmedString,
+  assignedToViewer: Schema.Boolean,
+  /** `owner/name` to search one repository, null to search every readable one. */
+  repository: Schema.NullOr(TrimmedNonEmptyString),
+  limit: Schema.Int.check(
+    Schema.isBetween({ minimum: 1, maximum: SOURCE_CONTROL_ISSUE_SEARCH_MAX_ROWS }),
+  ),
+});
+export type SourceControlIssueSearchInput = typeof SourceControlIssueSearchInput.Type;
+
+export const SourceControlIssueSearchResult = Schema.Struct({
+  issues: ForwardCompatibleArray(SourceControlIssueSummary),
+  /** True when the host had more rows than `limit`, so the user can narrow. */
+  truncated: Schema.Boolean,
+});
+export type SourceControlIssueSearchResult = typeof SourceControlIssueSearchResult.Type;
+
+export const SourceControlIssueDetailsInput = Schema.Struct({
+  provider: SourceControlProviderKind,
+  issues: Schema.Array(SourceControlIssueRef),
+});
+export type SourceControlIssueDetailsInput = typeof SourceControlIssueDetailsInput.Type;
+
+export const SourceControlIssueDetailsResult = Schema.Struct({
+  issues: ForwardCompatibleArray(SourceControlIssueDetail),
+});
+export type SourceControlIssueDetailsResult = typeof SourceControlIssueDetailsResult.Type;
+
+export class SourceControlIssueError extends Schema.TaggedErrorClass<SourceControlIssueError>()(
+  "SourceControlIssueError",
+  {
+    provider: SourceControlProviderKind,
+    operation: Schema.String,
+    detail: Schema.String,
+    cause: Schema.optional(Schema.Defect()),
+  },
+) {
+  override get message(): string {
+    return `Source control issue operation ${this.operation} failed for ${this.provider}: ${this.detail}`;
   }
 }
