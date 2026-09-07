@@ -44,11 +44,20 @@ git fetch upstream --tags --quiet
 LATEST_TAG="$(git tag --sort=-creatordate | grep -vE 'nightly|preview' | head -1)"
 [ -n "$LATEST_TAG" ] || die "No stable tag found."
 
+# Already current is not the same as nothing to do: --build still has a build
+# to run, which is the whole point of asking for it.
+UP_TO_DATE=0
 if [ "$LATEST_TAG" = "$BASE_TAG" ]; then
-  say "Already on the newest stable release ($BASE_TAG). Nothing to do."
-  exit 0
+  UP_TO_DATE=1
+  say "Already on the newest stable release ($BASE_TAG)."
+  if [ "$BUILD" != "1" ]; then
+    exit 0
+  fi
 fi
 
+if [ "$UP_TO_DATE" = "1" ]; then
+  say "Skipping the replay and going straight to the build."
+else
 AHEAD="$(git rev-list --count "$BASE_TAG..$LATEST_TAG")"
 OURS="$(git rev-list --count "$BASE_TAG..$BRANCH")"
 say "$BASE_TAG → $LATEST_TAG  ($AHEAD upstream commits, $OURS of ours to replay)"
@@ -59,6 +68,7 @@ comm -12 \
   <(git diff --name-only "$BASE_TAG..$BRANCH" | sort) \
   <(git diff --name-only "$BASE_TAG..$LATEST_TAG" | sort) \
   | sed 's/^/  /' || true
+fi
 
 if [ "$CHECK_ONLY" = "1" ]; then
   say "Check only. Nothing changed."
@@ -66,7 +76,9 @@ if [ "$CHECK_ONLY" = "1" ]; then
 fi
 
 # ── Rebase ───────────────────────────────────────────────────────────────────
-if [ -d .git/rebase-merge ] || [ -d .git/rebase-apply ]; then
+if [ "$UP_TO_DATE" = "1" ]; then
+  : # Nothing to replay.
+elif [ -d .git/rebase-merge ] || [ -d .git/rebase-apply ]; then
   say "A rebase is already in progress; continuing it."
   git rebase --continue || die "Still conflicted. Resolve, 'git add' them, then re-run this script."
 else
@@ -108,9 +120,13 @@ vp test run \
   apps/desktop/src/settings/DesktopClientSettings.test.ts \
   || die "Tests failed. Do not install this build."
 
-# Record the new base so the next run replays the right range.
-sed -i '' "s/^BASE_TAG=\".*\"$/BASE_TAG=\"$LATEST_TAG\"/" "$REPO_ROOT/scripts/fork-update.sh"
-say "Checks passed. Base tag recorded as $LATEST_TAG — commit this script's change."
+if [ "$UP_TO_DATE" = "0" ]; then
+  # Record the new base so the next run replays the right range.
+  sed -i '' "s/^BASE_TAG=\".*\"$/BASE_TAG=\"$LATEST_TAG\"/" "$REPO_ROOT/scripts/fork-update.sh"
+  say "Checks passed. Base tag recorded as $LATEST_TAG — commit this script's change."
+else
+  say "Checks passed."
+fi
 
 # ── Build ────────────────────────────────────────────────────────────────────
 if [ "$BUILD" = "1" ]; then
