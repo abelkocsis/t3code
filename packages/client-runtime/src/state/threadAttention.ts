@@ -1,6 +1,14 @@
 // @effect-diagnostics globalDate:off -- Compares wall-clock stamps from the shell against a client-local visit time.
+import type { OrchestrationThreadShell } from "@t3tools/contracts";
 import type { AgentAwarenessPhase, AwarenessThreadShell } from "@t3tools/shared/agentAwareness";
 import { resolveThreadAwarenessPhase } from "@t3tools/shared/agentAwareness";
+
+/**
+ * Everything the attention rules read: the awareness fields plus whether the
+ * user has already put the thread down.
+ */
+export type AttentionThreadShell = AwarenessThreadShell &
+  Partial<Pick<OrchestrationThreadShell, "settledOverride">>;
 
 /**
  * The phases that ask something of the user. Two of them block the agent
@@ -34,7 +42,11 @@ export interface ThreadAttention {
   readonly at: string;
 }
 
-export function resolveThreadAttention(thread: AwarenessThreadShell): ThreadAttention | null {
+export function resolveThreadAttention(thread: AttentionThreadShell): ThreadAttention | null {
+  // Settling is the user saying "I am done with this", so a settled thread
+  // never asks for attention: no highlight, no overlay row, no badge count.
+  // New work unsettles the thread on the server, which restores all three.
+  if (thread.settledOverride === "settled") return null;
   const phase = resolveThreadAwarenessPhase(thread);
   if (!isAttentionPhase(phase)) return null;
   return { phase, at: attentionTimestamp(phase, thread) };
