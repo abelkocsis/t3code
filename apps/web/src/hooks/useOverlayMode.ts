@@ -11,6 +11,7 @@ import type {
 } from "@t3tools/contracts";
 import { useEffect, useEffectEvent, useMemo } from "react";
 
+import { useStepAwayStore } from "../stepAwayStore";
 import { buildThreadRouteParams } from "../threadRoutes";
 import { attentionItemLabel, useAttentionThreads } from "./useAttentionThreads";
 import { useNowMinute } from "./useNowMinute";
@@ -38,6 +39,8 @@ export function useOverlayMode(): void {
   const keepAwake = useClientSettings((settings) => settings.overlayKeepAwake);
   const position = useClientSettings((settings) => settings.overlayPosition);
   const showIdlePill = useClientSettings((settings) => settings.overlayShowIdlePill);
+  const stepAway = useStepAwayStore((state) => state.active);
+  const setStepAway = useStepAwayStore((state) => state.setActive);
 
   const state = useMemo<DesktopOverlayState>(() => {
     const resolved = resolveOverlayState({
@@ -48,6 +51,7 @@ export function useOverlayMode(): void {
       unseen,
       workingCount,
       showIdlePill,
+      stepAway,
     });
     return {
       mode: resolved.mode,
@@ -60,7 +64,9 @@ export function useOverlayMode(): void {
         phaseLabel: attentionItemLabel(item),
       })),
       workingCount: resolved.workingCount,
-      keepAwake,
+      // Holding off display sleep is the point of step away mode: a dark
+      // screen cannot be read from across the room.
+      keepAwake: keepAwake || stepAway,
       position,
     };
   }, [
@@ -71,6 +77,7 @@ export function useOverlayMode(): void {
     nowMinute,
     position,
     showIdlePill,
+    stepAway,
     unseen,
     workingCount,
   ]);
@@ -88,6 +95,10 @@ export function useOverlayMode(): void {
           threadId: action.threadId as ThreadId,
         }),
       });
+      return;
+    }
+    if (action.kind === "step-away") {
+      setStepAway(action.enabled);
       return;
     }
     if (action.kind === "open-settings") {
