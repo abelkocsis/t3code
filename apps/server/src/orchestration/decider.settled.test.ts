@@ -271,6 +271,7 @@ it.layer(NodeServices.layer)("settled thread decider", (it) => {
           commandId: CommandId.make("cmd-auto-settle-live"),
           threadId: ThreadId.make("thread-1"),
           snapshotSequence: 0,
+          settledAt: NOW,
         },
         readModel: makeReadModel(null, null, makeSession("running")),
       }).pipe(Effect.flip);
@@ -424,7 +425,7 @@ it.layer(NodeServices.layer)("settled thread decider", (it) => {
         payload: { requestId: "async-question", responseMode: "message" },
       };
       for (const blocker of ["auto", "running", "starting", "approval", "native"] as const) {
-        const error = yield* decideOrchestrationCommand({
+        const decided = decideOrchestrationCommand({
           command:
             blocker === "auto"
               ? {
@@ -457,8 +458,20 @@ it.layer(NodeServices.layer)("settled thread decider", (it) => {
                 : []),
             ],
           ),
-        }).pipe(Effect.flip);
-        expect(error).toMatchObject({ _tag: "OrchestrationThreadSettleBlockedError" });
+        });
+        if (blocker === "auto") {
+          const error = yield* decided.pipe(Effect.flip);
+          expect(error).toMatchObject({ _tag: "OrchestrationThreadSettleBlockedError" });
+          continue;
+        }
+        // This fork parts company with upstream here: a settle the user asked
+        // for stops the agent rather than refusing, so none of these block it.
+        // Automatic settlement above still refuses, because it fires on a
+        // timer and must not stop work nobody asked it to stop.
+        const events = yield* decided;
+        const types = (Array.isArray(events) ? events : [events]).map((event) => event.type);
+        expect(types[0]).toBe("thread.settled");
+        expect(types).toContain("thread.session-stop-requested");
       }
     }),
   );

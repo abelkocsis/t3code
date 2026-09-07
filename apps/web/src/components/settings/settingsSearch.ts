@@ -74,6 +74,8 @@ export const SETTINGS_SEARCH_ITEMS = [
     searchTerms: [
       "model workspace browser machines projects inheritance automatic pull checkout grouping actions scripts",
     ],
+  },
+  {
     id: "desktop-notifications",
     title: "Show notifications",
     to: "/settings/notifications",

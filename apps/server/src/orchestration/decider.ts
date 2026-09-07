@@ -546,15 +546,19 @@ export const decideOrchestrationCommand = Effect.fn("decideOrchestrationCommand"
           },
         });
       }
-      // Stop the agent as well. A dismissed request with a live session leaves
-      // it blocked on an answer the user has just thrown away, and a running
-      // agent would keep working on a thread they have put down.
-      if (
-        command.type !== "thread.auto-settle" &&
-        thread.session != null &&
-        thread.session.status !== "stopped" &&
-        thread.session.status !== "error"
-      ) {
+      // Stop the agent as well, but only when settling would otherwise leave it
+      // working or blocked. An async question is not blocking — upstream
+      // dismisses those without touching the session — so a merely alive
+      // session with nothing but async questions is left alone.
+      const agentIsBusy =
+        thread.session?.status === "starting" || thread.session?.status === "running";
+      const hasBlockingRequest = Array.from(pendingRequests.values()).some(
+        (activity) =>
+          activity.kind !== "user-input.requested" ||
+          !Predicate.isObject(activity.payload) ||
+          activity.payload.responseMode !== "message",
+      );
+      if (command.type !== "thread.auto-settle" && (agentIsBusy || hasBlockingRequest)) {
         companionEvents.push({
           ...(yield* withEventBase({
             aggregateKind: "thread",
