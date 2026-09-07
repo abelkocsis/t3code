@@ -161,6 +161,7 @@ import { pullRequestSyncKey } from "./pullRequest/pullRequestSyncKey.ts";
 import * as SqlClient from "effect/unstable/sql/SqlClient";
 import * as PullRequestSyncReactor from "./orchestration/PullRequestSyncReactor.ts";
 import * as SourceControlDiscovery from "./sourceControl/SourceControlDiscovery.ts";
+import * as ProviderWorkspaceStateService from "./provider/ProviderWorkspaceStateService.ts";
 import * as SourceControlIssueService from "./sourceControl/SourceControlIssueService.ts";
 import * as SourceControlRepositoryService from "./sourceControl/SourceControlRepositoryService.ts";
 import * as AzureDevOpsCli from "./sourceControl/AzureDevOpsCli.ts";
@@ -656,6 +657,8 @@ const makeWsRpcLayer = (
       const sourceControlRepositories =
         yield* SourceControlRepositoryService.SourceControlRepositoryService;
       const sourceControlIssues = yield* SourceControlIssueService.SourceControlIssueService;
+      const providerWorkspaceState =
+        yield* ProviderWorkspaceStateService.ProviderWorkspaceStateService;
       const pullRequests = yield* PullRequestService.PullRequestService;
       const withPullRequestViewer = pullRequests.withRoutingCredential;
       const pullRequestSync = yield* PullRequestSyncReactor.PullRequestSyncReactor;
@@ -1538,6 +1541,12 @@ const makeWsRpcLayer = (
                 }),
               }));
               targetWorktreePath = worktree.worktree.path;
+              // Before the agent runs: a provider that files project state
+              // under the path would otherwise start this workspace empty.
+              yield* providerWorkspaceState.linkForWorktree({
+                projectPath: bootstrap.prepareWorktree.projectCwd,
+                worktreePath: targetWorktreePath,
+              });
               yield* dispatchFromClient({
                 type: "thread.meta.update",
                 commandId: yield* serverCommandId("bootstrap-thread-meta-update"),

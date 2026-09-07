@@ -106,6 +106,7 @@ import * as VcsStatusBroadcaster from "./vcs/VcsStatusBroadcaster.ts";
 import * as ProjectCloneTracker from "./project/ProjectCloneTracker.ts";
 import * as GitWorkflowService from "./git/GitWorkflowService.ts";
 import * as ReviewService from "./review/ReviewService.ts";
+import * as ProviderWorkspaceStateService from "./provider/ProviderWorkspaceStateService.ts";
 import * as SourceControlIssueService from "./sourceControl/SourceControlIssueService.ts";
 import * as SourceControlProviderRegistry from "./sourceControl/SourceControlProviderRegistry.ts";
 import * as PullRequestReadCache from "./pullRequest/PullRequestReadCache.ts";
@@ -333,9 +334,14 @@ const PullRequestServiceLive = PullRequestService.layer.pipe(
   Layer.provide(SourceControlRateLimit.layer),
 );
 
+const ProviderWorkspaceStateServiceLayerLive = ProviderWorkspaceStateService.layer.pipe(
+  Layer.provide(ServerSettingsLayerLive),
+);
+
 const GitManagerLayerLive = GitManager.layer.pipe(
   Layer.provideMerge(ProjectSetupScriptRunner.layer.pipe(Layer.provide(ServerSettingsLayerLive))),
   Layer.provideMerge(WorktreeSetupTracker.layer),
+  Layer.provideMerge(ProviderWorkspaceStateServiceLayerLive),
   Layer.provideMerge(GitVcsDriver.layer),
   Layer.provideMerge(SourceControlProviderRegistryLayerLive),
   Layer.provideMerge(
@@ -380,6 +386,7 @@ const VcsLayerLive = Layer.empty.pipe(
   Layer.provideMerge(SourceControlRepositoryServiceLayerLive),
   Layer.provideMerge(ProjectCloneTrackerLayerLive),
   Layer.provideMerge(SourceControlIssueServiceLayerLive),
+  Layer.provideMerge(ProviderWorkspaceStateServiceLayerLive),
   Layer.provideMerge(
     VcsStatusBroadcaster.layer.pipe(
       Layer.provide(GitWorkflowLayerLive),
