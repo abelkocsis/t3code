@@ -518,7 +518,13 @@ describe("OrchestrationEngine", () => {
       // session rather than refusing, while the timer-driven one still
       // protects work the user never asked to stop.
       const error = yield* engine
-        .dispatch({ type: "thread.auto-settle", commandId, threadId, snapshotSequence: sequence })
+        .dispatch({
+          type: "thread.auto-settle",
+          commandId,
+          threadId,
+          snapshotSequence: sequence,
+          settledAt: createdAt,
+        })
         .pipe(Effect.flip);
       const message =
         "This thread still needs attention. Resolve or interrupt it first, then try again.";
