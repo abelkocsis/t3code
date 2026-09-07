@@ -21,6 +21,7 @@ import {
   type KeyboardEvent as ReactKeyboardEvent,
   type MouseEvent as ReactMouseEvent,
 } from "react";
+import { isElectron } from "../../env";
 import GitActionsControl from "../GitActionsControl";
 import { isTrailingDoubleClick } from "../Sidebar.logic";
 import { type DraftId } from "~/composerDraftStore";
@@ -415,7 +416,12 @@ export const ChatHeader = memo(function ChatHeader({
         data-chat-header-actions
         className={cn(
           "flex shrink-0 items-center justify-end gap-2 @3xl/header-actions:gap-3",
-          rightPanelOpen ? "pr-0" : "pr-16",
+          // The panel toggles are fixed to the corner rather than laid out
+          // here, so this padding is what keeps the header's own buttons from
+          // sliding underneath them. It has to count them: the desktop build
+          // carries one more, the step away control. With the right panel open
+          // the toggles move into the panel and reserve nothing.
+          rightPanelOpen ? "pr-0" : isElectron ? "pr-24" : "pr-16",
           "[[data-panel-animations=true]_&]:motion-safe:transition-[padding-right] [[data-panel-animations=true]_&]:motion-safe:[transition-duration:var(--panel-animation-duration)] [[data-panel-animations=true]_&]:motion-safe:ease-out",
         )}
       >
