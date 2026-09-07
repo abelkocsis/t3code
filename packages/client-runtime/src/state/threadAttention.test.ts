@@ -97,6 +97,29 @@ describe("resolveThreadAttention", () => {
   it("ignores a thread that has never run", () => {
     expect(resolveThreadAttention(makeThread({}))).toBeNull();
   });
+
+  it("ignores a settled thread, whatever it would otherwise be asking for", () => {
+    // Settling is the user putting the thread down. Highlighting it after that
+    // forced them to click the row again just to quieten what they had already
+    // dealt with.
+    for (const input of [
+      { pending: "approval" } as const,
+      { pending: "user-input" } as const,
+      { turnState: "completed" } as const,
+      { sessionStatus: "error" } as const,
+    ]) {
+      const thread = { ...makeThread(input), settledOverride: "settled" as const };
+      expect(resolveThreadAttention(thread)).toBeNull();
+    }
+  });
+
+  it("still reports a thread the user pinned active", () => {
+    const thread = {
+      ...makeThread({ turnState: "completed" }),
+      settledOverride: "active" as const,
+    };
+    expect(resolveThreadAttention(thread)?.phase).toBe("completed");
+  });
 });
 
 describe("isThreadAttentionUnseen", () => {
