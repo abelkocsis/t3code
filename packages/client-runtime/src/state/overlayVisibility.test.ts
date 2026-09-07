@@ -29,6 +29,7 @@ function makeInput(overrides: Partial<OverlayVisibilityInput> = {}): OverlayVisi
     unseen: [ITEM],
     workingCount: 2,
     showIdlePill: true,
+    stepAway: false,
     ...overrides,
   };
 }
@@ -78,6 +79,45 @@ describe("resolveOverlayState", () => {
     const state = resolveOverlayState(makeInput({ enabled: false }));
     expect(state.items).toEqual([]);
     expect(state.workingCount).toBe(0);
+  });
+});
+
+describe("resolveOverlayState in step away mode", () => {
+  it("shows the unseen threads at reading size", () => {
+    const state = resolveOverlayState(makeInput({ stepAway: true }));
+    expect(state.mode).toBe("stepAway");
+    expect(state.items).toEqual([ITEM]);
+    expect(state.workingCount).toBe(2);
+  });
+
+  it("stays on screen while the user looks at T3 Code", () => {
+    // They usually leave with the app in front of them, so hiding on focus
+    // would hide the window the moment it was switched on.
+    expect(resolveOverlayState(makeInput({ stepAway: true, appFocused: true })).mode).toBe(
+      "stepAway",
+    );
+  });
+
+  it("outranks a temporary hide the user set earlier", () => {
+    const state = resolveOverlayState(
+      makeInput({ stepAway: true, hiddenUntil: "2026-04-10T18:00:00.000Z" }),
+    );
+    expect(state.mode).toBe("stepAway");
+  });
+
+  it("outranks the standing switch, since it is a request just made", () => {
+    expect(resolveOverlayState(makeInput({ stepAway: true, enabled: false })).mode).toBe(
+      "stepAway",
+    );
+  });
+
+  it("still shows with nothing unseen, so a glance proves the agents are working", () => {
+    const state = resolveOverlayState(
+      makeInput({ stepAway: true, unseen: [], showIdlePill: false }),
+    );
+    expect(state.mode).toBe("stepAway");
+    expect(state.items).toEqual([]);
+    expect(state.workingCount).toBe(2);
   });
 });
 

@@ -145,6 +145,34 @@ export const buildOverlayDataUrl = (): string => {
       #menu .row:hover { background: rgba(255, 255, 255, 0.09); }
       #menu .row .when { margin-left: auto; font-size: 11px; color: var(--muted); }
       #menu .sep { height: 1px; background: rgba(255, 255, 255, 0.09); margin: 4px 6px; }
+      /* Step away mode: the same content, sized to be read from a few steps
+         back rather than from the keyboard. Everything grows together, so the
+         layout is the one already proven rather than a second one. */
+      #shell.stepaway { width: max-content; min-width: 460px; max-width: 560px; }
+      #shell.stepaway header { padding: 16px 20px; gap: 12px; }
+      #shell.stepaway header .logo { width: 24px; height: 24px; font-size: 12px; border-radius: 7px; }
+      #shell.stepaway header .label { font-size: 17px; }
+      #shell.stepaway header .more { font-size: 22px; padding: 4px 10px; }
+      #shell.stepaway #summary { padding: 20px 20px 4px; }
+      #shell.stepaway #summary .count { font-size: 44px; }
+      #shell.stepaway #summary .count em { font-size: 54px; }
+      #shell.stepaway #summary .sub { font-size: 18px; margin-top: 6px; }
+      #shell.stepaway #items { padding: 16px 20px 20px; gap: 12px; max-height: 460px; }
+      #shell.stepaway .item { padding: 14px 16px; gap: 14px; border-radius: 12px; }
+      #shell.stepaway .item .bar { width: 5px; border-radius: 3px; }
+      #shell.stepaway .item .title { font-size: 22px; font-weight: 600; }
+      #shell.stepaway .item .project { font-size: 15px; margin-top: 4px; }
+      #shell.stepaway .item .phase { font-size: 15px; }
+      /* The way out is as large as everything else: it is pressed from a
+         standing start, often at arm's length. */
+      #exit {
+        -webkit-app-region: no-drag;
+        display: none; margin: 0 20px 20px; padding: 12px; border-radius: 10px;
+        text-align: center; font-size: 16px; font-weight: 600; color: #dcdcdc;
+        border: 1px solid rgba(255, 255, 255, 0.18); background: rgba(255, 255, 255, 0.05);
+      }
+      #shell.stepaway #exit { display: block; }
+      #exit:hover { background: rgba(255, 255, 255, 0.11); color: var(--fg); }
       .hidden { display: none !important; }
     </style>
   </head>
@@ -166,6 +194,7 @@ export const buildOverlayDataUrl = (): string => {
           <div class="sub" id="working"></div>
         </div>
         <div id="items"></div>
+        <div id="exit">I&#8217;m back</div>
       </div>
     </div>
       <div id="menu">
@@ -174,6 +203,7 @@ export const buildOverlayDataUrl = (): string => {
         <div class="row" data-hide="tomorrow">Until tomorrow</div>
         <div class="row" data-hide="indefinitely">Until I turn it back on</div>
         <div class="sep"></div>
+        <div class="row" data-stepaway="1">Step away mode</div>
         <div class="row" data-settings="1">Notification settings…</div>
       </div>
     <script>
@@ -190,7 +220,10 @@ export const buildOverlayDataUrl = (): string => {
 
         function render(state) {
           var isPill = state.mode === "pill";
-          document.getElementById("shell").classList.toggle("pill", isPill);
+          var isStepAway = state.mode === "stepAway";
+          var shell = document.getElementById("shell");
+          shell.classList.toggle("pill", isPill);
+          shell.classList.toggle("stepaway", isStepAway);
           pill.classList.toggle("hidden", !isPill);
           full.classList.toggle("hidden", isPill);
           if (isPill) {
@@ -202,8 +235,15 @@ export const buildOverlayDataUrl = (): string => {
             return;
           }
           document.getElementById("count").textContent = String(state.items.length);
+          // Step away answers "how are my agents doing", so with nothing
+          // waiting the working count is the whole message rather than a
+          // footnote under a zero.
           document.getElementById("working").textContent =
-            state.workingCount > 0 ? state.workingCount + " still working" : "Nothing else running";
+            state.workingCount > 0
+              ? state.workingCount + " still working"
+              : isStepAway
+                ? "Nothing running"
+                : "Nothing else running";
           items.replaceChildren();
           state.items.forEach(function (item) {
             var row = document.createElement("div");
@@ -294,14 +334,21 @@ export const buildOverlayDataUrl = (): string => {
           menu.classList.remove("open");
         });
         menu.addEventListener("click", function (event) {
-          var target = event.target.closest("[data-hide], [data-settings]");
+          var target = event.target.closest("[data-hide], [data-settings], [data-stepaway]");
           if (!target) return;
           menu.classList.remove("open");
+          if (target.dataset.stepaway) {
+            bridge.send({ kind: "step-away", enabled: true });
+            return;
+          }
           if (target.dataset.settings) {
             bridge.send({ kind: "open-settings" });
             return;
           }
           bridge.send({ kind: "hide", duration: target.dataset.hide });
+        });
+        document.getElementById("exit").addEventListener("click", function () {
+          bridge.send({ kind: "step-away", enabled: false });
         });
 
         bridge.onState(render);
@@ -314,6 +361,12 @@ export const buildOverlayDataUrl = (): string => {
 };
 
 export const OVERLAY_WIDTH = 340;
+/**
+ * Step away mode is the widest the page ever gets, so the clamp has to reach
+ * it. The bound is a guard against a nonsense measurement, not the layout —
+ * the page's own CSS decides the width within it.
+ */
+const OVERLAY_MAX_WIDTH = 560;
 const OVERLAY_MIN_WIDTH = 120;
 /** The hide menu is 214px plus its border, and must never be clipped. */
 const OVERLAY_MENU_WIDTH = 216;
@@ -321,14 +374,15 @@ const OVERLAY_MENU_WIDTH = 216;
 /** Keeps a reported width inside the window's own bounds. */
 export function clampOverlayWidth(width: number): number {
   if (!Number.isFinite(width)) return OVERLAY_WIDTH;
-  return Math.min(OVERLAY_WIDTH, Math.max(OVERLAY_MIN_WIDTH, Math.ceil(width)));
+  return Math.min(OVERLAY_MAX_WIDTH, Math.max(OVERLAY_MIN_WIDTH, Math.ceil(width)));
 }
 
 export { OVERLAY_MENU_WIDTH };
 /** Enough for the pill until the page reports what it actually needs. */
 export const OVERLAY_INITIAL_HEIGHT = 44;
 const OVERLAY_MIN_HEIGHT = 36;
-const OVERLAY_MAX_HEIGHT = 520;
+/** Tall enough for a step-away list, which uses larger rows than the card. */
+const OVERLAY_MAX_HEIGHT = 760;
 
 const OVERLAY_PILL_HEIGHT = 44;
 const OVERLAY_CHROME_HEIGHT = 117;

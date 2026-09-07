@@ -217,7 +217,7 @@ export const DesktopOverlayItemSchema = Schema.Struct({
 export type DesktopOverlayItem = typeof DesktopOverlayItemSchema.Type;
 
 export const DesktopOverlayStateSchema = Schema.Struct({
-  mode: Schema.Literals(["hidden", "pill", "full"]),
+  mode: Schema.Literals(["hidden", "pill", "full", "stepAway"]),
   items: Schema.Array(DesktopOverlayItemSchema),
   workingCount: Schema.Int,
   /** Whether to hold off display sleep while the overlay shows. */
@@ -239,6 +239,8 @@ export const DesktopOverlayActionSchema = Schema.Union([
     duration: Schema.Literals(["hour", "tomorrow", "indefinitely"]),
   }),
   Schema.Struct({ kind: Schema.Literal("open-settings") }),
+  /** Turned on from the overlay's own menu, and off from its exit button. */
+  Schema.Struct({ kind: Schema.Literal("step-away"), enabled: Schema.Boolean }),
 ]);
 export type DesktopOverlayAction = typeof DesktopOverlayActionSchema.Type;
 
