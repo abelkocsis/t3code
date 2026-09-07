@@ -57,8 +57,16 @@ if [ -z "$VERSION" ]; then
 fi
 TAG="v${VERSION}"
 
-git rev-parse -q --verify "refs/tags/${TAG}" >/dev/null \
-  && die "Tag ${TAG} already exists. Pass a version explicitly to override."
+# A tag on its own is not a release: publishing can fail after tagging, and
+# re-running then has to finish the job rather than refuse. Only a release that
+# already exists means this version is done.
+TAG_EXISTS=0
+if git rev-parse -q --verify "refs/tags/${TAG}" >/dev/null; then
+  gh release view "$TAG" --repo "$UPDATE_REPOSITORY" >/dev/null 2>&1 \
+    && die "${TAG} is already released. Pass a version explicitly to cut another."
+  TAG_EXISTS=1
+  say "Tag ${TAG} exists with no release behind it; finishing that release."
+fi
 
 say "Releasing ${TAG} from ${BRANCH} (upstream base ${BASE_TAG})"
 
@@ -114,13 +122,19 @@ if [ "$DRY_RUN" = "1" ]; then
 fi
 
 # ── Publish ──────────────────────────────────────────────────────────────────
-say "Tagging ${TAG}…"
-git tag -a "$TAG" -m "T3 Code ${VERSION} (fork of ${BASE_TAG})"
+if [ "$TAG_EXISTS" = "0" ]; then
+  say "Tagging ${TAG}…"
+  git tag -a "$TAG" -m "T3 Code ${VERSION} (fork of ${BASE_TAG})"
+fi
 git push origin "$BRANCH"
 git push origin "$TAG"
 
 say "Publishing the release…"
+# --repo is not optional here. This checkout has an `upstream` remote as well,
+# and gh resolves a fork to its parent by default, so without it the release is
+# attempted against pingdotgg/t3code and refused.
 gh release create "$TAG" \
+  --repo "$UPDATE_REPOSITORY" \
   --title "T3 Code ${VERSION}" \
   --notes "Bitsafe's fork of T3 Code, built on upstream ${BASE_TAG}.
 
