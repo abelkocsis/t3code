@@ -6,10 +6,11 @@ import {
 } from "@t3tools/client-runtime/state/runtime";
 import type { ContextMenuItem } from "@t3tools/contracts";
 import {
+  type AttentionThreadShell,
   isThreadAttentionUnseen,
   resolveThreadAttention,
 } from "@t3tools/client-runtime/state/thread-attention";
-import type { AwarenessThreadShell } from "@t3tools/shared/agentAwareness";
+
 import type { SidebarProjectSortOrder, SidebarThreadSortOrder } from "@t3tools/contracts/settings";
 import type { AsyncResult } from "effect/unstable/reactivity";
 import { planPinnedReorder } from "@t3tools/client-runtime/state/thread-sort";
@@ -631,7 +632,7 @@ export function hasUnseenCompletion(thread: ThreadStatusInput): boolean {
   return completedAt > lastVisitedAt;
 }
 
-export type ThreadAttentionInput = AwarenessThreadShell & {
+export type ThreadAttentionInput = AttentionThreadShell & {
   lastVisitedAt?: string | undefined;
 };
 
