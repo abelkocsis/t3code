@@ -55,6 +55,7 @@ import {
   PlusIcon,
   SettingsIcon,
   ShieldQuestionIcon,
+  CircleDotIcon,
   SquarePenIcon,
   TerminalIcon,
   Undo2Icon,
@@ -123,6 +124,7 @@ import { useClientSettings } from "../hooks/useSettings";
 import { useCopyToClipboard } from "../hooks/useCopyToClipboard";
 import { useLocalStorage } from "../hooks/useLocalStorage";
 import { useNowMinute } from "../hooks/useNowMinute";
+import { IssuePickerDialog } from "./issues/IssuePickerDialog";
 import { useEnvironments, usePrimaryEnvironmentId } from "../state/environments";
 import {
   readThreadShell,
@@ -4347,6 +4349,12 @@ export default function Sidebar() {
     updateThreadJumpHintsVisibility(shouldShowJumpHintsNow);
   }, [shouldShowJumpHintsNow, updateThreadJumpHintsVisibility]);
 
+  // The issue picker searches one environment's GitHub account. It follows the
+  // primary environment rather than the selected project's, because a user with
+  // no project yet still has an account to search.
+  const issuePickerEnvironmentId = usePrimaryEnvironmentId();
+  const [issuePickerOpen, setIssuePickerOpen] = useState(false);
+
   // New thread defaults to the project you're in (active thread's project,
   // falling back to the top project) — same resolution the command palette
   // uses. The command palette already offers a "New thread in..." submenu
@@ -4543,50 +4551,82 @@ export default function Sidebar() {
               activeSearchResultIndex={activeSearchResultIndex}
               onClearSearch={clearThreadSearch}
             />
-            {/* Starting a thread is the sidebar's most-used action, so it gets
-                its own full-width, labelled row rather than an unlabelled icon
-                sharing the header with search and scope. */}
-            <Tooltip>
-              <TooltipTrigger
-                render={
-                  <Button
-                    type="button"
-                    variant="outline"
-                    // Outlined rather than filled: the button stays the obvious
-                    // target without a block of accent colour shouting from the
-                    // top of every screen. The border carries the affordance, so
-                    // the fill is dropped on both schemes.
-                    className="mt-1 w-full justify-center gap-2 bg-transparent focus-visible:ring-offset-2 focus-visible:ring-offset-sidebar dark:bg-transparent"
-                    onClick={handleNewThreadClick}
-                    disabled={projects.length === 0}
-                  />
-                }
-              >
-                <SquarePenIcon />
-                New thread
-              </TooltipTrigger>
-              <TooltipPopup side="right">
-                {projectGroups.length > 1 ? (
-                  <span className="flex flex-col gap-0.5">
-                    <span>
-                      {newThreadShortcutLabel
-                        ? `New thread (${newThreadShortcutLabel})`
-                        : "New thread"}
+            {/* Starting work is the sidebar's most-used action, so it gets
+                labelled, full-width buttons rather than unlabelled icons
+                sharing the header with search and scope. The two share the
+                width one button used to take. */}
+            <div className="mt-1 flex w-full items-center gap-2">
+              <Tooltip>
+                <TooltipTrigger
+                  render={
+                    <Button
+                      type="button"
+                      variant="outline"
+                      // Outlined rather than filled: the button stays the obvious
+                      // target without a block of accent colour shouting from the
+                      // top of every screen. The border carries the affordance, so
+                      // the fill is dropped on both schemes.
+                      className="min-w-0 flex-1 justify-center gap-2 bg-transparent focus-visible:ring-offset-2 focus-visible:ring-offset-sidebar dark:bg-transparent"
+                      onClick={handleNewThreadClick}
+                      disabled={projects.length === 0}
+                    />
+                  }
+                >
+                  <SquarePenIcon />
+                  <span className="truncate">New thread</span>
+                </TooltipTrigger>
+                <TooltipPopup side="right">
+                  {projectGroups.length > 1 ? (
+                    <span className="flex flex-col gap-0.5">
+                      <span>
+                        {newThreadShortcutLabel
+                          ? `New thread (${newThreadShortcutLabel})`
+                          : "New thread"}
+                      </span>
+                      <span className="text-muted-foreground">
+                        New thread in current project: Shift+click
+                        {newThreadInProjectShortcutLabel
+                          ? ` (${newThreadInProjectShortcutLabel})`
+                          : ""}
+                      </span>
                     </span>
-                    <span className="text-muted-foreground">
-                      New thread in current project: Shift+click
-                      {newThreadInProjectShortcutLabel
-                        ? ` (${newThreadInProjectShortcutLabel})`
-                        : ""}
-                    </span>
-                  </span>
-                ) : newThreadShortcutLabel ? (
-                  `New thread (${newThreadShortcutLabel})`
-                ) : (
-                  "New thread"
-                )}
-              </TooltipPopup>
-            </Tooltip>
+                  ) : newThreadShortcutLabel ? (
+                    `New thread (${newThreadShortcutLabel})`
+                  ) : (
+                    "New thread"
+                  )}
+                </TooltipPopup>
+              </Tooltip>
+              {/* An issue carries its own project: the issue's own repository
+                  names the repository, and the picker clones it when there is
+                  nothing to reuse. So it is never disabled with the other one. */}
+              <Tooltip>
+                <TooltipTrigger
+                  render={
+                    <Button
+                      type="button"
+                      variant="outline"
+                      className="min-w-0 flex-1 justify-center gap-2 bg-transparent focus-visible:ring-offset-2 focus-visible:ring-offset-sidebar dark:bg-transparent"
+                      onClick={() => setIssuePickerOpen(true)}
+                      disabled={issuePickerEnvironmentId === null}
+                    />
+                  }
+                >
+                  <CircleDotIcon />
+                  <span className="truncate">From issue</span>
+                </TooltipTrigger>
+                <TooltipPopup side="right">
+                  Start a thread from one or more GitHub issues
+                </TooltipPopup>
+              </Tooltip>
+            </div>
+            {issuePickerEnvironmentId !== null ? (
+              <IssuePickerDialog
+                open={issuePickerOpen}
+                onOpenChange={setIssuePickerOpen}
+                environmentId={issuePickerEnvironmentId}
+              />
+            ) : null}
           </SidebarGroup>
         }
       >
