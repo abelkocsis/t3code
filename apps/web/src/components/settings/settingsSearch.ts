@@ -120,6 +120,8 @@ export const SETTINGS_SEARCH_ITEMS = [
     searchTerms: [
       "new thread default runtime mode supervised approvals auto accept edits full access",
     ],
+  },
+  {
     id: "desktop-notifications",
     title: "Show notifications",
     to: "/settings/notifications",
