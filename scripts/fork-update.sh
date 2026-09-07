@@ -12,7 +12,7 @@
 #
 set -euo pipefail
 
-BRANCH="feature/desktop-notifications"
+BRANCH="bitsafe"
 # The tag this branch is currently based on. The script rewrites this line
 # after a successful rebase, so the next run knows which range to replay.
 BASE_TAG="v0.0.39"
