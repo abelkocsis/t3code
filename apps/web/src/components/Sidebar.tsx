@@ -4552,7 +4552,11 @@ export default function Sidebar() {
                   <Button
                     type="button"
                     variant="outline"
-                    className="mt-1 w-full justify-center gap-2 focus-visible:ring-offset-2 focus-visible:ring-offset-sidebar"
+                    // Outlined rather than filled: the button stays the obvious
+                    // target without a block of accent colour shouting from the
+                    // top of every screen. The border carries the affordance, so
+                    // the fill is dropped on both schemes.
+                    className="mt-1 w-full justify-center gap-2 bg-transparent focus-visible:ring-offset-2 focus-visible:ring-offset-sidebar dark:bg-transparent"
                     onClick={handleNewThreadClick}
                     disabled={projects.length === 0}
                   />
