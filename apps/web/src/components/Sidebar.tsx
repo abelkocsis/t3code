@@ -4316,50 +4316,46 @@ export default function Sidebar() {
                   </Button>
                 ) : null}
               </div>
-              <div className="shrink-0">
-                <Tooltip>
-                  <TooltipTrigger
-                    render={
-                      <SidebarMenuButton
-                        size="icon"
-                        type="button"
-                        className="relative focus-visible:ring-offset-2 focus-visible:ring-offset-sidebar"
-                        onClick={handleNewThreadClick}
-                        disabled={projects.length === 0}
-                        aria-label="New thread"
-                      />
-                    }
-                  >
-                    <SquarePenIcon />
-                    <span
-                      className="pointer-events-none absolute left-1/2 top-1/2 size-[max(100%,3rem)] -translate-1/2 pointer-fine:hidden"
-                      aria-hidden="true"
-                    />
-                  </TooltipTrigger>
-                  <TooltipPopup side="right">
-                    {projectGroups.length > 1 ? (
-                      <span className="flex flex-col gap-0.5">
-                        <span>
-                          {newThreadShortcutLabel
-                            ? `New thread (${newThreadShortcutLabel})`
-                            : "New thread"}
-                        </span>
-                        <span className="text-muted-foreground">
-                          New thread in current project: Shift+click
-                          {newThreadInProjectShortcutLabel
-                            ? ` (${newThreadInProjectShortcutLabel})`
-                            : ""}
-                        </span>
-                      </span>
-                    ) : newThreadShortcutLabel ? (
-                      `New thread (${newThreadShortcutLabel})`
-                    ) : (
-                      "New thread"
-                    )}
-                  </TooltipPopup>
-                </Tooltip>
-              </div>
             </div>
+            {/* Starting a thread is the sidebar's most-used action, so it gets a
+                filled, full-width, labelled button rather than an unlabelled
+                icon competing with the search field for notice. */}
+            <Tooltip>
+              <TooltipTrigger
+                render={
+                  <Button
+                    type="button"
+                    className="w-full justify-center gap-2 focus-visible:ring-offset-2 focus-visible:ring-offset-sidebar"
+                    onClick={handleNewThreadClick}
+                    disabled={projects.length === 0}
+                  />
+                }
+              >
+                <SquarePenIcon />
+                New thread
+              </TooltipTrigger>
+              <TooltipPopup side="right">
+                {projectGroups.length > 1 ? (
+                  <span className="flex flex-col gap-0.5">
+                    <span>
+                      {newThreadShortcutLabel
+                        ? `New thread (${newThreadShortcutLabel})`
+                        : "New thread"}
+                    </span>
+                    <span className="text-muted-foreground">
+                      New thread in current project: Shift+click
+                      {newThreadInProjectShortcutLabel
+                        ? ` (${newThreadInProjectShortcutLabel})`
+                        : ""}
+                    </span>
+                  </span>
+                ) : newThreadShortcutLabel ? (
+                  `New thread (${newThreadShortcutLabel})`
+                ) : (
+                  "New thread"
+                )}
+              </TooltipPopup>
+            </Tooltip>
             {projectGroups.length > 0 ? (
               <div className="flex items-center gap-1">
                 <Combobox
