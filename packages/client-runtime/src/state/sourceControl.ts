@@ -24,6 +24,16 @@ export function createSourceControlEnvironmentAtoms<R, E>(
       label: "environment-data:source-control:repository",
       tag: WS_METHODS.sourceControlLookupRepository,
     }),
+    // Both are queries rather than commands: they read a host and change
+    // nothing, and the picker runs them on demand as the user types.
+    issues: createEnvironmentRpcQueryAtomFamily(runtime, {
+      label: "environment-data:source-control:issues",
+      tag: WS_METHODS.sourceControlSearchIssues,
+    }),
+    issueDetails: createEnvironmentRpcQueryAtomFamily(runtime, {
+      label: "environment-data:source-control:issue-details",
+      tag: WS_METHODS.sourceControlIssueDetails,
+    }),
     cloneRepository: createEnvironmentRpcCommand(runtime, {
       label: "environment-data:source-control:clone-repository",
       tag: WS_METHODS.sourceControlCloneRepository,
