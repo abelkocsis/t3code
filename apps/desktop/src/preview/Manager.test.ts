@@ -67,6 +67,125 @@ describe("isPreviewRefreshShortcut", () => {
   });
 });
 
+describe("previewClipboardCommand", () => {
+  const input = (overrides: Partial<Electron.Input> = {}) =>
+    ({
+      type: "keyDown",
+      key: "c",
+      meta: true,
+      control: false,
+      shift: false,
+      alt: false,
+      ...overrides,
+    }) as Electron.Input;
+
+  it("names the edit command for each macOS clipboard chord", () => {
+    expect(PreviewManager.previewClipboardCommand(input(), "darwin")).toBe("copy");
+    expect(PreviewManager.previewClipboardCommand(input({ key: "X" }), "darwin")).toBe("cut");
+    expect(PreviewManager.previewClipboardCommand(input({ key: "v" }), "darwin")).toBe("paste");
+    expect(PreviewManager.previewClipboardCommand(input({ key: "a" }), "darwin")).toBe("selectAll");
+  });
+
+  it("leaves the chords to the renderer everywhere else", () => {
+    // A Windows or Linux guest already pastes on Ctrl+V, so running the command
+    // here as well would paste twice.
+    expect(
+      PreviewManager.previewClipboardCommand(input({ meta: false, control: true }), "win32"),
+    ).toBe(null);
+    expect(
+      PreviewManager.previewClipboardCommand(input({ meta: false, control: true }), "linux"),
+    ).toBe(null);
+  });
+
+  it("ignores modified variants, other keys, and key releases", () => {
+    expect(PreviewManager.previewClipboardCommand(input({ shift: true }), "darwin")).toBe(null);
+    expect(PreviewManager.previewClipboardCommand(input({ alt: true }), "darwin")).toBe(null);
+    expect(PreviewManager.previewClipboardCommand(input({ meta: false }), "darwin")).toBe(null);
+    expect(PreviewManager.previewClipboardCommand(input({ key: "k" }), "darwin")).toBe(null);
+    expect(PreviewManager.previewClipboardCommand(input({ type: "keyUp" }), "darwin")).toBe(null);
+  });
+});
+
+describe("previewContextMenuTemplate", () => {
+  const target = () => ({
+    copy: vi.fn(),
+    cut: vi.fn(),
+    paste: vi.fn(),
+    selectAll: vi.fn(),
+    copyImageAt: vi.fn(),
+  });
+  const params = (overrides: {
+    readonly linkURL?: string;
+    readonly mediaType?: Electron.ContextMenuParams["mediaType"];
+    readonly editFlags?: Partial<Electron.ContextMenuParams["editFlags"]>;
+  }) => ({
+    linkURL: "",
+    mediaType: "none" as Electron.ContextMenuParams["mediaType"],
+    x: 12,
+    y: 34,
+    ...overrides,
+    editFlags: {
+      canCut: true,
+      canCopy: true,
+      canPaste: true,
+      canSelectAll: true,
+      ...overrides.editFlags,
+    } as Electron.ContextMenuParams["editFlags"],
+  });
+
+  it("runs each clipboard command against the guest, not the focused WebContents", () => {
+    const guest = target();
+    const template = PreviewManager.previewContextMenuTemplate(params({}), guest, vi.fn());
+
+    expect(template.map((item) => item.label)).toEqual(["Cut", "Copy", "Paste", "Select All"]);
+    for (const item of template) item.click?.(undefined as never, undefined, undefined as never);
+    expect(guest.cut).toHaveBeenCalledOnce();
+    expect(guest.copy).toHaveBeenCalledOnce();
+    expect(guest.paste).toHaveBeenCalledOnce();
+    expect(guest.selectAll).toHaveBeenCalledOnce();
+  });
+
+  it("disables a command the page cannot run", () => {
+    const template = PreviewManager.previewContextMenuTemplate(
+      params({ editFlags: { canPaste: false } }),
+      target(),
+      vi.fn(),
+    );
+
+    expect(template.find((item) => item.label === "Paste")?.enabled).toBe(false);
+    expect(template.find((item) => item.label === "Copy")?.enabled).toBe(true);
+  });
+
+  it("copies a link and an image from the position the menu opened at", () => {
+    const guest = target();
+    const writeLink = vi.fn();
+    const template = PreviewManager.previewContextMenuTemplate(
+      params({ linkURL: "https://t3.chat/docs", mediaType: "image" }),
+      guest,
+      writeLink,
+    );
+
+    for (const label of ["Copy Link", "Copy Image"]) {
+      const item = template.find((entry) => entry.label === label);
+      expect(item).toBeDefined();
+      item?.click?.(undefined as never, undefined, undefined as never);
+    }
+    expect(writeLink).toHaveBeenCalledWith("https://t3.chat/docs");
+    expect(guest.copyImageAt).toHaveBeenCalledWith(12, 34);
+  });
+
+  it("offers no link item for a scheme a pasted link cannot serve", () => {
+    for (const linkURL of ["", "javascript:alert(1)", "file:///etc/passwd", "not a url"]) {
+      const template = PreviewManager.previewContextMenuTemplate(
+        params({ linkURL }),
+        target(),
+        vi.fn(),
+      );
+      expect(template.some((item) => item.label === "Copy Link")).toBe(false);
+    }
+  });
+});
+
 describe("previewWindowOpenAction", () => {
   const details = (overrides: {
     readonly url?: string;
@@ -113,30 +232,42 @@ describe("previewWindowOpenAction", () => {
 
 const {
   browserWindowConstructor,
+  buildFromTemplate,
   createFromPath,
   fromId,
   getFocusedWebContents,
+  menuPopup,
   mkdir,
   showItemInFolder,
   webviewSend,
   writeFile,
   writeImage,
+  writeText,
 } = vi.hoisted(() => ({
   browserWindowConstructor: vi.fn(),
+  buildFromTemplate: vi.fn((_template: ReadonlyArray<Electron.MenuItemConstructorOptions>) => ({
+    popup: menuPopup,
+  })),
   createFromPath: vi.fn((): { readonly isEmpty: () => boolean } => ({ isEmpty: () => false })),
   fromId: vi.fn<(_id?: number) => Electron.WebContents | null>((_id?: number) => null),
   getFocusedWebContents: vi.fn(() => null),
+  menuPopup: vi.fn(),
   mkdir: vi.fn((_path: string) => undefined),
   showItemInFolder: vi.fn(),
   webviewSend: vi.fn(),
   writeFile: vi.fn((_path: string, _data: Uint8Array) => undefined),
   writeImage: vi.fn(),
+  writeText: vi.fn(),
 }));
 
 vi.mock("electron", () => ({
   BrowserWindow: browserWindowConstructor,
   clipboard: {
     writeImage,
+    writeText,
+  },
+  Menu: {
+    buildFromTemplate,
   },
   nativeImage: {
     createFromPath,
@@ -360,6 +491,11 @@ const makeFaviconWebContents = (options?: {
   });
   const off = vi.fn();
   const debuggerOff = vi.fn();
+  const copy = vi.fn();
+  const cut = vi.fn();
+  const paste = vi.fn();
+  const selectAll = vi.fn();
+  const copyImageAt = vi.fn();
   const webContents = {
     id: options?.id ?? 42,
     isDestroyed: () => destroyed,
@@ -385,6 +521,11 @@ const makeFaviconWebContents = (options?: {
     navigationHistory: { canGoBack: () => false, canGoForward: () => false },
     setIgnoreMenuShortcuts: vi.fn(),
     setWindowOpenHandler: vi.fn(),
+    copy,
+    cut,
+    paste,
+    selectAll,
+    copyImageAt,
     executeJavaScriptInIsolatedWorld,
     debugger: {
       isAttached: () => false,
@@ -395,9 +536,14 @@ const makeFaviconWebContents = (options?: {
     },
   };
   return {
+    copy,
+    copyImageAt,
+    cut,
     executeJavaScriptInIsolatedWorld,
     fetch,
     debuggerOff,
+    paste,
+    selectAll,
     listeners,
     loadURL,
     off,
@@ -465,6 +611,9 @@ const makeTestPictureInPictureWindow = (loadURL: () => Promise<void> = async () 
 describe("PreviewManager", () => {
   beforeEach(() => {
     browserWindowConstructor.mockReset();
+    buildFromTemplate.mockClear();
+    menuPopup.mockClear();
+    writeText.mockClear();
     fromId.mockClear();
     getFocusedWebContents.mockReset();
     getFocusedWebContents.mockReturnValue(null);
@@ -533,6 +682,58 @@ describe("PreviewManager", () => {
           webContents: { setIgnoreMenuShortcuts, setWindowOpenHandler: vi.fn() },
         } as never);
         expect(setIgnoreMenuShortcuts).toHaveBeenCalledWith(true);
+      }),
+    ),
+  );
+
+  effectIt.effect("gives the preview guest the clipboard the host menu cannot reach", () =>
+    withManager((manager) =>
+      Effect.gen(function* () {
+        const preview = makeFaviconWebContents();
+        const hostWebContents = { sendInputEvent: vi.fn() };
+        const mainWindow = {
+          isDestroyed: () => false,
+          once: vi.fn(),
+          webContents: hostWebContents,
+        };
+        Object.assign(preview.webContents, { hostWebContents });
+        fromId.mockReturnValue(preview.webContents);
+        yield* manager.setMainWindow(mainWindow as never);
+        yield* manager.createTab("tab_clipboard");
+        yield* manager.registerWebview("tab_clipboard", 42);
+
+        preview.listeners.get("before-input-event")!(
+          { preventDefault: vi.fn() } as never,
+          {
+            type: "keyDown",
+            key: "c",
+            meta: true,
+            control: false,
+            shift: false,
+            alt: false,
+          } as never,
+        );
+        yield* Effect.yieldNow;
+        expect(preview.copy).toHaveBeenCalledOnce();
+
+        preview.listeners.get("context-menu")!(
+          {} as never,
+          {
+            linkURL: "",
+            mediaType: "none",
+            x: 0,
+            y: 0,
+            editFlags: { canCut: true, canCopy: true, canPaste: true, canSelectAll: true },
+          } as never,
+        );
+        yield* Effect.yieldNow;
+        expect(buildFromTemplate.mock.calls[0]?.[0].map((item) => item.label)).toEqual([
+          "Cut",
+          "Copy",
+          "Paste",
+          "Select All",
+        ]);
+        expect(menuPopup).toHaveBeenCalledWith({ window: mainWindow });
       }),
     ),
   );
