@@ -15,7 +15,7 @@ set -euo pipefail
 BRANCH="bitsafe"
 # The tag this branch is currently based on. The script rewrites this line
 # after a successful rebase, so the next run knows which range to replay.
-BASE_TAG="v0.0.39"
+BASE_TAG="v0.0.40"
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$REPO_ROOT"
