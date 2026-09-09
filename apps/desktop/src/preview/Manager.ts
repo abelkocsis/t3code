@@ -40,6 +40,7 @@ import { normalizePreviewUrl } from "@t3tools/shared/preview";
 import {
   BrowserWindow,
   ClipboardItem,
+  Menu,
   type Session,
   clipboard,
   nativeImage,
@@ -593,6 +594,57 @@ export const isPreviewEditingShortcut = (
     key === "x" ||
     (key === "y" && platform === "win32")
   );
+};
+
+interface PreviewContextMenuTarget {
+  readonly copy: () => void;
+  readonly cut: () => void;
+  readonly paste: () => void;
+  readonly selectAll: () => void;
+  readonly copyImageAt: (x: number, y: number) => void;
+}
+
+/**
+ * Builds the preview guest's context menu.
+ *
+ * The items call the guest directly instead of using menu roles, because a role
+ * acts on whichever WebContents holds focus and the guest is not the host
+ * window. `Copy Link` stays on `http:` and `https:` targets, the schemes a
+ * pasted link is useful for.
+ *
+ * The keyboard chords are handled upstream by isPreviewEditingShortcut. This
+ * menu is the second way to the clipboard, for a user who reaches for the right
+ * mouse button instead.
+ */
+export const previewContextMenuTemplate = (
+  params: Pick<Electron.ContextMenuParams, "editFlags" | "linkURL" | "mediaType" | "x" | "y">,
+  target: PreviewContextMenuTarget,
+  writeText: (text: string) => void,
+): ReadonlyArray<Electron.MenuItemConstructorOptions> => {
+  const template: Electron.MenuItemConstructorOptions[] = [];
+  if (isPopupUrl(params.linkURL)) {
+    template.push(
+      { label: "Copy Link", click: () => writeText(params.linkURL) },
+      { type: "separator" },
+    );
+  }
+  if (params.mediaType === "image") {
+    template.push(
+      { label: "Copy Image", click: () => target.copyImageAt(params.x, params.y) },
+      { type: "separator" },
+    );
+  }
+  template.push(
+    { label: "Cut", enabled: params.editFlags.canCut, click: () => target.cut() },
+    { label: "Copy", enabled: params.editFlags.canCopy, click: () => target.copy() },
+    { label: "Paste", enabled: params.editFlags.canPaste, click: () => target.paste() },
+    {
+      label: "Select All",
+      enabled: params.editFlags.canSelectAll,
+      click: () => target.selectAll(),
+    },
+  );
+  return template;
 };
 
 const isPreviewInputSignal = (value: unknown): value is PreviewInputSignal => {
@@ -2032,6 +2084,28 @@ const makeNativeOperations = Effect.fn("PreviewManager.makeOperations")(function
         );
         return;
       }
+      const command = previewClipboardCommand(input, hostPlatform);
+      if (command) {
+        runFork(
+          attempt({ operation: `shortcut.${command}`, tabId, webContentsId: wc.id }, () =>
+            wc[command](),
+          ).pipe(Effect.ignore),
+        );
+      }
+    };
+    const contextMenu = (_event: Electron.Event, params: Electron.ContextMenuParams): void => {
+      runFork(
+        Effect.flatMap(Ref.get(mainWindowRef), (window) =>
+          attempt({ operation: "contextMenu", tabId, webContentsId: wc.id }, () => {
+            const template = previewContextMenuTemplate(params, wc, (text) =>
+              clipboard.writeText(text),
+            );
+            Menu.buildFromTemplate([...template]).popup(
+              Option.isSome(window) ? { window: window.value } : {},
+            );
+          }),
+        ).pipe(Effect.ignore),
+      );
     };
     yield* Scope.addFinalizer(
       scope,
@@ -2049,6 +2123,7 @@ const makeNativeOperations = Effect.fn("PreviewManager.makeOperations")(function
         wc.off("audio-state-changed", audioStateChanged);
         wc.off("did-create-window", windowCreated);
         wc.off("before-input-event", beforeInput);
+        wc.off("context-menu", contextMenu);
         wc.ipc.off(HUMAN_INPUT_CHANNEL, humanInput);
         wc.ipc.off(RECORDING_INPUT_CHANNEL, recordingInput);
         wc.ipc.off(MOUSE_NAVIGATE_CHANNEL, mouseNavigate);
@@ -2085,6 +2160,7 @@ const makeNativeOperations = Effect.fn("PreviewManager.makeOperations")(function
         });
         wc.on("did-create-window", windowCreated);
         wc.on("before-input-event", beforeInput);
+        wc.on("context-menu", contextMenu);
       });
       yield* Ref.update(attachedRef, (attached) =>
         replaceMap(attached, (copy) => {
