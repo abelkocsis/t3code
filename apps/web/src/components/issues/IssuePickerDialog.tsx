@@ -6,7 +6,11 @@ import {
   getDefaultCloneUrl,
 } from "@t3tools/client-runtime/operations/projects";
 import { squashAtomCommandFailure } from "@t3tools/client-runtime/state/runtime";
-import type { EnvironmentId, SourceControlIssueSummary } from "@t3tools/contracts";
+import type {
+  EnvironmentId,
+  SourceControlIssueDetail,
+  SourceControlIssueSummary,
+} from "@t3tools/contracts";
 import { CircleDotIcon, LoaderCircleIcon, SearchIcon } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
@@ -39,10 +43,15 @@ import {
 import { Input } from "../ui/input";
 import { Label } from "../ui/label";
 import { Switch } from "../ui/switch";
+import { Textarea } from "../ui/textarea";
 import { stackedThreadToast, toastManager } from "../ui/toast";
 import {
-  buildIssueSeedMessage,
+  buildIssueSections,
+  composeIssueSeedMessage,
+  defaultIssueInstructions,
+  isBareIssueNumber,
   issueKey,
+  parseIssueLookup,
   selectedRepository,
   selectionWouldReset,
   toggleIssueSelection,
@@ -56,7 +65,9 @@ function errorMessage(error: unknown): string {
 const SEARCH_DEBOUNCE_MS = 350;
 const SEARCH_ROWS = 40;
 
-type Phase = "idle" | "searching" | "starting";
+type Phase = "idle" | "searching" | "loading" | "starting";
+/** `pick` chooses the issues; `compose` edits the first message built from them. */
+type Step = "pick" | "compose";
 
 /**
  * Pick GitHub issues and open a thread on them.
@@ -92,6 +103,7 @@ export function IssuePickerDialog({
   });
   const createProject = useAtomCommand(projectEnvironment.create, { reportFailure: false });
 
+  const [step, setStep] = useState<Step>("pick");
   const [query, setQuery] = useState("");
   const [assignedToViewer, setAssignedToViewer] = useState(true);
   const [freshWorkspace, setFreshWorkspace] = useState(true);
@@ -100,6 +112,12 @@ export function IssuePickerDialog({
   const [truncated, setTruncated] = useState(false);
   const [phase, setPhase] = useState<Phase>("idle");
   const [failure, setFailure] = useState<string | null>(null);
+  // The message is two parts. `instructions` is the user's own text: null
+  // until they touch it, so the default can follow the issue count. `sections`
+  // is rebuilt from the selection every time the compose step opens.
+  const [instructions, setInstructions] = useState<string | null>(null);
+  const [sections, setSections] = useState("");
+  const [details, setDetails] = useState<ReadonlyArray<SourceControlIssueDetail>>([]);
   // Only the newest search may write the list: a slow first request must not
   // overwrite the rows a later, faster one already showed.
   const searchGeneration = useRef(0);
@@ -107,17 +125,43 @@ export function IssuePickerDialog({
   const environment = environments.find((each) => each.environmentId === environmentId);
   const baseDirectory = environment?.serverConfig?.settings?.addProjectBaseDirectory?.trim() ?? "";
 
+  const repository = selectedRepository(selected);
+  // A bare number is the only entry the locked repository changes the meaning
+  // of, so it is the only case that lets a selection change rerun the search.
+  const lockedForLookup = isBareIssueNumber(query) ? repository : null;
+
   const runSearch = useCallback(
-    async (text: string, filterToViewer: boolean) => {
+    async (text: string, filterToViewer: boolean, lockedRepository: string | null) => {
       const generation = ++searchGeneration.current;
       setPhase("searching");
+      const lookup = parseIssueLookup(text, lockedRepository);
+      if (lookup.kind === "issue") {
+        const result = await loadIssueDetails({
+          environmentId,
+          input: {
+            provider: "github",
+            issues: [{ repository: lookup.repository, number: lookup.number }],
+          },
+        });
+        if (generation !== searchGeneration.current) return;
+        setPhase("idle");
+        setTruncated(false);
+        if (result._tag === "Failure") {
+          setIssues([]);
+          setFailure(`No issue #${lookup.number} in ${lookup.repository}, or you cannot read it.`);
+          return;
+        }
+        setFailure(null);
+        setIssues(result.value.issues);
+        return;
+      }
       const result = await searchIssues({
         environmentId,
         input: {
           provider: "github",
-          query: text.trim(),
+          query: lookup.query,
           assignedToViewer: filterToViewer,
-          repository: null,
+          repository: lookup.repository,
           limit: SEARCH_ROWS,
         },
       });
@@ -133,43 +177,69 @@ export function IssuePickerDialog({
       setIssues(result.value.issues);
       setTruncated(result.value.truncated);
     },
-    [environmentId, searchIssues],
+    [environmentId, loadIssueDetails, searchIssues],
   );
 
   useEffect(() => {
     if (!open) return;
     const timer = setTimeout(() => {
-      void runSearch(query, assignedToViewer);
+      void runSearch(query, assignedToViewer, lockedForLookup);
     }, SEARCH_DEBOUNCE_MS);
     return () => {
       clearTimeout(timer);
     };
-  }, [assignedToViewer, open, query, runSearch]);
+  }, [assignedToViewer, lockedForLookup, open, query, runSearch]);
 
   // Reset on the close itself rather than in an effect watching `open`: the
   // event is what changed, and a reopened picker starts clean rather than
   // showing yesterday's search.
   const close = useCallback(() => {
     searchGeneration.current += 1;
+    setStep("pick");
     setQuery("");
     setIssues([]);
     setSelected([]);
     setTruncated(false);
     setFailure(null);
     setPhase("idle");
+    setInstructions(null);
+    setSections("");
+    setDetails([]);
     onOpenChange(false);
   }, [onOpenChange]);
 
   const selectedKeys = useMemo(() => new Set(selected.map(issueKey)), [selected]);
-  const repository = selectedRepository(selected);
 
   const fail = (title: string, description: string) => {
     setPhase("idle");
     toastManager.add(stackedThreadToast({ type: "error", title, description }));
   };
 
+  /** Read the selected issues in full and move on to the message. */
+  const compose = async () => {
+    if (selected.length === 0 || phase === "loading" || phase === "starting") return;
+    setPhase("loading");
+    const result = await loadIssueDetails({
+      environmentId,
+      input: {
+        provider: "github",
+        issues: selected.map((issue) => ({ repository: issue.repository, number: issue.number })),
+      },
+    });
+    if (result._tag === "Failure") {
+      fail("Could not read the issues", errorMessage(squashAtomCommandFailure(result)));
+      return;
+    }
+    setPhase("idle");
+    setDetails(result.value.issues);
+    setSections(buildIssueSections(result.value.issues));
+    setStep("compose");
+  };
+
+  const instructionsText = instructions ?? defaultIssueInstructions(details.length);
+
   const start = async () => {
-    if (selected.length === 0 || repository === null || phase === "starting") return;
+    if (details.length === 0 || repository === null || phase === "starting") return;
     if (!canCreateProjectInEnvironment(environment?.connection.phase)) {
       fail(
         "Environment unavailable",
@@ -178,18 +248,6 @@ export function IssuePickerDialog({
       return;
     }
     setPhase("starting");
-
-    const details = await loadIssueDetails({
-      environmentId,
-      input: {
-        provider: "github",
-        issues: selected.map((issue) => ({ repository: issue.repository, number: issue.number })),
-      },
-    });
-    if (details._tag === "Failure") {
-      fail("Could not read the issues", errorMessage(squashAtomCommandFailure(details)));
-      return;
-    }
 
     const environmentProjects = projects.filter(
       (project) => project.environmentId === environmentId,
@@ -248,12 +306,12 @@ export function IssuePickerDialog({
     }
     useComposerDraftStore
       .getState()
-      .setPrompt(thread.draftId, buildIssueSeedMessage(details.value.issues));
+      .setPrompt(thread.draftId, composeIssueSeedMessage(instructionsText, sections));
     close();
   };
 
-  const startLabel =
-    selected.length <= 1 ? "Start work" : `Start work on ${selected.length} issues`;
+  const startLabel = details.length <= 1 ? "Start work" : `Start work on ${details.length} issues`;
+  const nextLabel = selected.length <= 1 ? "Next" : `Next with ${selected.length} issues`;
 
   return (
     <Dialog
@@ -267,90 +325,146 @@ export function IssuePickerDialog({
         <DialogHeader>
           <DialogTitle>Start from a GitHub issue</DialogTitle>
           <DialogDescription>
-            {repository === null
-              ? "Search every repository you can read. Picking an issue locks the list to its repository."
-              : `Picking more issues from ${repository}. A different repository starts the selection again.`}
+            {step === "compose"
+              ? "This is the thread's first message. Edit it as you like; Start work puts it in the composer."
+              : repository === null
+                ? "Search every repository you can read, or paste an issue link. Picking an issue locks the list to its repository."
+                : `Picking more issues from ${repository}. A different repository starts the selection again.`}
           </DialogDescription>
         </DialogHeader>
-        <DialogPanel className="flex flex-col gap-3">
-          <div className="flex items-center gap-3">
-            <div className="relative flex-1">
-              <SearchIcon
-                className="pointer-events-none absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-muted-foreground"
-                aria-hidden
-              />
-              <Input
-                className="ps-8"
-                placeholder="Search open issues"
-                value={query}
-                onChange={(event) => setQuery(event.target.value)}
-                autoFocus
-              />
+        {step === "pick" ? (
+          <DialogPanel className="flex flex-col gap-3">
+            <div className="flex items-center gap-3">
+              <div className="relative flex-1">
+                <SearchIcon
+                  className="pointer-events-none absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-muted-foreground"
+                  aria-hidden
+                />
+                <Input
+                  className="ps-8"
+                  placeholder="Search open issues, or paste a link, owner/repo or owner/repo#123"
+                  value={query}
+                  onChange={(event) => setQuery(event.target.value)}
+                  autoFocus
+                />
+              </div>
+              <Label className="flex shrink-0 items-center gap-2 text-xs font-normal text-muted-foreground">
+                <Switch
+                  checked={assignedToViewer}
+                  onCheckedChange={(checked) => setAssignedToViewer(Boolean(checked))}
+                  aria-label="Only issues assigned to me"
+                />
+                Assigned to me
+              </Label>
             </div>
-            <Label className="flex shrink-0 items-center gap-2 text-xs font-normal text-muted-foreground">
-              <Switch
-                checked={assignedToViewer}
-                onCheckedChange={(checked) => setAssignedToViewer(Boolean(checked))}
-                aria-label="Only issues assigned to me"
-              />
-              Assigned to me
-            </Label>
-          </div>
 
-          <div className="min-h-64 max-h-80 overflow-y-auto rounded-md border border-border/60">
-            {failure !== null ? (
-              <p className="p-4 text-sm text-muted-foreground">{failure}</p>
-            ) : issues.length === 0 ? (
-              <p className="p-4 text-sm text-muted-foreground">
-                {phase === "searching" ? "Searching…" : "No open issues match."}
+            <div className="min-h-64 max-h-80 overflow-y-auto rounded-md border border-border/60">
+              {failure !== null ? (
+                <p className="p-4 text-sm text-muted-foreground">{failure}</p>
+              ) : issues.length === 0 ? (
+                <p className="p-4 text-sm text-muted-foreground">
+                  {phase === "searching" ? "Searching…" : "No open issues match."}
+                </p>
+              ) : (
+                <ul>
+                  {issues.map((issue) => (
+                    <IssueRow
+                      key={issueKey(issue)}
+                      issue={issue}
+                      checked={selectedKeys.has(issueKey(issue))}
+                      resets={selectionWouldReset(selected, issue)}
+                      onToggle={() =>
+                        setSelected((current) => toggleIssueSelection(current, issue))
+                      }
+                    />
+                  ))}
+                </ul>
+              )}
+            </div>
+            {truncated ? (
+              <p className="text-xs text-muted-foreground">
+                Showing the {SEARCH_ROWS} most recently updated. Narrow the search, or type
+                owner/repo to search one repository.
               </p>
-            ) : (
-              <ul>
-                {issues.map((issue) => (
-                  <IssueRow
-                    key={issueKey(issue)}
-                    issue={issue}
-                    checked={selectedKeys.has(issueKey(issue))}
-                    resets={selectionWouldReset(selected, issue)}
-                    onToggle={() => setSelected((current) => toggleIssueSelection(current, issue))}
-                  />
-                ))}
-              </ul>
-            )}
-          </div>
-          {truncated ? (
-            <p className="text-xs text-muted-foreground">
-              Showing the {SEARCH_ROWS} most recently updated. Narrow the search to see the rest.
-            </p>
-          ) : null}
-
-          <Label className="flex items-start gap-2.5 text-sm font-normal">
-            <Checkbox
-              checked={freshWorkspace}
-              onCheckedChange={(checked) => setFreshWorkspace(Boolean(checked))}
-              className="mt-0.5"
-            />
-            <span className="flex flex-col gap-0.5">
-              <span>Work in a fresh workspace</span>
-              <span className="text-xs text-muted-foreground">
-                A separate checkout, so the work never touches your own copy of the repository.
-              </span>
-            </span>
-          </Label>
-        </DialogPanel>
-        <DialogFooter>
-          <Button variant="ghost" onClick={close}>
-            Cancel
-          </Button>
-          <Button
-            onClick={() => void start()}
-            disabled={selected.length === 0 || phase === "starting"}
-          >
-            {phase === "starting" ? (
-              <LoaderCircleIcon className="animate-spin" aria-hidden />
             ) : null}
-            {startLabel}
-          </Button>
+          </DialogPanel>
+        ) : (
+          <DialogPanel className="flex flex-col gap-3">
+            <Label className="flex flex-col gap-1.5 text-sm font-normal">
+              <span className="flex flex-col gap-0.5">
+                <span>Instructions</span>
+                <span className="text-xs text-muted-foreground">
+                  Your own text. It stays as you wrote it when the issues change.
+                </span>
+              </span>
+              <Textarea
+                value={instructionsText}
+                onChange={(event) => setInstructions(event.target.value)}
+                style={{ maxHeight: "12rem" }}
+              />
+            </Label>
+            <Label className="flex flex-col gap-1.5 text-sm font-normal">
+              <span className="flex flex-col gap-0.5">
+                <span>Issues</span>
+                <span className="text-xs text-muted-foreground">
+                  Filled in from the selected issues. Rebuilt whenever the selection changes.
+                </span>
+              </span>
+              <Textarea
+                value={sections}
+                onChange={(event) => setSections(event.target.value)}
+                style={{ maxHeight: "16rem" }}
+              />
+            </Label>
+
+            <Label className="flex items-start gap-2.5 text-sm font-normal">
+              <Checkbox
+                checked={freshWorkspace}
+                onCheckedChange={(checked) => setFreshWorkspace(Boolean(checked))}
+                className="mt-0.5"
+              />
+              <span className="flex flex-col gap-0.5">
+                <span>Work in a fresh workspace</span>
+                <span className="text-xs text-muted-foreground">
+                  A separate checkout, so the work never touches your own copy of the repository.
+                </span>
+              </span>
+            </Label>
+          </DialogPanel>
+        )}
+        <DialogFooter>
+          {step === "pick" ? (
+            <>
+              <Button variant="ghost" onClick={close}>
+                Cancel
+              </Button>
+              <Button
+                onClick={() => void compose()}
+                disabled={selected.length === 0 || phase === "loading"}
+              >
+                {phase === "loading" ? (
+                  <LoaderCircleIcon className="animate-spin" aria-hidden />
+                ) : null}
+                {nextLabel}
+              </Button>
+            </>
+          ) : (
+            <>
+              <Button
+                variant="ghost"
+                onClick={() => setStep("pick")}
+                disabled={phase === "starting"}
+              >
+                Back
+              </Button>
+              <Button onClick={() => void start()} disabled={phase === "starting"}>
+                {phase === "starting" ? (
+                  <LoaderCircleIcon className="animate-spin" aria-hidden />
+                ) : null}
+                {startLabel}
+              </Button>
+            </>
+          )}
         </DialogFooter>
       </DialogPopup>
     </Dialog>
@@ -394,6 +508,7 @@ function IssueRow({
             <span className="truncate">
               {issue.repository}#{issue.number}
             </span>
+            {issue.state === "closed" ? <span>Closed</span> : null}
             {issue.labels.slice(0, 4).map((label) => (
               <IssueLabel key={label.name} name={label.name} color={label.color} />
             ))}
