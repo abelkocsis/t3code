@@ -38,6 +38,7 @@ export type AwarenessThreadShell = Pick<
   | "updatedAt"
   | "hasPendingApprovals"
   | "hasPendingUserInput"
+  | "backgroundLiveness"
 >;
 
 export interface ProjectThreadAwarenessInput {
@@ -100,8 +101,14 @@ export function resolveThreadAwarenessPhase(
   if (thread.session?.status === "running" || thread.latestTurn?.state === "running") {
     return "running";
   }
+  // Native background work (subagent fleets, workflow runs, watch loops)
+  // outlives the turn that started it, and a subagent that lands re-enters the
+  // parent agent, which settles another turn. Every one of those settles read
+  // as "completed" and announced a finish the user did not get. A thread whose
+  // turn settled while background work is alive is still working.
+  const settledPhase = thread.backgroundLiveness == null ? "completed" : "running";
   if (thread.latestTurn?.state === "completed") {
-    return "completed";
+    return settledPhase;
   }
   // A turn that finished can still read as "interrupted" here: session
   // teardown settles still-running turns by session status, and that write
@@ -110,7 +117,7 @@ export function resolveThreadAwarenessPhase(
   // Without this, quick finish-then-teardown threads resolve to null
   // persistently and get tombstoned instead of published as completed.
   if (thread.latestTurn?.state === "interrupted" && thread.latestTurn.completedAt !== null) {
-    return "completed";
+    return settledPhase;
   }
   // Threads whose turns never produce a checkpoint (no code changes) have no
   // materialized latestTurn in the shell at all, and the session-set
@@ -119,7 +126,7 @@ export function resolveThreadAwarenessPhase(
   // session at "ready"/"idle" with nothing pending and nothing running means
   // the agent finished and is waiting for the next prompt — Done.
   if (thread.session?.status === "ready" || thread.session?.status === "idle") {
-    return "completed";
+    return settledPhase;
   }
   return null;
 }

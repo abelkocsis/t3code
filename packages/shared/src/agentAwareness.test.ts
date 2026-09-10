@@ -29,6 +29,7 @@ function thread(
   | "updatedAt"
   | "hasPendingApprovals"
   | "hasPendingUserInput"
+  | "backgroundLiveness"
 > {
   return {
     id: "thread-1" as ThreadId,
@@ -152,6 +153,83 @@ describe("projectThreadAwareness", () => {
     });
 
     expect(state?.phase).toBe("completed");
+  });
+
+  it("keeps settled turns running while background work is alive", () => {
+    // A backgrounded subagent settles the parent turn and re-enters the agent
+    // when it lands, so each of its rounds settled a turn and announced a
+    // finish that never happened.
+    const completedTurn = {
+      turnId: "turn-1" as TurnId,
+      state: "completed" as const,
+      requestedAt: NOW,
+      startedAt: NOW,
+      completedAt: NOW,
+      assistantMessageId: null,
+    };
+    for (const backgroundLiveness of ["working", "monitoring"] as const) {
+      const state = projectThreadAwareness({
+        environmentId: "env-1" as EnvironmentId,
+        project,
+        thread: thread({ latestTurn: completedTurn, backgroundLiveness }),
+      });
+      expect(state?.phase).toBe("running");
+    }
+
+    const drained = projectThreadAwareness({
+      environmentId: "env-1" as EnvironmentId,
+      project,
+      thread: thread({ latestTurn: completedTurn, backgroundLiveness: null }),
+    });
+    expect(drained?.phase).toBe("completed");
+  });
+
+  it("keeps ready sessions running while background work is alive", () => {
+    const state = projectThreadAwareness({
+      environmentId: "env-1" as EnvironmentId,
+      project,
+      thread: thread({
+        backgroundLiveness: "working",
+        session: {
+          threadId: "thread-1" as ThreadId,
+          status: "ready",
+          providerName: "Codex",
+          runtimeMode: "full-access",
+          activeTurnId: null,
+          lastError: null,
+          updatedAt: NOW,
+        },
+      }),
+    });
+
+    expect(state?.phase).toBe("running");
+  });
+
+  it("still reports approvals and failures while background work is alive", () => {
+    const approval = projectThreadAwareness({
+      environmentId: "env-1" as EnvironmentId,
+      project,
+      thread: thread({ backgroundLiveness: "working", hasPendingApprovals: true }),
+    });
+    expect(approval?.phase).toBe("waiting_for_approval");
+
+    const failed = projectThreadAwareness({
+      environmentId: "env-1" as EnvironmentId,
+      project,
+      thread: thread({
+        backgroundLiveness: "working",
+        session: {
+          threadId: "thread-1" as ThreadId,
+          status: "error",
+          providerName: "Codex",
+          runtimeMode: "full-access",
+          activeTurnId: null,
+          lastError: "Provider process exited.",
+          updatedAt: NOW,
+        },
+      }),
+    });
+    expect(failed?.phase).toBe("failed");
   });
 
   it("projects failures with the session error detail", () => {
