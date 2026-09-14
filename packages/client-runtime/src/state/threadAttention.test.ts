@@ -6,6 +6,7 @@ import {
   detectPhaseChanges,
   isPhaseNotifiable,
   isThreadAttentionUnseen,
+  resolveNotifiableAwarenessPhase,
   resolveThreadAttention,
   type ThreadPhaseMap,
 } from "./threadAttention.ts";
@@ -218,5 +219,22 @@ describe("detectPhaseChanges", () => {
     expect(second.changes).toEqual([
       { key: "env-a:thread-1", phase: "completed", previousPhase: "running" },
     ]);
+  });
+});
+
+describe("resolveNotifiableAwarenessPhase", () => {
+  it("reports the ordinary phase for a thread the user has not settled", () => {
+    expect(resolveNotifiableAwarenessPhase(makeThread({ turnState: "completed" }))).toBe(
+      "completed",
+    );
+  });
+
+  it("reports no phase for a settled thread, so settling announces nothing", () => {
+    expect(
+      resolveNotifiableAwarenessPhase({
+        ...makeThread({ turnState: "completed" }),
+        settledOverride: "settled",
+      }),
+    ).toBeNull();
   });
 });
