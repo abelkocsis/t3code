@@ -52,6 +52,21 @@ export function resolveThreadAttention(thread: AttentionThreadShell): ThreadAtte
   return { phase, at: attentionTimestamp(phase, thread) };
 }
 
+/**
+ * The phase the desktop notifier watches.
+ *
+ * A settled thread reports no phase. Settling is the user saying they are done
+ * with the thread, and the settle itself ends the session, which reads as a
+ * finished turn: without this rule, settling announces a finish the user just
+ * caused.
+ */
+export function resolveNotifiableAwarenessPhase(
+  thread: AttentionThreadShell,
+): AgentAwarenessPhase | null {
+  if (thread.settledOverride === "settled") return null;
+  return resolveThreadAwarenessPhase(thread);
+}
+
 function attentionTimestamp(phase: AttentionPhase, thread: AwarenessThreadShell): string {
   if (phase === "completed") {
     return thread.latestTurn?.completedAt ?? thread.session?.updatedAt ?? thread.updatedAt;

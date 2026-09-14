@@ -2,20 +2,22 @@ import { useNavigate } from "@tanstack/react-router";
 import { scopedThreadKey, scopeThreadRef } from "@t3tools/client-runtime/environment";
 import {
   detectPhaseChanges,
+  resolveNotifiableAwarenessPhase,
   type ThreadPhaseMap,
 } from "@t3tools/client-runtime/state/thread-attention";
 import type { EnvironmentId, ThreadId } from "@t3tools/contracts";
-import { resolveThreadAwarenessPhase } from "@t3tools/shared/agentAwareness";
-import { useEffect, useEffectEvent, useRef } from "react";
+import { useEffect, useEffectEvent, useRef, useState } from "react";
 
 import { buildThreadRouteParams } from "../threadRoutes";
 import { useProjects, useThreadShells } from "../state/entities";
 import { useAttentionThreads } from "./useAttentionThreads";
 import { useClientSettings } from "./useSettings";
 import {
-  buildThreadNotifications,
   type NotificationSettings,
   type NotifiableThread,
+  type PendingThreadNotifications,
+  reducePendingThreadNotifications,
+  takeDueThreadNotifications,
 } from "../notifications/threadNotifications";
 import { useWindowFocused } from "./useWindowFocused";
 
@@ -38,6 +40,14 @@ export function useThreadNotifications(): void {
   // have never seen, and its phase is recorded silently: the first snapshot
   // after launch is history, not news.
   const phasesRef = useRef<ThreadPhaseMap>(new Map());
+  // Banners waiting out their quiet period, so one burst of phases on a thread
+  // announces itself once.
+  const pendingRef = useRef<PendingThreadNotifications>(new Map());
+  const flushTimerRef = useRef<number | null>(null);
+  // Wakes the sync when the quiet period is the only thing left to wait for.
+  // A counter rather than a direct call, so the flush reads the focus state of
+  // the moment it fires, not the one from when the banner was scheduled.
+  const [flushTick, setFlushTick] = useState(0);
 
   const syncNotifications = useEffectEvent(() => {
     const projectTitleByKey = new Map(
@@ -45,7 +55,7 @@ export function useThreadNotifications(): void {
     );
     const inputs = threads.map((thread) => ({
       key: scopedThreadKey(scopeThreadRef(thread.environmentId, thread.id)),
-      phase: resolveThreadAwarenessPhase(thread),
+      phase: resolveNotifiableAwarenessPhase(thread),
       thread: {
         environmentId: thread.environmentId,
         threadId: thread.id,
@@ -61,16 +71,35 @@ export function useThreadNotifications(): void {
     phasesRef.current = next;
 
     const threadByKey = new Map(inputs.map((input) => [input.key, input.thread]));
-    const notifications = buildThreadNotifications({
+    const now = Date.now();
+    const pending = reducePendingThreadNotifications({
+      pending: pendingRef.current,
       changes: changes.flatMap((change) => {
         const thread = threadByKey.get(change.key);
         return thread === undefined ? [] : [{ thread, phase: change.phase }];
       }),
-      settings,
-      appFocused,
+      now,
     });
-    for (const notification of notifications) {
+    const due = takeDueThreadNotifications({ pending, now, settings, appFocused });
+    pendingRef.current = due.pending;
+    for (const notification of due.notifications) {
       void window.desktopBridge?.showThreadNotification?.(notification);
+    }
+
+    // A banner that nothing follows has no later snapshot to carry it, so the
+    // quiet period needs its own wake-up.
+    if (flushTimerRef.current !== null) {
+      window.clearTimeout(flushTimerRef.current);
+      flushTimerRef.current = null;
+    }
+    if (due.nextDueAt !== null) {
+      flushTimerRef.current = window.setTimeout(
+        () => {
+          flushTimerRef.current = null;
+          setFlushTick((tick) => tick + 1);
+        },
+        Math.max(0, due.nextDueAt - now),
+      );
     }
 
     // The badge counts what the user has not looked at, the same set the
@@ -81,7 +110,16 @@ export function useThreadNotifications(): void {
 
   useEffect(() => {
     syncNotifications();
-  }, [threads, projects, unseen, settings, appFocused]);
+  }, [threads, projects, unseen, settings, appFocused, flushTick]);
+
+  useEffect(
+    () => () => {
+      if (flushTimerRef.current === null) return;
+      window.clearTimeout(flushTimerRef.current);
+      flushTimerRef.current = null;
+    },
+    [],
+  );
 
   useEffect(() => {
     const subscribe = window.desktopBridge?.onThreadNotificationActivated;

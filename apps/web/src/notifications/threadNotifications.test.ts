@@ -2,9 +2,14 @@ import { describe, expect, it } from "vite-plus/test";
 
 import {
   buildThreadNotification,
-  buildThreadNotifications,
+  NOTIFICATION_QUIET_PERIOD_MS,
   type NotificationSettings,
+  type PendingThreadNotifications,
+  pendingNotificationKey,
+  type PhaseChangeNotificationInput,
+  reducePendingThreadNotifications,
   shouldNotifyNow,
+  takeDueThreadNotifications,
 } from "./threadNotifications.ts";
 
 const SETTINGS: NotificationSettings = {
@@ -90,42 +95,140 @@ describe("buildThreadNotification", () => {
   });
 });
 
-describe("buildThreadNotifications", () => {
-  it("announces only the phases that ask something of the user", () => {
-    const notifications = buildThreadNotifications({
-      changes: [
-        { thread: THREAD, phase: "running" },
-        { thread: { ...THREAD, threadId: "thread-2" }, phase: "completed" },
-        { thread: { ...THREAD, threadId: "thread-3" }, phase: null },
-      ],
+describe("the notification quiet period", () => {
+  const NOW = 1_000_000;
+  const THREAD_2 = { ...THREAD, threadId: "thread-2" };
+
+  function pendingAfter(
+    changes: readonly PhaseChangeNotificationInput[],
+    at = NOW,
+  ): PendingThreadNotifications {
+    return changes.reduce<PendingThreadNotifications>(
+      (pending, change) =>
+        reducePendingThreadNotifications({ pending, changes: [change], now: at }),
+      new Map(),
+    );
+  }
+
+  it("announces the phase a burst lands in, not the ones it crossed", () => {
+    const pending = pendingAfter([
+      { thread: THREAD, phase: "completed" },
+      { thread: THREAD, phase: "waiting_for_input" },
+    ]);
+    const due = takeDueThreadNotifications({
+      pending,
+      now: NOW + NOTIFICATION_QUIET_PERIOD_MS,
       settings: SETTINGS,
       appFocused: false,
     });
-    expect(notifications.map((notification) => notification.threadId)).toEqual(["thread-2"]);
+    expect(due.notifications.map((notification) => notification.title)).toEqual([
+      "Waiting for input",
+    ]);
   });
 
-  it("announces nothing while the trigger forbids it, however many changes arrive", () => {
-    expect(
-      buildThreadNotifications({
-        changes: [{ thread: THREAD, phase: "failed" }],
-        settings: SETTINGS,
-        appFocused: true,
-      }),
-    ).toEqual([]);
-  });
-
-  it("announces every qualifying change in one batch", () => {
-    const notifications = buildThreadNotifications({
-      changes: [
-        { thread: THREAD, phase: "waiting_for_approval" },
-        { thread: { ...THREAD, threadId: "thread-2" }, phase: "failed" },
-      ],
+  it("holds a banner until its quiet period passes", () => {
+    const pending = pendingAfter([{ thread: THREAD, phase: "completed" }]);
+    const due = takeDueThreadNotifications({
+      pending,
+      now: NOW + NOTIFICATION_QUIET_PERIOD_MS - 1,
       settings: SETTINGS,
       appFocused: false,
     });
-    expect(notifications.map((notification) => notification.title)).toEqual([
+    expect(due.notifications).toEqual([]);
+    expect(due.nextDueAt).toBe(NOW + NOTIFICATION_QUIET_PERIOD_MS);
+    expect(due.pending.size).toBe(1);
+  });
+
+  it("announces a finish that nothing follows", () => {
+    const pending = pendingAfter([{ thread: THREAD, phase: "completed" }]);
+    const due = takeDueThreadNotifications({
+      pending,
+      now: NOW + NOTIFICATION_QUIET_PERIOD_MS,
+      settings: SETTINGS,
+      appFocused: false,
+    });
+    expect(due.notifications.map((notification) => notification.title)).toEqual(["Agent finished"]);
+    expect(due.pending.size).toBe(0);
+    expect(due.nextDueAt).toBeNull();
+  });
+
+  it("cancels the banner when the agent carries on by itself", () => {
+    const pending = pendingAfter([
+      { thread: THREAD, phase: "completed" },
+      { thread: THREAD, phase: "running" },
+    ]);
+    expect(pending.has(pendingNotificationKey(THREAD))).toBe(false);
+  });
+
+  it("restarts the wait on the replacing phase", () => {
+    const first = reducePendingThreadNotifications({
+      pending: new Map(),
+      changes: [{ thread: THREAD, phase: "completed" }],
+      now: NOW,
+    });
+    const second = reducePendingThreadNotifications({
+      pending: first,
+      changes: [{ thread: THREAD, phase: "waiting_for_approval" }],
+      now: NOW + 2_000,
+    });
+    expect(second.get(pendingNotificationKey(THREAD))?.dueAt).toBe(
+      NOW + 2_000 + NOTIFICATION_QUIET_PERIOD_MS,
+    );
+  });
+
+  it("keeps each thread's burst separate", () => {
+    const pending = pendingAfter([
+      { thread: THREAD, phase: "completed" },
+      { thread: THREAD_2, phase: "failed" },
+    ]);
+    const due = takeDueThreadNotifications({
+      pending,
+      now: NOW + NOTIFICATION_QUIET_PERIOD_MS,
+      settings: SETTINGS,
+      appFocused: false,
+    });
+    expect(due.notifications.map((notification) => notification.threadId)).toEqual([
+      "thread-1",
+      "thread-2",
+    ]);
+  });
+
+  it("drops a due banner when the user came back to the app", () => {
+    const pending = pendingAfter([{ thread: THREAD, phase: "completed" }]);
+    const due = takeDueThreadNotifications({
+      pending,
+      now: NOW + NOTIFICATION_QUIET_PERIOD_MS,
+      settings: SETTINGS,
+      appFocused: true,
+    });
+    expect(due.notifications).toEqual([]);
+    expect(due.pending.size).toBe(0);
+  });
+
+  it("drops a due banner for a phase the user switched off", () => {
+    const pending = pendingAfter([{ thread: THREAD, phase: "completed" }]);
+    const due = takeDueThreadNotifications({
+      pending,
+      now: NOW + NOTIFICATION_QUIET_PERIOD_MS,
+      settings: { ...SETTINGS, notifyOnCompletion: false },
+      appFocused: false,
+    });
+    expect(due.notifications).toEqual([]);
+  });
+
+  it("announces the landing phase even when the crossed one is switched off", () => {
+    const pending = pendingAfter([
+      { thread: THREAD, phase: "completed" },
+      { thread: THREAD, phase: "waiting_for_approval" },
+    ]);
+    const due = takeDueThreadNotifications({
+      pending,
+      now: NOW + NOTIFICATION_QUIET_PERIOD_MS,
+      settings: { ...SETTINGS, notifyOnCompletion: false },
+      appFocused: false,
+    });
+    expect(due.notifications.map((notification) => notification.title)).toEqual([
       "Approval needed",
-      "Agent failed",
     ]);
   });
 });
