@@ -7,6 +7,7 @@ import {
   composeIssueSeedMessage,
   issueKey,
   parseIssueLookup,
+  projectsForRepository,
   selectedRepository,
   selectionWouldReset,
   toggleIssueSelection,
@@ -251,5 +252,48 @@ describe("composeIssueSeedMessage", () => {
     expect(before.startsWith(edited)).toBe(true);
     expect(after.startsWith(edited)).toBe(true);
     expect(after).toContain("cli/cli#2");
+  });
+});
+
+describe("projectsForRepository", () => {
+  const remote = (repository: string) => ({
+    displayName: repository,
+    owner: repository.split("/")[0],
+    name: repository.split("/")[1],
+  });
+
+  it("matches a project by its remote whatever the folder is called", () => {
+    const project = {
+      workspaceRoot: "/home/me/work/checkout",
+      repositoryIdentity: remote("t3-oss/t3-code"),
+    };
+    expect(projectsForRepository([project], "t3-oss/t3-code")).toEqual([project]);
+  });
+
+  it("ignores a project on another remote sitting in a same-named folder", () => {
+    const fork = {
+      workspaceRoot: "/home/me/t3-code",
+      repositoryIdentity: remote("someone/t3-code"),
+    };
+    expect(projectsForRepository([fork], "t3-oss/t3-code")).toEqual([]);
+  });
+
+  it("falls back to the folder name when the remote is unknown", () => {
+    const project = { workspaceRoot: "/home/me/t3-code", repositoryIdentity: null };
+    expect(projectsForRepository([project], "t3-oss/t3-code")).toEqual([project]);
+  });
+
+  it("offers the remote match before the folder-name guess", () => {
+    const guess = { workspaceRoot: "/home/me/t3-code", repositoryIdentity: null };
+    const match = {
+      workspaceRoot: "/home/me/work/other",
+      repositoryIdentity: remote("t3-oss/t3-code"),
+    };
+    expect(projectsForRepository([guess, match], "t3-oss/t3-code")).toEqual([match, guess]);
+  });
+
+  it("matches nothing while no repository is selected", () => {
+    const project = { workspaceRoot: "/home/me/t3-code", repositoryIdentity: null };
+    expect(projectsForRepository([project], null)).toEqual([]);
   });
 });
