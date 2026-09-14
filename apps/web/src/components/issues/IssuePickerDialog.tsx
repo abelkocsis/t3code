@@ -8,6 +8,7 @@ import {
 import { squashAtomCommandFailure } from "@t3tools/client-runtime/state/runtime";
 import type {
   EnvironmentId,
+  ProjectId,
   SourceControlIssueDetail,
   SourceControlIssueSummary,
 } from "@t3tools/contracts";
@@ -16,11 +17,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { useComposerDraftStore } from "../../composerDraftStore";
 import { useNewThreadHandler } from "../../hooks/useHandleNewThread";
-import {
-  ensureBrowseDirectoryPath,
-  findProjectByPath,
-  inferProjectTitleFromPath,
-} from "../../lib/projectPaths";
+import { ensureBrowseDirectoryPath, inferProjectTitleFromPath } from "../../lib/projectPaths";
 import { newProjectId } from "../../lib/utils";
 import { useProjects } from "../../state/entities";
 import { useEnvironments } from "../../state/environments";
@@ -42,6 +39,7 @@ import {
 } from "../ui/dialog";
 import { Input } from "../ui/input";
 import { Label } from "../ui/label";
+import { Select, SelectItem, SelectPopup, SelectTrigger, SelectValue } from "../ui/select";
 import { Switch } from "../ui/switch";
 import { Textarea } from "../ui/textarea";
 import { stackedThreadToast, toastManager } from "../ui/toast";
@@ -52,6 +50,7 @@ import {
   isBareIssueNumber,
   issueKey,
   parseIssueLookup,
+  projectsForRepository,
   selectedRepository,
   selectionWouldReset,
   toggleIssueSelection,
@@ -64,6 +63,10 @@ function errorMessage(error: unknown): string {
 /** How long the field stays quiet before a search runs. */
 const SEARCH_DEBOUNCE_MS = 350;
 const SEARCH_ROWS = 40;
+
+/** The workspace choice that clones the repository again instead of reusing a project. */
+const CLONE_CHOICE = "clone";
+type WorkspaceChoice = ProjectId | typeof CLONE_CHOICE;
 
 type Phase = "idle" | "searching" | "loading" | "starting";
 /** `pick` chooses the issues; `compose` edits the first message built from them. */
@@ -107,6 +110,8 @@ export function IssuePickerDialog({
   const [query, setQuery] = useState("");
   const [assignedToViewer, setAssignedToViewer] = useState(true);
   const [freshWorkspace, setFreshWorkspace] = useState(true);
+  // null follows the repository match; a value is the user's own pick.
+  const [workspaceChoice, setWorkspaceChoice] = useState<WorkspaceChoice | null>(null);
   const [issues, setIssues] = useState<ReadonlyArray<SourceControlIssueSummary>>([]);
   const [selected, setSelected] = useState<ReadonlyArray<SourceControlIssueSummary>>([]);
   const [truncated, setTruncated] = useState(false);
@@ -126,6 +131,31 @@ export function IssuePickerDialog({
   const baseDirectory = environment?.serverConfig?.settings?.addProjectBaseDirectory?.trim() ?? "";
 
   const repository = selectedRepository(selected);
+  const environmentProjects = useMemo(
+    () => projects.filter((project) => project.environmentId === environmentId),
+    [environmentId, projects],
+  );
+  const repositoryProjects = useMemo(
+    () => projectsForRepository(environmentProjects, repository),
+    [environmentProjects, repository],
+  );
+  // The first match is the default. A pick only holds while it still names a
+  // project of the selected repository, so changing the selection re-defaults
+  // rather than starting work in the repository the user left behind.
+  const chosenProject = repositoryProjects.find((project) => project.id === workspaceChoice);
+  const activeChoice: WorkspaceChoice =
+    workspaceChoice === CLONE_CHOICE
+      ? CLONE_CHOICE
+      : (chosenProject?.id ?? repositoryProjects[0]?.id ?? CLONE_CHOICE);
+  const workspaceItems = useMemo<
+    ReadonlyArray<{ readonly value: WorkspaceChoice; readonly label: string }>
+  >(
+    () => [
+      ...repositoryProjects.map((project) => ({ value: project.id, label: project.title })),
+      { value: CLONE_CHOICE, label: "Clone a fresh copy" },
+    ],
+    [repositoryProjects],
+  );
   // A bare number is the only entry the locked repository changes the meaning
   // of, so it is the only case that lets a selection change rerun the search.
   const lockedForLookup = isBareIssueNumber(query) ? repository : null;
@@ -205,6 +235,7 @@ export function IssuePickerDialog({
     setInstructions(null);
     setSections("");
     setDetails([]);
+    setWorkspaceChoice(null);
     onOpenChange(false);
   }, [onOpenChange]);
 
@@ -249,17 +280,12 @@ export function IssuePickerDialog({
     }
     setPhase("starting");
 
-    const environmentProjects = projects.filter(
-      (project) => project.environmentId === environmentId,
-    );
-    const destinationPath = getCloneDestinationPath(
-      ensureBrowseDirectoryPath(baseDirectory.length > 0 ? baseDirectory : "~/"),
-      getCloneDirectoryName(repository),
-    );
-    const existing = findProjectByPath(environmentProjects, destinationPath);
-
-    let projectId = existing?.id ?? null;
+    let projectId: ProjectId | null = activeChoice === CLONE_CHOICE ? null : activeChoice;
     if (projectId === null) {
+      const destinationPath = getCloneDestinationPath(
+        ensureBrowseDirectoryPath(baseDirectory.length > 0 ? baseDirectory : "~/"),
+        getCloneDirectoryName(repository),
+      );
       const lookup = await lookupRepository({
         environmentId,
         input: { provider: "github", repository },
@@ -416,6 +442,35 @@ export function IssuePickerDialog({
                 style={{ maxHeight: "16rem" }}
               />
             </Label>
+
+            {repositoryProjects.length > 0 ? (
+              <Label className="flex flex-col gap-1.5 text-sm font-normal">
+                <span className="flex flex-col gap-0.5">
+                  <span>Repository</span>
+                  <span className="text-xs text-muted-foreground">
+                    A project you already have, or another copy of {repository}.
+                  </span>
+                </span>
+                <Select<WorkspaceChoice>
+                  items={workspaceItems}
+                  value={activeChoice}
+                  onValueChange={(value) => {
+                    if (value !== null) setWorkspaceChoice(value);
+                  }}
+                >
+                  <SelectTrigger aria-label="Repository to work in">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectPopup>
+                    {workspaceItems.map((item) => (
+                      <SelectItem key={item.value} value={item.value}>
+                        {item.label}
+                      </SelectItem>
+                    ))}
+                  </SelectPopup>
+                </Select>
+              </Label>
+            ) : null}
 
             <Label className="flex items-start gap-2.5 text-sm font-normal">
               <Checkbox
