@@ -176,3 +176,52 @@ export function buildIssueSeedMessage(issues: ReadonlyArray<SourceControlIssueDe
     buildIssueSections(issues),
   );
 }
+
+/** The part of a project the picker needs to tell which repository it holds. */
+export interface IssueProjectCandidate {
+  readonly workspaceRoot: string;
+  readonly repositoryIdentity?:
+    | {
+        readonly displayName?: string | undefined;
+        readonly owner?: string | undefined;
+        readonly name?: string | undefined;
+      }
+    | null
+    | undefined;
+}
+
+/** `owner/name` for a project, from the git remote the server resolved. */
+function projectRepository(project: IssueProjectCandidate): string | null {
+  const identity = project.repositoryIdentity;
+  if (!identity) return null;
+  if (identity.displayName) return identity.displayName;
+  return identity.owner && identity.name ? `${identity.owner}/${identity.name}` : null;
+}
+
+function folderName(workspaceRoot: string): string {
+  return workspaceRoot.split(/[/\\]/u).findLast((segment) => segment.length > 0) ?? "";
+}
+
+/**
+ * The projects that already hold `owner/name`, remote matches first.
+ *
+ * The remote is what decides, so a clone in any folder counts. A project whose
+ * remote the server could not read falls back to its folder name, which a
+ * clone keeps by default.
+ */
+export function projectsForRepository<T extends IssueProjectCandidate>(
+  projects: ReadonlyArray<T>,
+  repository: string | null,
+): ReadonlyArray<T> {
+  const wanted = repository?.trim().toLowerCase() ?? "";
+  if (wanted.length === 0) return [];
+  const wantedName = wanted.split("/").findLast((segment) => segment.length > 0) ?? "";
+  return [
+    ...projects.filter((project) => projectRepository(project)?.toLowerCase() === wanted),
+    ...projects.filter(
+      (project) =>
+        projectRepository(project) === null &&
+        folderName(project.workspaceRoot).toLowerCase() === wantedName,
+    ),
+  ];
+}
