@@ -2676,6 +2676,24 @@ export const makeCodexAdapter = Effect.fn("makeCodexAdapter")(function* (
       })),
     );
 
+  const buildForkCursor: CodexAdapterShape["buildForkCursor"] = Effect.fn("buildForkCursor")(
+    function* (input) {
+      if (!isCodexResumeCursorSchema(input.resumeCursor)) {
+        return yield* new ProviderAdapterValidationError({
+          provider: PROVIDER,
+          operation: "buildForkCursor",
+          issue: "The source thread has no Codex thread to fork.",
+        });
+      }
+      // Codex turn ids are the canonical turn ids, so the checkpoint's turn
+      // names the fork point directly.
+      return {
+        threadId: input.resumeCursor.threadId,
+        forkFromTurnId: input.turnId,
+      };
+    },
+  );
+
   const rollbackThread: CodexAdapterShape["rollbackThread"] = (threadId, numTurns) => {
     if (!Number.isInteger(numTurns) || numTurns < 1) {
       return Effect.fail(
@@ -2804,6 +2822,7 @@ export const makeCodexAdapter = Effect.fn("makeCodexAdapter")(function* (
     capabilities: {
       sessionModelSwitch: "in-session",
       promptlessTurnContinuation: true,
+      supportsConversationFork: true,
     },
     startSession,
     sendTurn,
@@ -2811,6 +2830,7 @@ export const makeCodexAdapter = Effect.fn("makeCodexAdapter")(function* (
     interruptTurn,
     readThread,
     rollbackThread,
+    buildForkCursor,
     uploadFeedback,
     respondToRequest,
     respondToUserInput,

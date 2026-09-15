@@ -49,10 +49,21 @@ export const TurnProcessingQuiescedReceipt = Schema.Struct({
 });
 export type TurnProcessingQuiescedReceipt = typeof TurnProcessingQuiescedReceipt.Type;
 
+export const ThreadForkedReceipt = Schema.Struct({
+  type: Schema.Literal("thread.forked"),
+  threadId: ThreadId,
+  forkThreadId: ThreadId,
+  checkpointTurnCount: NonNegativeInt,
+  worktreePath: Schema.String,
+  createdAt: IsoDateTime,
+});
+export type ThreadForkedReceipt = typeof ThreadForkedReceipt.Type;
+
 export const OrchestrationRuntimeReceipt = Schema.Union([
   CheckpointBaselineCapturedReceipt,
   CheckpointDiffFinalizedReceipt,
   TurnProcessingQuiescedReceipt,
+  ThreadForkedReceipt,
 ]);
 export type OrchestrationRuntimeReceipt = typeof OrchestrationRuntimeReceipt.Type;
 

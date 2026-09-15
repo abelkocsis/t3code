@@ -52,6 +52,9 @@ export interface ProviderAdapterCapabilities {
   readonly promptlessTurnContinuation?: boolean;
   /** False when native conversation history cannot be rewound. */
   readonly supportsConversationRollback?: boolean;
+  /** True when a session can be resumed from a past turn into a second,
+      independent session. Absent means the adapter cannot fork. */
+  readonly supportsConversationFork?: boolean;
 }
 
 export interface ProviderThreadTurnSnapshot {
@@ -138,6 +141,17 @@ export interface ProviderAdapterShape<TError> {
     threadId: ThreadId,
     numTurns: number,
   ) => Effect.Effect<ProviderThreadSnapshot, TError>;
+
+  /**
+   * Derive the resume cursor a forked thread starts from. The input cursor is
+   * the source thread's persisted cursor; `turnId` names the last turn the
+   * fork keeps. Omitted when the adapter cannot fork.
+   */
+  readonly buildForkCursor?: (input: {
+    readonly resumeCursor: unknown;
+    readonly turnId: TurnId;
+    readonly turnCount: number;
+  }) => Effect.Effect<unknown, TError>;
 
   /**
    * Upload a thread to the provider when the adapter supports feedback.

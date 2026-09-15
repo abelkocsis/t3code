@@ -67,6 +67,8 @@ export interface ServerProviderPresentation {
   readonly reportsContextWindow?: boolean;
   readonly requiresNewThreadForModelChange?: boolean;
   readonly supportsConversationRollback?: boolean;
+  /** Absent means the provider cannot fork a thread from a past turn. */
+  readonly supportsConversationFork?: boolean;
 }
 
 export type ServerProviderDraft = Omit<ServerProvider, "instanceId" | "driver">;
@@ -228,6 +230,9 @@ export function buildServerProvider(input: {
       : {}),
     ...(typeof input.presentation.requiresNewThreadForModelChange === "boolean"
       ? { requiresNewThreadForModelChange: input.presentation.requiresNewThreadForModelChange }
+      : {}),
+    ...(typeof input.presentation.supportsConversationFork === "boolean"
+      ? { supportsConversationFork: input.presentation.supportsConversationFork }
       : {}),
     enabled: input.enabled,
     installed: input.probe.installed,
