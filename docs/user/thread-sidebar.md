@@ -41,6 +41,17 @@ in a new thread's model picker to add or remove them. A regular click returns to
 single model. Choose a base branch and send. Each selection starts a separate thread
 and worktree while you stay in the new thread composer. This requires a Git project.
 
+## Fork a thread
+
+Fork a thread to try a different direction without losing the work you already
+have. Hover a message you sent and choose **Fork from this message**. T3 Code
+starts a second thread that keeps the conversation up to the turn before that
+message, and gives it a worktree of its own, so both threads can run at the same
+time. The files in the new worktree match the checkpoint at the fork point.
+
+The source thread does not change. Forking needs a provider that supports it:
+Claude and Codex do today, and the action is hidden for the others.
+
 ## Pin and reorder threads
 
 Pin a thread from its menu to keep it above your active work.
