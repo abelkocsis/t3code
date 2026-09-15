@@ -137,6 +137,7 @@ function createProviderServiceHarness(
         },
       }),
     rollbackConversation,
+    prepareForkBinding: () => unsupported(),
     uploadFeedback: () => unsupported(),
     get streamEvents() {
       return Stream.fromPubSub(runtimeEventPubSub);

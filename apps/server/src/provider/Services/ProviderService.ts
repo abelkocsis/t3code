@@ -25,6 +25,7 @@ import type {
   ProviderUploadFeedbackResult,
   MessageId,
   ThreadId,
+  TurnId,
   ProviderTurnStartResult,
 } from "@t3tools/contracts";
 import * as Context from "effect/Context";
@@ -119,6 +120,18 @@ export interface ProviderServiceShape {
   readonly rollbackConversation: (input: {
     readonly threadId: ThreadId;
     readonly numTurns: number;
+  }) => Effect.Effect<void, ProviderServiceError>;
+
+  /**
+   * Bind a forked thread to a session that continues the source thread from a
+   * past turn. The fork's first turn resumes from the cursor written here; no
+   * provider process starts yet, and the source thread is left alone.
+   */
+  readonly prepareForkBinding: (input: {
+    readonly sourceThreadId: ThreadId;
+    readonly forkThreadId: ThreadId;
+    readonly turnId: TurnId;
+    readonly turnCount: number;
   }) => Effect.Effect<void, ProviderServiceError>;
 
   /**

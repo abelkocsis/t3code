@@ -1909,6 +1909,40 @@ const makeProviderService = Effect.fn("makeProviderService")(function* (
       }
     });
 
+  const prepareForkBinding: ProviderServiceMethod<"prepareForkBinding"> = Effect.fn(
+    "prepareForkBinding",
+  )(function* (input) {
+    const operation = "ProviderService.prepareForkBinding";
+    const binding = Option.getOrUndefined(yield* directory.getBinding(input.sourceThreadId));
+    if (!binding) {
+      return yield* toValidationError(
+        operation,
+        `Cannot fork thread '${input.sourceThreadId}' because no persisted provider binding exists.`,
+      );
+    }
+    const instanceId = yield* requireBindingInstanceId(operation, binding);
+    const adapter = yield* registry.getByInstance(instanceId);
+    if (adapter.capabilities.supportsConversationFork !== true || !adapter.buildForkCursor) {
+      return yield* toValidationError(
+        operation,
+        `Provider '${adapter.provider}' does not support forking a thread.`,
+      );
+    }
+    const resumeCursor = yield* adapter.buildForkCursor({
+      resumeCursor: binding.resumeCursor,
+      turnId: input.turnId,
+      turnCount: input.turnCount,
+    });
+    yield* directory.upsert({
+      threadId: input.forkThreadId,
+      provider: adapter.provider,
+      providerInstanceId: instanceId,
+      resumeCursor,
+      ...(binding.adapterKey !== undefined ? { adapterKey: binding.adapterKey } : {}),
+      ...(binding.runtimeMode !== undefined ? { runtimeMode: binding.runtimeMode } : {}),
+    });
+  });
+
   const rollbackConversation: ProviderServiceMethod<"rollbackConversation"> = Effect.fn(
     "rollbackConversation",
   )(function* (rawInput) {
@@ -2084,6 +2118,7 @@ const makeProviderService = Effect.fn("makeProviderService")(function* (
     getInstanceInfo,
     assertConversationRollbackSupported,
     rollbackConversation,
+    prepareForkBinding,
     uploadFeedback,
     // Each access creates a fresh PubSub subscription so that multiple
     // consumers (ProviderRuntimeIngestion, CheckpointReactor, etc.) each

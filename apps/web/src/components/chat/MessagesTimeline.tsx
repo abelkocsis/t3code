@@ -24,6 +24,7 @@ import {
 const EMPTY_AGENT_PANEL_MODEL = emptyAgentPanelModel();
 const NOOP_OPEN_AGENTS = () => {};
 const NOOP_USE_ARTIFACT_TEMPLATE = () => {};
+const NOOP_FORK_FROM_TURN_COUNT = (_targetTurnCount: number) => {};
 const NOOP_OPEN_ATTACHMENT = (_attachment: ChatFileAttachment) => {};
 import { resolveChatListAnchoredEndSpace } from "@t3tools/shared/chatList";
 import { toolActivityFaviconUrl } from "@t3tools/shared/favicon";
@@ -88,6 +89,7 @@ import {
   CircleAlertIcon,
   DownloadIcon,
   EyeIcon,
+  GitBranchIcon,
   GlobeIcon,
   HammerIcon,
   MessageCircleIcon,
@@ -204,6 +206,8 @@ interface TimelineRowSharedState {
   skills: ReadonlyArray<Pick<ServerProviderSkill, "name" | "displayName">>;
   activeThreadEnvironmentId: EnvironmentId;
   onRevertToTurnCount: (targetTurnCount: number) => void;
+  supportsConversationFork: boolean;
+  onForkFromTurnCount: (targetTurnCount: number) => void;
   onUseArtifactTemplate: (template: CodexArtifactTemplate) => void;
   onImageExpand: (preview: ExpandedImagePreview) => void;
   onFileOpen: (attachment: ChatFileAttachment) => void;
@@ -316,6 +320,8 @@ interface MessagesTimelineProps {
   onOpenTurnDiff: (turnId: TurnId, filePath?: string) => void;
   supportsConversationRollback: boolean;
   onRevertToTurnCount: (targetTurnCount: number) => void;
+  supportsConversationFork?: boolean;
+  onForkFromTurnCount?: (targetTurnCount: number) => void;
   onUseArtifactTemplate?: (template: CodexArtifactTemplate) => void;
   isRevertingCheckpoint: boolean;
   onImageExpand: (preview: ExpandedImagePreview) => void;
@@ -374,6 +380,8 @@ export const MessagesTimeline = memo(function MessagesTimeline({
   onOpenTurnDiff,
   supportsConversationRollback,
   onRevertToTurnCount,
+  supportsConversationFork = false,
+  onForkFromTurnCount = NOOP_FORK_FROM_TURN_COUNT,
   onUseArtifactTemplate = NOOP_USE_ARTIFACT_TEMPLATE,
   isRevertingCheckpoint,
   onImageExpand,
@@ -730,6 +738,8 @@ export const MessagesTimeline = memo(function MessagesTimeline({
       skills,
       activeThreadEnvironmentId,
       onRevertToTurnCount,
+      supportsConversationFork,
+      onForkFromTurnCount,
       onUseArtifactTemplate,
       onImageExpand,
       onFileOpen,
@@ -754,6 +764,8 @@ export const MessagesTimeline = memo(function MessagesTimeline({
       skills,
       activeThreadEnvironmentId,
       onRevertToTurnCount,
+      supportsConversationFork,
+      onForkFromTurnCount,
       onUseArtifactTemplate,
       onImageExpand,
       onFileOpen,
@@ -1501,6 +1513,9 @@ function UserTimelineRow({ row }: { row: Extract<TimelineRow, { kind: "message" 
             {typeof revertTurnCount === "number" && (
               <RevertUserMessageButton turnCount={revertTurnCount} />
             )}
+            {typeof revertTurnCount === "number" && revertTurnCount >= 1 && (
+              <ForkUserMessageButton turnCount={revertTurnCount} />
+            )}
             {displayedUserMessage.copyText && (
               <MessageCopyButton text={displayedUserMessage.copyText} variant="ghost" />
             )}
@@ -1532,6 +1547,39 @@ function RevertUserMessageButton({ turnCount }: { turnCount: number }) {
         <Undo2Icon className="size-3" />
       </TooltipTrigger>
       <TooltipPopup side="top">Revert to this message</TooltipPopup>
+    </Tooltip>
+  );
+}
+
+/**
+ * Starts a second thread that keeps this thread's history up to the turn
+ * before this message. The source thread is left untouched.
+ */
+function ForkUserMessageButton({ turnCount }: { turnCount: number }) {
+  const ctx = use(TimelineRowCtx);
+  const activity = use(TimelineRowActivityCtx);
+
+  if (!ctx.supportsConversationFork) {
+    return null;
+  }
+
+  return (
+    <Tooltip>
+      <TooltipTrigger
+        render={
+          <Button
+            type="button"
+            size="xs"
+            variant="ghost"
+            disabled={activity.isRevertingCheckpoint}
+            onClick={() => ctx.onForkFromTurnCount(turnCount)}
+            aria-label="Fork from this message"
+          />
+        }
+      >
+        <GitBranchIcon className="size-3" />
+      </TooltipTrigger>
+      <TooltipPopup side="top">Fork from this message</TooltipPopup>
     </Tooltip>
   );
 }

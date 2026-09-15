@@ -20,6 +20,17 @@ on Windows and Linux to start a new thread and immediately open another draft. T
 next draft keeps the workspace mode and base branch you selected. With **New
 worktree**, each background submission creates its own worktree.
 
+## Fork a thread
+
+Fork a thread to try a different direction without losing the work you already
+have. Hover a message you sent and choose **Fork from this message**. T3 Code
+starts a second thread that keeps the conversation up to the turn before that
+message, and gives it a worktree of its own, so both threads can run at the same
+time. The files in the new worktree match the checkpoint at the fork point.
+
+The source thread does not change. Forking needs a provider that supports it:
+Claude and Codex do today, and the action is hidden for the others.
+
 ## Pin and reorder threads
 
 Pin a thread from its menu to keep it above your active work.

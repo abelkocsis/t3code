@@ -1433,6 +1433,9 @@ export default function ChatView(props: ChatViewProps) {
   const revertThreadCheckpoint = useAtomCommand(threadEnvironment.revertCheckpoint, {
     reportFailure: false,
   });
+  const forkThread = useAtomCommand(threadEnvironment.fork, {
+    reportFailure: false,
+  });
   const openPreview = useAtomCommand(previewEnvironment.open, { reportFailure: false });
   const closePreview = useAtomCommand(previewEnvironment.close, "preview close");
   const { environments } = useEnvironments();
@@ -2572,6 +2575,10 @@ export default function ChatView(props: ChatViewProps) {
   const supportsConversationRollback =
     conversationProviderStatus !== null &&
     conversationProviderStatus.supportsConversationRollback !== false;
+  // Forking is opt-in per provider, so an unknown provider hides the action.
+  const supportsConversationFork =
+    conversationProviderStatus !== null &&
+    conversationProviderStatus.supportsConversationFork === true;
   const phase = derivePhase(activeThread?.session ?? null);
   const threadActivities = activeThread?.activities ?? EMPTY_ACTIVITIES;
   const latestCheckpointCompletedAt = activeThread?.checkpoints.at(-1)?.completedAt ?? null;
@@ -6244,6 +6251,63 @@ export default function ChatView(props: ChatViewProps) {
     ],
   );
 
+  const onForkFromTurnCount = useCallback(
+    async (turnCount: number) => {
+      if (!activeThread || turnCount < 1) return;
+
+      if (!supportsConversationFork) {
+        setThreadError(
+          activeThread.id,
+          "This provider cannot fork a thread. Start a new thread instead.",
+        );
+        return;
+      }
+      if (activeEnvironmentUnavailable && activeEnvironmentUnavailableLabel) {
+        setThreadError(
+          activeThread.id,
+          `Reconnect ${activeEnvironmentUnavailableLabel} before forking a thread.`,
+        );
+        return;
+      }
+
+      const forkThreadId = newThreadId();
+      setThreadError(activeThread.id, null);
+      const result = await forkThread({
+        environmentId,
+        input: {
+          threadId: activeThread.id,
+          forkThreadId,
+          turnCount,
+          title: `${activeThread.title} (fork)`,
+        },
+      });
+      if (result._tag === "Failure" && !isAtomCommandInterrupted(result)) {
+        const error = squashAtomCommandFailure(result);
+        setThreadError(
+          activeThread.id,
+          error instanceof Error ? error.message : "Failed to fork this thread.",
+        );
+        return;
+      }
+      // The fork's thread row arrives over the shell subscription once the
+      // server finishes its worktree; the route resolves as soon as it lands.
+      await navigate({
+        to: "/$environmentId/$threadId",
+        params: buildThreadRouteParams(scopeThreadRef(activeThread.environmentId, forkThreadId)),
+      });
+    },
+    [
+      activeThread,
+      activeEnvironmentUnavailable,
+      activeEnvironmentUnavailableLabel,
+      environmentId,
+      forkThread,
+      navigate,
+      setThreadError,
+      supportsConversationFork,
+    ],
+  );
+
   const onSend = async (
     e?: { preventDefault: () => void },
     submissionIntent: ComposerSubmissionIntent = "foreground",
@@ -7685,6 +7749,11 @@ export default function ChatView(props: ChatViewProps) {
   const onRevertTimelineTurn = useCallback((targetTurnCount: number) => {
     void onRevertToTurnCountRef.current(targetTurnCount);
   }, []);
+  const onForkFromTurnCountRef = useRef(onForkFromTurnCount);
+  onForkFromTurnCountRef.current = onForkFromTurnCount;
+  const onForkTimelineTurn = useCallback((targetTurnCount: number) => {
+    void onForkFromTurnCountRef.current(targetTurnCount);
+  }, []);
 
   // Empty state: no active thread
   if (!activeThread) {
@@ -8001,6 +8070,8 @@ export default function ChatView(props: ChatViewProps) {
                 onOpenTurnDiff={onOpenTurnDiff}
                 supportsConversationRollback={supportsConversationRollback}
                 onRevertToTurnCount={onRevertTimelineTurn}
+                supportsConversationFork={supportsConversationFork}
+                onForkFromTurnCount={onForkTimelineTurn}
                 onUseArtifactTemplate={useArtifactTemplate}
                 isRevertingCheckpoint={isRevertingCheckpoint}
                 onImageExpand={onExpandTimelineImage}
