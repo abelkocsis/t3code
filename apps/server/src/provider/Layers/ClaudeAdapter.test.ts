@@ -20,6 +20,7 @@ import {
   ProviderRuntimeEvent,
   type RuntimeMode,
   ThreadId,
+  TurnId,
   ProviderInstanceId,
 } from "@t3tools/contracts";
 import { createModelSelection } from "@t3tools/shared/model";
@@ -6135,6 +6136,89 @@ describe("ClaudeAdapterLive", () => {
       assert.equal(createInput?.options.resume, "550e8400-e29b-41d4-a716-446655440000");
       assert.equal(createInput?.options.sessionId, undefined);
       assert.equal(createInput?.options.resumeSessionAt, undefined);
+    }).pipe(
+      Effect.provideService(Random.Random, makeDeterministicRandomService()),
+      Effect.provide(harness.layer),
+    );
+  });
+
+  it.effect("forks a session at a recorded turn anchor", () => {
+    const harness = makeHarness();
+    return Effect.gen(function* () {
+      const adapter = yield* ClaudeAdapter;
+      const sourceSessionId = "550e8400-e29b-41d4-a716-446655440000";
+
+      const forkCursor = yield* adapter.buildForkCursor!({
+        resumeCursor: {
+          threadId: "resume-thread-1",
+          resume: sourceSessionId,
+          resumeSessionAt: "assistant-99",
+          turnCount: 3,
+          turnAnchors: [
+            { turnId: "turn-1", uuid: "assistant-11" },
+            { turnId: "turn-2", uuid: "assistant-22" },
+            { turnId: "turn-3", uuid: "assistant-99" },
+          ],
+        },
+        turnId: TurnId.make("turn-2"),
+        turnCount: 2,
+      });
+
+      // The fork resumes at turn 2 and forgets the anchors it drops.
+      assert.deepEqual(forkCursor, {
+        resume: sourceSessionId,
+        resumeSessionAt: "assistant-22",
+        forkSession: true,
+        turnCount: 2,
+        turnAnchors: [
+          { turnId: "turn-1", uuid: "assistant-11" },
+          { turnId: "turn-2", uuid: "assistant-22" },
+        ],
+      });
+
+      const session = yield* adapter.startSession({
+        threadId: RESUME_THREAD_ID,
+        provider: ProviderDriverKind.make("claudeAgent"),
+        resumeCursor: forkCursor,
+        runtimeMode: "full-access",
+      });
+
+      const createInput = harness.getLastCreateQueryInput();
+      assert.equal(createInput?.options.resume, sourceSessionId);
+      assert.equal(createInput?.options.forkSession, true);
+      assert.equal(createInput?.options.resumeSessionAt, "assistant-22");
+      // The fork writes to a session of its own, so the source transcript is
+      // never appended to by both threads.
+      assert.notEqual(createInput?.options.sessionId, undefined);
+      assert.notEqual(createInput?.options.sessionId, sourceSessionId);
+      assert.notEqual(
+        (session.resumeCursor as { readonly resume?: string } | undefined)?.resume,
+        sourceSessionId,
+      );
+    }).pipe(
+      Effect.provideService(Random.Random, makeDeterministicRandomService()),
+      Effect.provide(harness.layer),
+    );
+  });
+
+  it.effect("refuses to fork a turn with no recorded anchor", () => {
+    const harness = makeHarness();
+    return Effect.gen(function* () {
+      const adapter = yield* ClaudeAdapter;
+
+      const error = yield* adapter.buildForkCursor!({
+        resumeCursor: {
+          threadId: "resume-thread-1",
+          resume: "550e8400-e29b-41d4-a716-446655440000",
+          turnCount: 1,
+          turnAnchors: [{ turnId: "turn-1", uuid: "assistant-11" }],
+        },
+        turnId: TurnId.make("turn-9"),
+        turnCount: 9,
+      }).pipe(Effect.catch((issue) => Effect.succeed(issue)));
+
+      assert.instanceOf(error, Error);
+      assert.match(error.message, /turn 'turn-9'/);
     }).pipe(
       Effect.provideService(Random.Random, makeDeterministicRandomService()),
       Effect.provide(harness.layer),

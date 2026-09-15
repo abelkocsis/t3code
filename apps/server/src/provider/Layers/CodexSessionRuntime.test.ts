@@ -872,6 +872,47 @@ describe("isRecoverableThreadResumeError", () => {
 });
 
 describe("openCodexThread", () => {
+  it.effect("forks the source thread at the requested turn instead of resuming it", () =>
+    Effect.gen(function* () {
+      const response = makeThreadOpenResponse("forked-thread");
+      const calls: Array<{ method: string; payload: unknown }> = [];
+      const opened = yield* openCodexThread({
+        client: {
+          request: () => Effect.die("A fork must not start a fresh thread"),
+          raw: {
+            request: (method, payload) => {
+              calls.push({ method, payload });
+              return Effect.succeed(response);
+            },
+          },
+        },
+        threadId: ThreadId.make("thread-fork"),
+        runtimeMode: "auto",
+        cwd: "/tmp/project-fork",
+        requestedModel: "gpt-5.3-codex",
+        serviceTier: undefined,
+        resumeThreadId: "source-thread",
+        forkFromTurnId: "turn-3",
+      });
+
+      NodeAssert.equal(opened.thread.id, "forked-thread");
+      NodeAssert.deepStrictEqual(calls, [
+        {
+          method: "thread/fork",
+          payload: {
+            threadId: "source-thread",
+            lastTurnId: "turn-3",
+            cwd: "/tmp/project-fork",
+            model: "gpt-5.3-codex",
+            approvalPolicy: "on-request",
+            sandbox: "workspace-write",
+            approvalsReviewer: "auto_review",
+          },
+        },
+      ]);
+    }),
+  );
+
   it.effect("resumes metadata when historical turns contain unknown error values", () =>
     Effect.gen(function* () {
       const response = makeThreadOpenResponse("saved-thread");

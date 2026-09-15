@@ -1330,6 +1330,21 @@ const ThreadConversationRevertCommand = Schema.Struct({
   type: Schema.Literal("thread.conversation.revert"),
 });
 
+/**
+ * Forks a thread at a completed turn. The source thread keeps its history and
+ * its worktree; the fork runs in a worktree of its own, so both threads can
+ * work at the same time. `turnCount` names the checkpoint the fork starts from.
+ */
+const ThreadForkCommand = Schema.Struct({
+  type: Schema.Literal("thread.fork"),
+  commandId: CommandId,
+  threadId: ThreadId,
+  forkThreadId: ThreadId,
+  turnCount: PositiveInt,
+  title: TrimmedNonEmptyString,
+  createdAt: IsoDateTime,
+});
+
 const ThreadSessionStopCommand = Schema.Struct({
   type: Schema.Literal("thread.session.stop"),
   commandId: CommandId,
@@ -1371,6 +1386,7 @@ const DispatchableClientOrchestrationCommand = Schema.Union([
   ThreadUserInputDismissCommand,
   ThreadCheckpointRevertCommand,
   ThreadConversationRevertCommand,
+  ThreadForkCommand,
   ThreadSessionStopCommand,
 ]);
 export type DispatchableClientOrchestrationCommand =
@@ -1404,6 +1420,7 @@ export const ClientOrchestrationCommand = Schema.Union([
   ThreadUserInputDismissCommand,
   ThreadCheckpointRevertCommand,
   ThreadConversationRevertCommand,
+  ThreadForkCommand,
   ThreadSessionStopCommand,
 ]);
 export type ClientOrchestrationCommand = typeof ClientOrchestrationCommand.Type;
@@ -1464,6 +1481,28 @@ const ThreadMessageUserAppendCommand = Schema.Struct({
     attachments: Schema.Array(ChatAttachment),
     context: Schema.optional(OrchestrationMessageContext),
   }),
+});
+
+ * Copies a slice of a source thread into an empty forked thread. Unlike
+ * `thread.history.import`, which carries message text only, this carries the
+ * activity rows too, so the fork reads like the thread it came from.
+ */
+const ThreadForkHydrateCommand = Schema.Struct({
+  type: Schema.Literal("thread.fork.hydrate"),
+  commandId: CommandId,
+  threadId: ThreadId,
+  sourceThreadId: ThreadId,
+  turnCount: PositiveInt,
+  messages: Schema.Array(
+    Schema.Struct({
+      messageId: MessageId,
+      role: Schema.Literals(["user", "assistant"]),
+      text: Schema.String,
+      turnId: Schema.NullOr(TurnId),
+      createdAt: IsoDateTime,
+    }),
+  ).check(Schema.isNonEmpty()),
+  activities: Schema.Array(OrchestrationThreadActivity),
   createdAt: IsoDateTime,
 });
 
@@ -1565,6 +1604,7 @@ const InternalOrchestrationCommand = Schema.Union([
   ThreadMessageAssistantCompleteCommand,
   ThreadHistoryImportCommand,
   ThreadMessageUserAppendCommand,
+  ThreadForkHydrateCommand,
   ThreadProposedPlanUpsertCommand,
   ThreadTurnDiffCompleteCommand,
   ThreadActivityAppendCommand,
@@ -1611,6 +1651,7 @@ export const OrchestrationEventType = Schema.Literals([
   "thread.user-input-response-requested",
   "thread.checkpoint-revert-requested",
   "thread.reverted",
+  "thread.fork-requested",
   "thread.session-stop-requested",
   "thread.session-set",
   "thread.proposed-plan-upserted",
@@ -1851,6 +1892,14 @@ export const ThreadCheckpointRevertRequestedPayload = Schema.Struct({
   createdAt: IsoDateTime,
 });
 
+export const ThreadForkRequestedPayload = Schema.Struct({
+  threadId: ThreadId,
+  forkThreadId: ThreadId,
+  turnCount: PositiveInt,
+  title: TrimmedNonEmptyString,
+  createdAt: IsoDateTime,
+});
+
 export const ThreadRevertedPayload = Schema.Struct({
   threadId: ThreadId,
   turnCount: NonNegativeInt,
@@ -2063,6 +2112,11 @@ export const OrchestrationEvent = Schema.Union([
     ...EventBaseFields,
     type: Schema.Literal("thread.reverted"),
     payload: ThreadRevertedPayload,
+  }),
+  Schema.Struct({
+    ...EventBaseFields,
+    type: Schema.Literal("thread.fork-requested"),
+    payload: ThreadForkRequestedPayload,
   }),
   Schema.Struct({
     ...EventBaseFields,

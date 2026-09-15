@@ -1180,6 +1180,84 @@ antigravityInstanceRouting.layer("ProviderServiceLive instance-owned conversatio
   );
 });
 
+const forkInstanceId = ProviderInstanceId.make("fork-capable");
+const noForkInstanceId = ProviderInstanceId.make("fork-incapable");
+const forkCapable = makeFakeCodexAdapter(CODEX_DRIVER);
+const forkIncapable = makeFakeCodexAdapter(CODEX_DRIVER);
+const forkBinding = makeProviderServiceLayer({
+  registry: makeStaticInstanceRegistry([
+    [
+      forkInstanceId,
+      {
+        ...forkCapable.adapter,
+        capabilities: { ...forkCapable.adapter.capabilities, supportsConversationFork: true },
+        buildForkCursor: (input) =>
+          Effect.succeed({ forkedAt: String(input.turnId), turnCount: input.turnCount }),
+      },
+    ],
+    [noForkInstanceId, forkIncapable.adapter],
+  ]),
+});
+
+forkBinding.layer("ProviderService fork binding", (it) => {
+  it.effect("binds the fork to a cursor the adapter derived, without starting a session", () =>
+    Effect.gen(function* () {
+      const provider = yield* ProviderService.ProviderService;
+      const directory = yield* ProviderSessionDirectory.ProviderSessionDirectory;
+      const sourceThreadId = asThreadId("fork-source");
+      const forkThreadId = asThreadId("fork-target");
+      yield* provider.startSession(sourceThreadId, {
+        providerInstanceId: forkInstanceId,
+        threadId: sourceThreadId,
+        runtimeMode: "full-access",
+      });
+      forkCapable.startSession.mockClear();
+
+      yield* provider.prepareForkBinding({
+        sourceThreadId,
+        forkThreadId,
+        turnId: TurnId.make("turn-2"),
+        turnCount: 2,
+      });
+
+      const binding = Option.getOrThrow(yield* directory.getBinding(forkThreadId));
+      assert.deepEqual(binding.resumeCursor, { forkedAt: "turn-2", turnCount: 2 });
+      assert.equal(binding.providerInstanceId, forkInstanceId);
+      // The fork's first turn starts the session; preparing the binding must not.
+      assert.equal(forkCapable.startSession.mock.calls.length, 0);
+      yield* provider.stopSession({ threadId: sourceThreadId });
+    }),
+  );
+
+  it.effect("rejects a fork for a provider that cannot fork", () =>
+    Effect.gen(function* () {
+      const provider = yield* ProviderService.ProviderService;
+      const directory = yield* ProviderSessionDirectory.ProviderSessionDirectory;
+      const sourceThreadId = asThreadId("fork-unsupported-source");
+      const forkThreadId = asThreadId("fork-unsupported-target");
+      yield* provider.startSession(sourceThreadId, {
+        providerInstanceId: noForkInstanceId,
+        threadId: sourceThreadId,
+        runtimeMode: "full-access",
+      });
+
+      const error = yield* Effect.flip(
+        provider.prepareForkBinding({
+          sourceThreadId,
+          forkThreadId,
+          turnId: TurnId.make("turn-2"),
+          turnCount: 2,
+        }),
+      );
+
+      assert.instanceOf(error, ProviderValidationError);
+      assert.include(error.message, "does not support forking");
+      assert.equal(Option.isNone(yield* directory.getBinding(forkThreadId)), true);
+      yield* provider.stopSession({ threadId: sourceThreadId });
+    }),
+  );
+});
+
 const unsupportedRollback = makeProviderServiceLayer({ supportsConversationRollback: false });
 unsupportedRollback.layer("ProviderServiceLive unsupported rewind", (it) => {
   it.effect("rejects rewind without starting or changing the provider conversation", () =>
