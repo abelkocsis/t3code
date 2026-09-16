@@ -105,6 +105,8 @@ describe("OrchestrationReactor", () => {
             drain: Effect.void,
             requestSync: () => Effect.void,
           }),
+        ),
+        Layer.provideMerge(
           Layer.succeed(ScheduledMessageReactor.ScheduledMessageReactor, {
             start: () => {
               started.push("scheduled-message-reactor");

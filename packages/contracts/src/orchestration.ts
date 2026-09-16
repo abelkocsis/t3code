@@ -639,10 +639,6 @@ export const ThreadTitleRegeneration = Schema.Struct({
 export type ThreadTitleRegeneration = typeof ThreadTitleRegeneration.Type;
 
 /**
- * Legacy single-PR link. Still emitted as the thread's derived current pull
- * request (see `@t3tools/shared/threadPullRequests`) so clients from before
- * `pullRequests` keep working independently of their release schedule.
- */
  * A message the user parked for a later time, most often a provider quota
  * reset. One per thread: scheduling again replaces the pending message. The
  * server sends it once the due time passes and the thread is idle.
@@ -655,6 +651,11 @@ export const ThreadScheduledMessage = Schema.Struct({
 });
 export type ThreadScheduledMessage = typeof ThreadScheduledMessage.Type;
 
+/**
+ * Legacy single-PR link. Still emitted as the thread's derived current pull
+ * request (see `@t3tools/shared/threadPullRequests`) so clients from before
+ * `pullRequests` keep working independently of their release schedule.
+ */
 export const ThreadLinkedPullRequest = Schema.Struct({
   projectId: ProjectId,
   repository: TrimmedNonEmptyString,
@@ -1523,8 +1524,10 @@ const ThreadMessageUserAppendCommand = Schema.Struct({
     attachments: Schema.Array(ChatAttachment),
     context: Schema.optional(OrchestrationMessageContext),
   }),
+  createdAt: IsoDateTime,
 });
 
+/**
  * Copies a slice of a source thread into an empty forked thread. Unlike
  * `thread.history.import`, which carries message text only, this carries the
  * activity rows too, so the fork reads like the thread it came from.

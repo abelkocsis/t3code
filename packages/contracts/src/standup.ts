@@ -125,7 +125,7 @@ export const StandupSaveInput = Schema.Struct({
 });
 export type StandupSaveInput = typeof StandupSaveInput.Type;
 
-export class StandupError extends Schema.TaggedErrorClass<StandupError>()("StandupError", {
+export class StandupError extends Schema.TaggedError<StandupError>()("StandupError", {
   reason: Schema.Literals([
     "collectFailed",
     "generateFailed",

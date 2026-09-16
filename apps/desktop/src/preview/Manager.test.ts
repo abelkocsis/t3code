@@ -569,7 +569,7 @@ describe("PreviewManager", () => {
     browserWindowConstructor.mockReset();
     buildFromTemplate.mockClear();
     menuPopup.mockClear();
-    writeText.mockClear();
+    writeClipboardText.mockClear();
     fromId.mockClear();
     getFocusedWebContents.mockReset();
     getFocusedWebContents.mockReturnValue(null);
@@ -690,7 +690,7 @@ describe("PreviewManager", () => {
     ),
   );
 
-  effectIt.effect("gives the preview guest the clipboard the host menu cannot reach", () =>
+  effectIt.effect("offers the preview guest a clipboard context menu", () =>
     withManager((manager) =>
       Effect.gen(function* () {
         const preview = makeFaviconWebContents();
@@ -705,20 +705,6 @@ describe("PreviewManager", () => {
         yield* manager.setMainWindow(mainWindow as never);
         yield* manager.createTab("tab_clipboard");
         yield* manager.registerWebview("tab_clipboard", 42);
-
-        preview.listeners.get("before-input-event")!(
-          { preventDefault: vi.fn() } as never,
-          {
-            type: "keyDown",
-            key: "c",
-            meta: true,
-            control: false,
-            shift: false,
-            alt: false,
-          } as never,
-        );
-        yield* Effect.yieldNow;
-        expect(preview.copy).toHaveBeenCalledOnce();
 
         preview.listeners.get("context-menu")!(
           {} as never,

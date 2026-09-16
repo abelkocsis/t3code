@@ -1968,14 +1968,6 @@ const makeNativeOperations = Effect.fn("PreviewManager.makeOperations")(function
         );
         return;
       }
-      const command = previewClipboardCommand(input, hostPlatform);
-      if (command) {
-        runFork(
-          attempt({ operation: `shortcut.${command}`, tabId, webContentsId: wc.id }, () =>
-            wc[command](),
-          ).pipe(Effect.ignore),
-        );
-      }
     };
     const contextMenu = (_event: Electron.Event, params: Electron.ContextMenuParams): void => {
       runFork(

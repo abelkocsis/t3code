@@ -22,7 +22,7 @@ import {
   OVERLAY_WIDTH,
 } from "./OverlayWindowHtml.ts";
 
-export class OverlayWindowError extends Schema.TaggedErrorClass<OverlayWindowError>()(
+export class OverlayWindowError extends Schema.TaggedError<OverlayWindowError>()(
   "OverlayWindowError",
   {
     operation: Schema.Literals(["create", "update", "close"]),

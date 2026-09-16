@@ -379,6 +379,8 @@ const SourceControlRepositoryServiceLayerLive = SourceControlRepositoryService.l
 
 const ProjectCloneTrackerLayerLive = ProjectCloneTracker.layer.pipe(
   Layer.provide(SourceControlRepositoryServiceLayerLive),
+);
+
 // `gh` is the only client it needs, so it does not carry the git driver and
 // provider registry the repository service does.
 const SourceControlIssueServiceLayerLive = SourceControlIssueService.layer.pipe(

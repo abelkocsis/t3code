@@ -6,7 +6,7 @@ import * as Schema from "effect/Schema";
 
 import * as Electron from "electron";
 
-export class ElectronPowerSaveBlockerError extends Schema.TaggedErrorClass<ElectronPowerSaveBlockerError>()(
+export class ElectronPowerSaveBlockerError extends Schema.TaggedError<ElectronPowerSaveBlockerError>()(
   "ElectronPowerSaveBlockerError",
   {
     operation: Schema.Literals(["start", "stop"]),

@@ -79,19 +79,6 @@ export class ThreadSnoozeUnsupportedError extends Schema.TaggedError<ThreadSnooz
 }
 
 export class ThreadSnoozeBlockedError extends Schema.TaggedError<ThreadSnoozeBlockedError>()(
-export class ThreadMessageScheduleUnsupportedError extends Schema.TaggedErrorClass<ThreadMessageScheduleUnsupportedError>()(
-  "ThreadMessageScheduleUnsupportedError",
-  {
-    environmentId: EnvironmentId,
-    threadId: ThreadId,
-  },
-) {
-  override get message(): string {
-    return "This environment's server does not support scheduled messages yet. Update the server to send a message later.";
-  }
-}
-
-export class ThreadSnoozeBlockedError extends Schema.TaggedErrorClass<ThreadSnoozeBlockedError>()(
   "ThreadSnoozeBlockedError",
   {
     environmentId: EnvironmentId,
@@ -100,6 +87,18 @@ export class ThreadSnoozeBlockedError extends Schema.TaggedErrorClass<ThreadSnoo
 ) {
   override get message(): string {
     return "This thread is waiting on you. Respond to the pending request before snoozing it.";
+  }
+}
+
+export class ThreadMessageScheduleUnsupportedError extends Schema.TaggedError<ThreadMessageScheduleUnsupportedError>()(
+  "ThreadMessageScheduleUnsupportedError",
+  {
+    environmentId: EnvironmentId,
+    threadId: ThreadId,
+  },
+) {
+  override get message(): string {
+    return "This environment's server does not support scheduled messages yet. Update the server to send a message later.";
   }
 }
 

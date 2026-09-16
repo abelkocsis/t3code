@@ -419,6 +419,8 @@ export const makeOrchestrationIntegrationHarness = (
           drain: Effect.void,
           requestSync: () => Effect.void,
         }),
+      ),
+      Layer.provideMerge(
         Layer.succeed(ScheduledMessageReactor.ScheduledMessageReactor, {
           start: () => Effect.void,
           drain: Effect.void,
