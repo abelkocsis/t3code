@@ -39,6 +39,8 @@ export type SettleThreadInput = CommandInput<"thread.settle">;
 export type UnsettleThreadInput = CommandInput<"thread.unsettle">;
 export type SnoozeThreadInput = CommandInput<"thread.snooze">;
 export type UnsnoozeThreadInput = CommandInput<"thread.unsnooze">;
+export type ScheduleThreadMessageInput = CommandInput<"thread.message.schedule">;
+export type UnscheduleThreadMessageInput = CommandInput<"thread.message.unschedule">;
 export type PinThreadInput = CommandInput<"thread.pin">;
 export type UnpinThreadInput = CommandInput<"thread.unpin">;
 export type ReorderPinnedThreadInput = CommandInput<"thread.pin.reorder">;
@@ -202,6 +204,26 @@ export const unsnoozeThread: (input: UnsnoozeThreadInput) => CommandEffect = Eff
     commandId: yield* commandId(input),
   });
 });
+
+export const scheduleThreadMessage: (input: ScheduleThreadMessageInput) => CommandEffect =
+  Effect.fn("EnvironmentCommands.scheduleThreadMessage")(function* (input) {
+    const metadata = yield* timestampedCommandMetadata(input);
+    return yield* dispatch({
+      ...input,
+      type: "thread.message.schedule",
+      commandId: metadata.commandId,
+      createdAt: metadata.createdAt,
+    });
+  });
+
+export const unscheduleThreadMessage: (input: UnscheduleThreadMessageInput) => CommandEffect =
+  Effect.fn("EnvironmentCommands.unscheduleThreadMessage")(function* (input) {
+    return yield* dispatch({
+      ...input,
+      type: "thread.message.unschedule",
+      commandId: yield* commandId(input),
+    });
+  });
 
 export const pinThread: (input: PinThreadInput) => CommandEffect = Effect.fn(
   "EnvironmentCommands.pinThread",

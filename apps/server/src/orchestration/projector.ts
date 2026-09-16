@@ -26,6 +26,8 @@ import {
   ThreadProposedPlanUpsertedPayload,
   ThreadRuntimeModeSetPayload,
   ThreadSettledPayload,
+  ThreadMessageScheduledPayload,
+  ThreadMessageUnscheduledPayload,
   ThreadPinnedPayload,
   ThreadPinReorderedPayload,
   ThreadSnoozedPayload,
@@ -347,6 +349,7 @@ export function projectEvent(
             activeOrderKey: null,
             snoozedUntil: null,
             snoozedAt: null,
+            scheduledMessage: null,
             deletedAt: null,
             messages: [],
             activities: [],
@@ -454,6 +457,38 @@ export function projectEvent(
           threads: updateThread(nextBase.threads, payload.threadId, {
             snoozedUntil: null,
             snoozedAt: null,
+            updatedAt: payload.updatedAt,
+          }),
+        })),
+      );
+
+    case "thread.message-scheduled":
+      return decodeForEvent(
+        ThreadMessageScheduledPayload,
+        event.payload,
+        event.type,
+        "payload",
+      ).pipe(
+        Effect.map((payload) => ({
+          ...nextBase,
+          threads: updateThread(nextBase.threads, payload.threadId, {
+            scheduledMessage: payload.scheduledMessage,
+            updatedAt: payload.updatedAt,
+          }),
+        })),
+      );
+
+    case "thread.message-unscheduled":
+      return decodeForEvent(
+        ThreadMessageUnscheduledPayload,
+        event.payload,
+        event.type,
+        "payload",
+      ).pipe(
+        Effect.map((payload) => ({
+          ...nextBase,
+          threads: updateThread(nextBase.threads, payload.threadId, {
+            scheduledMessage: null,
             updatedAt: payload.updatedAt,
           }),
         })),

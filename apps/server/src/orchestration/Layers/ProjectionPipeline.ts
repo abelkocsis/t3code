@@ -615,6 +615,7 @@ const makeOrchestrationProjectionPipeline = Effect.fn("makeOrchestrationProjecti
             unsettledAt: null,
             snoozedUntil: null,
             snoozedAt: null,
+            scheduledMessage: null,
             pinnedAt: null,
             pinOrderKey: null,
             activeOrderKey: null,
@@ -728,6 +729,36 @@ const makeOrchestrationProjectionPipeline = Effect.fn("makeOrchestrationProjecti
             ...existingRow.value,
             snoozedUntil: null,
             snoozedAt: null,
+            updatedAt: event.payload.updatedAt,
+          });
+          return;
+        }
+
+        case "thread.message-scheduled": {
+          const existingRow = yield* projectionThreadRepository.getById({
+            threadId: event.payload.threadId,
+          });
+          if (Option.isNone(existingRow)) {
+            return;
+          }
+          yield* projectionThreadRepository.upsert({
+            ...existingRow.value,
+            scheduledMessage: event.payload.scheduledMessage,
+            updatedAt: event.payload.updatedAt,
+          });
+          return;
+        }
+
+        case "thread.message-unscheduled": {
+          const existingRow = yield* projectionThreadRepository.getById({
+            threadId: event.payload.threadId,
+          });
+          if (Option.isNone(existingRow)) {
+            return;
+          }
+          yield* projectionThreadRepository.upsert({
+            ...existingRow.value,
+            scheduledMessage: null,
             updatedAt: event.payload.updatedAt,
           });
           return;

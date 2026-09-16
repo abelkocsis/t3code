@@ -10,6 +10,7 @@ import { ProviderCommandReactor } from "../Services/ProviderCommandReactor.ts";
 import { ProviderRuntimeIngestionService } from "../Services/ProviderRuntimeIngestion.ts";
 import { ThreadDeletionReactor } from "../Services/ThreadDeletionReactor.ts";
 import { ThreadForkReactor } from "../Services/ThreadForkReactor.ts";
+import * as ScheduledMessageReactor from "../ScheduledMessageReactor.ts";
 import * as ThreadSettlementReactor from "../ThreadSettlementReactor.ts";
 import * as ThreadPullRequestReactor from "../ThreadPullRequestReactor.ts";
 import * as AgentAwarenessRelay from "../../relay/AgentAwarenessRelay.ts";
@@ -22,6 +23,7 @@ export const makeOrchestrationReactor = Effect.gen(function* () {
   const threadForkReactor = yield* ThreadForkReactor;
   const threadSettlementReactor = yield* ThreadSettlementReactor.ThreadSettlementReactor;
   const threadPullRequestReactor = yield* ThreadPullRequestReactor.ThreadPullRequestReactor;
+  const scheduledMessageReactor = yield* ScheduledMessageReactor.ScheduledMessageReactor;
   const agentAwarenessRelay = yield* AgentAwarenessRelay.AgentAwarenessRelay;
 
   const start: OrchestrationReactorShape["start"] = Effect.fn("start")(function* () {
@@ -32,6 +34,7 @@ export const makeOrchestrationReactor = Effect.gen(function* () {
     yield* threadForkReactor.start();
     yield* threadPullRequestReactor.start();
     yield* threadSettlementReactor.start();
+    yield* scheduledMessageReactor.start();
     yield* agentAwarenessRelay.start();
   });
 
