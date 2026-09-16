@@ -251,6 +251,7 @@ import { ComposerPendingApprovalActions } from "./ComposerPendingApprovalActions
 import { CompactComposerControlsMenu } from "./CompactComposerControlsMenu";
 import { ComposerImageThumbnail } from "./ComposerImageThumbnail";
 import { ComposerPrimaryActions } from "./ComposerPrimaryActions";
+import { ComposerScheduleAction, type ComposerMessageScheduling } from "./ComposerScheduleAction";
 import { ComposerPendingApprovalPanel } from "./ComposerPendingApprovalPanel";
 import { ComposerPendingUserInputPanel } from "./ComposerPendingUserInputPanel";
 import { ComposerPlanFollowUpBanner } from "./ComposerPlanFollowUpBanner";
@@ -1187,6 +1188,7 @@ const ComposerFooterModeControls = memo(function ComposerFooterModeControls(prop
 
 const ComposerFooterPrimaryActions = memo(function ComposerFooterPrimaryActions(props: {
   compact: boolean;
+  messageScheduling: ComposerMessageScheduling | null;
   activeContextWindow: ContextWindowSnapshot | null;
   reserveContextWindowMeter: boolean;
   contextWindowUsageLimits: UsageLimitsReport | null;
@@ -1217,6 +1219,17 @@ const ComposerFooterPrimaryActions = memo(function ComposerFooterPrimaryActions(
 }) {
   return (
     <>
+      {props.messageScheduling === null ? null : (
+        <ComposerScheduleAction
+          compact={props.compact}
+          pending={props.messageScheduling.pending}
+          disabledReason={props.messageScheduling.disabledReason}
+          resolveDefaultDueAt={props.messageScheduling.resolveDefaultDueAt}
+          onSchedule={props.messageScheduling.onSchedule}
+          onCancel={props.messageScheduling.onCancel}
+          preserveComposerFocusOnPointerDown={props.preserveComposerFocusOnPointerDown ?? false}
+        />
+      )}
       {props.activeContextWindow ? (
         <ContextWindowMeter
           usage={props.activeContextWindow}
@@ -1444,6 +1457,9 @@ export interface ChatComposerProps {
   onPageScrollKeyUp: (key: string) => void;
   onPageScrollRelease: () => void;
 
+  /** Absent where parking a message makes no sense, such as a draft thread. */
+  messageScheduling?: ComposerMessageScheduling | null;
+
   // Callbacks
   onCompactContext: () => void;
   onSend: (e?: { preventDefault: () => void }, intent?: ComposerSubmissionIntent) => void;
@@ -1554,6 +1570,7 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
     timelineOverflows,
     onComposerOverlayHeightChange,
     onRestingChange,
+    messageScheduling,
     promptRef,
     composerRef,
     composerImagesRef,
@@ -7020,6 +7037,7 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
                   ) : null}
                   <ComposerFooterPrimaryActions
                     compact={isComposerResting || isComposerPrimaryActionsCompact}
+                    messageScheduling={messageScheduling ?? null}
                     activeContextWindow={
                       settings.contextWindowMeterEnabled ? activeContextWindow : null
                     }

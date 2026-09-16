@@ -6,7 +6,12 @@ import {
 } from "@t3tools/client-runtime/environment";
 import { settlePromise, squashAtomCommandFailure } from "@t3tools/client-runtime/state/runtime";
 import { canSnooze, threadWokeAt } from "@t3tools/client-runtime/state/thread-settled";
-import { EnvironmentId, type ScopedThreadRef, ThreadId } from "@t3tools/contracts";
+import {
+  EnvironmentId,
+  type MessageId,
+  type ScopedThreadRef,
+  ThreadId,
+} from "@t3tools/contracts";
 import { resolveWorktreeCleanup } from "@t3tools/shared/projectSettings";
 import * as Cause from "effect/Cause";
 import * as Schema from "effect/Schema";
@@ -30,6 +35,7 @@ import {
   readEnvironmentSupportsPinning,
   readEnvironmentSupportsPinReorder,
   readEnvironmentSupportsActiveReorder,
+  readEnvironmentSupportsMessageSchedule,
   readEnvironmentSupportsSettlement,
   readEnvironmentSupportsSnooze,
   readEnvironmentThreadRefs,
@@ -84,6 +90,19 @@ export class ThreadSnoozeUnsupportedError extends Schema.TaggedError<ThreadSnooz
 }
 
 export class ThreadSnoozeBlockedError extends Schema.TaggedError<ThreadSnoozeBlockedError>()(
+export class ThreadMessageScheduleUnsupportedError extends Schema.TaggedErrorClass<ThreadMessageScheduleUnsupportedError>()(
+  "ThreadMessageScheduleUnsupportedError",
+  {
+    environmentId: EnvironmentId,
+    threadId: ThreadId,
+  },
+) {
+  override get message(): string {
+    return "This environment's server does not support scheduled messages yet. Update the server to send a message later.";
+  }
+}
+
+export class ThreadSnoozeBlockedError extends Schema.TaggedErrorClass<ThreadSnoozeBlockedError>()(
   "ThreadSnoozeBlockedError",
   {
     environmentId: EnvironmentId,
@@ -226,6 +245,12 @@ export function useThreadActions() {
     reportFailure: false,
   });
   const unsnoozeThreadMutation = useAtomCommand(threadEnvironment.unsnooze, {
+    reportFailure: false,
+  });
+  const scheduleThreadMessageMutation = useAtomCommand(threadEnvironment.scheduleMessage, {
+    reportFailure: false,
+  });
+  const unscheduleThreadMessageMutation = useAtomCommand(threadEnvironment.unscheduleMessage, {
     reportFailure: false,
   });
   const stopThreadSession = useAtomCommand(threadEnvironment.stopSession);
@@ -868,6 +893,51 @@ export function useThreadActions() {
     [resolveThreadTarget, snoozeThreadMutation, unsnoozeThread],
   );
 
+  const scheduleThreadMessage = useCallback(
+    async (
+      target: ScopedThreadRef,
+      message: { messageId: MessageId; text: string },
+      dueAt: string,
+    ) => {
+      // Version skew: never send the command to a server that predates it.
+      if (!readEnvironmentSupportsMessageSchedule(target.environmentId)) {
+        return AsyncResult.failure(
+          Cause.fail(
+            new ThreadMessageScheduleUnsupportedError({
+              environmentId: target.environmentId,
+              threadId: target.threadId,
+            }),
+          ),
+        );
+      }
+      return scheduleThreadMessageMutation({
+        environmentId: target.environmentId,
+        input: { threadId: target.threadId, message, dueAt },
+      });
+    },
+    [scheduleThreadMessageMutation],
+  );
+
+  const unscheduleThreadMessage = useCallback(
+    async (target: ScopedThreadRef) => {
+      if (!readEnvironmentSupportsMessageSchedule(target.environmentId)) {
+        return AsyncResult.failure(
+          Cause.fail(
+            new ThreadMessageScheduleUnsupportedError({
+              environmentId: target.environmentId,
+              threadId: target.threadId,
+            }),
+          ),
+        );
+      }
+      return unscheduleThreadMessageMutation({
+        environmentId: target.environmentId,
+        input: { threadId: target.threadId },
+      });
+    },
+    [unscheduleThreadMessageMutation],
+  );
+
   const confirmAndDeleteThread = useCallback(
     async (target: ScopedThreadRef) => {
       const localApi = readLocalApi();
@@ -907,6 +977,8 @@ export function useThreadActions() {
       unsettleThread,
       snoozeThread,
       unsnoozeThread,
+      scheduleThreadMessage,
+      unscheduleThreadMessage,
       pinThread,
       unpinThread,
       confirmAndUnpinThread,
@@ -923,9 +995,11 @@ export function useThreadActions() {
       reorderPinnedThread,
       reorderActiveThread,
       setThreadAutoSettle,
+      scheduleThreadMessage,
       settleThread,
       snoozeThread,
       unarchiveThread,
+      unscheduleThreadMessage,
       unpinThread,
       unsettleThread,
       unsnoozeThread,
