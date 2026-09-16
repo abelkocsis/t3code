@@ -15,11 +15,13 @@ import {
   buildBranchNamePrompt,
   buildCommitMessagePrompt,
   buildPrContentPrompt,
+  buildDailySummaryPrompt,
   buildThreadTitlePrompt,
 } from "./TextGenerationPrompts.ts";
 import {
   sanitizeCommitSubject,
   sanitizePrTitle,
+  sanitizeDailySummaryItems,
   sanitizeThreadTitle,
 } from "./TextGenerationUtils.ts";
 import {
@@ -54,7 +56,8 @@ export const makeCursorTextGeneration = Effect.fn("makeCursorTextGeneration")(fu
       | "generateCommitMessage"
       | "generatePrContent"
       | "generateBranchName"
-      | "generateThreadTitle";
+      | "generateThreadTitle"
+      | "generateDailySummary";
     cwd: string;
     prompt: string;
     outputSchemaJson: S;
@@ -261,10 +264,34 @@ export const makeCursorTextGeneration = Effect.fn("makeCursorTextGeneration")(fu
       } satisfies TextGeneration.ThreadTitleGenerationResult;
     });
 
+  const generateDailySummary: TextGeneration.TextGeneration["Service"]["generateDailySummary"] =
+    Effect.fn("CursorTextGeneration.generateDailySummary")(function* (input) {
+      const { prompt, outputSchema } = buildDailySummaryPrompt({
+        day: input.day,
+        facts: input.facts,
+        keptItems: input.keptItems,
+        excludedItems: input.excludedItems,
+        styleExamples: input.styleExamples,
+      });
+
+      const generated = yield* runCursorJson({
+        operation: "generateDailySummary",
+        cwd: input.cwd,
+        prompt,
+        outputSchemaJson: outputSchema,
+        modelSelection: input.modelSelection,
+      });
+
+      return {
+        items: sanitizeDailySummaryItems(generated.items),
+      } satisfies TextGeneration.DailySummaryGenerationResult;
+    });
+
   return {
     generateCommitMessage,
     generatePrContent,
     generateBranchName,
     generateThreadTitle,
+    generateDailySummary,
   } satisfies TextGeneration.TextGeneration["Service"];
 });

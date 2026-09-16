@@ -18,12 +18,14 @@ import {
   buildBranchNamePrompt,
   buildCommitMessagePrompt,
   buildPrContentPrompt,
+  buildDailySummaryPrompt,
   buildThreadTitlePrompt,
 } from "./TextGenerationPrompts.ts";
 import * as TextGeneration from "./TextGeneration.ts";
 import {
   sanitizeCommitSubject,
   sanitizePrTitle,
+  sanitizeDailySummaryItems,
   sanitizeThreadTitle,
 } from "./TextGenerationUtils.ts";
 import * as OpenCodeRuntime from "../provider/opencodeRuntime.ts";
@@ -34,6 +36,7 @@ const OpenCodeTextGenerationOperation = Schema.Literals([
   "generatePrContent",
   "generateBranchName",
   "generateThreadTitle",
+  "generateDailySummary",
 ]);
 
 type OpenCodeTextGenerationOperation = typeof OpenCodeTextGenerationOperation.Type;
@@ -453,10 +456,34 @@ export const makeOpenCodeTextGeneration = Effect.fn("makeOpenCodeTextGeneration"
       };
     });
 
+  const generateDailySummary: TextGeneration.TextGeneration["Service"]["generateDailySummary"] =
+    Effect.fn("OpenCodeTextGeneration.generateDailySummary")(function* (input) {
+      const { prompt, outputSchema } = buildDailySummaryPrompt({
+        day: input.day,
+        facts: input.facts,
+        keptItems: input.keptItems,
+        excludedItems: input.excludedItems,
+        styleExamples: input.styleExamples,
+      });
+
+      const generated = yield* runOpenCodeJson({
+        operation: "generateDailySummary",
+        cwd: input.cwd,
+        prompt,
+        outputSchemaJson: outputSchema,
+        modelSelection: input.modelSelection,
+      });
+
+      return {
+        items: sanitizeDailySummaryItems(generated.items),
+      };
+    });
+
   return {
     generateCommitMessage,
     generatePrContent,
     generateBranchName,
     generateThreadTitle,
+    generateDailySummary,
   } satisfies TextGeneration.TextGeneration["Service"];
 });

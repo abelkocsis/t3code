@@ -1,5 +1,6 @@
 import {
   CoffeeIcon,
+  ListChecksIcon,
   Maximize2Icon,
   Minimize2Icon,
   PanelBottomIcon,
@@ -23,6 +24,12 @@ interface PanelLayoutControlsProps {
   rightPanelUnavailableLabel?: string;
   /** Running + waiting subagents in this thread; badges the right panel toggle. */
   liveAgentCount: number;
+  /**
+   * Opens the daily summary. Absent on a surface that has no right panel to
+   * open it in, which is why the control is not offered there.
+   */
+  onOpenStandup?: (() => void) | undefined;
+  standupOpen?: boolean;
   onToggleTerminal: () => void;
   onToggleRightPanel: () => void;
 }
@@ -37,6 +44,8 @@ export const PanelLayoutControls = memo(function PanelLayoutControls({
   rightPanelShortcutLabel,
   rightPanelUnavailableLabel = "Right panel is unavailable",
   liveAgentCount,
+  onOpenStandup,
+  standupOpen = false,
   onToggleTerminal,
   onToggleRightPanel,
 }: PanelLayoutControlsProps) {
@@ -46,6 +55,7 @@ export const PanelLayoutControls = memo(function PanelLayoutControls({
       data-panel-layout-controls
     >
       <StepAwayToggle />
+      {onOpenStandup ? <StandupToggle open={standupOpen} onOpen={onOpenStandup} /> : null}
       {showTerminalControl ? (
         <Tooltip>
           <TooltipTrigger render={<span className="flex shrink-0" />}>
@@ -140,6 +150,40 @@ export const RightPanelMaximizeControl = memo(function RightPanelMaximizeControl
     </Tooltip>
   );
 });
+
+/**
+ * Opens the daily summary beside the thread.
+ *
+ * It sits next to step away rather than inside the right panel's own tab strip,
+ * because the summary is the one surface there that is not about the code on
+ * screen: it spans every project in the environment.
+ *
+ * It follows step away rather than leading it. First in the row puts it hard
+ * against the Commit split-button, where a bordered neighbour makes a ghost
+ * icon read as part of that button.
+ *
+ * Offered on the web as well as the desktop, unlike step away, because nothing
+ * about it needs an Electron window.
+ */
+function StandupToggle({ open, onOpen }: { open: boolean; onOpen: () => void }) {
+  return (
+    <Tooltip>
+      <TooltipTrigger render={<span className="flex shrink-0" />}>
+        <Toggle
+          className="shrink-0 [-webkit-app-region:no-drag]"
+          pressed={open}
+          onPressedChange={onOpen}
+          aria-label="Daily summary"
+          variant="ghost"
+          size="sm"
+        >
+          <ListChecksIcon className="size-4" />
+        </Toggle>
+      </TooltipTrigger>
+      <TooltipPopup side="bottom">Daily summary for your standup</TooltipPopup>
+    </Tooltip>
+  );
+}
 
 /**
  * Turns step away mode on: the overlay window grows to a size that reads from

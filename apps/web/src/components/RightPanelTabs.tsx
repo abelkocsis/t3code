@@ -17,6 +17,7 @@ import {
   Bot,
   Smartphone,
   ChevronDown,
+  ListChecks,
   ChevronLeft,
   ChevronRight,
   FileDiff,
@@ -632,6 +633,8 @@ function surfaceTitle(
       return "Agents";
     case "device":
       return surface.title ?? surface.target?.name ?? "Device";
+    case "standup":
+      return "Daily summary";
     case "preview": {
       const snapshot = surface.resourceId ? sessions[surface.resourceId] : null;
       if (!snapshot || snapshot.navStatus._tag === "Idle") return "Browser";
@@ -723,6 +726,8 @@ function SurfaceIcon({
       ) : (
         <Smartphone className="size-3 shrink-0" />
       );
+    case "standup":
+      return <ListChecks className="size-3 shrink-0" />;
   }
 }
 

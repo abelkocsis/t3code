@@ -248,6 +248,15 @@ import {
   ProviderConsumeResetCreditResult,
 } from "./providerUsageLimits.ts";
 import { UsagePricing, UsageReadError, UsageSummary, UsageSummaryInput } from "./usage.ts";
+import {
+  StandupError,
+  StandupGenerateInput,
+  StandupSaveInput,
+  StandupState,
+  StandupStateInput,
+  StandupSummary,
+  StandupUpdateItemsInput,
+} from "./standup.ts";
 import { ServerSettings, ServerSettingsError, ServerSettingsPatch } from "./settings.ts";
 import {
   ProjectCloneActionInput,
@@ -384,6 +393,10 @@ export const WS_METHODS = {
   serverGetBackgroundPolicy: "server.getBackgroundPolicy",
   serverGetUsageSummary: "server.getUsageSummary",
   serverRefreshUsageRates: "server.refreshUsageRates",
+  serverGetStandupState: "server.getStandupState",
+  serverGenerateStandupSummary: "server.generateStandupSummary",
+  serverUpdateStandupItems: "server.updateStandupItems",
+  serverSaveStandupSummary: "server.saveStandupSummary",
 
   // Cloud environment methods
   cloudGetRelayClientStatus: "cloud.getRelayClientStatus",
@@ -644,6 +657,45 @@ const WsServerRefreshUsageRatesRpc = Rpc.make(WS_METHODS.serverRefreshUsageRates
   payload: Schema.Struct({}),
   success: UsagePricing,
   error: EnvironmentAuthorizationError,
+});
+
+/**
+ * Loads the day the panel should open on, the days that already hold a stored
+ * summary, and the stored summary for the requested day. It never runs the
+ * model, so opening the panel on a generated day costs nothing.
+ */
+const WsServerGetStandupStateRpc = Rpc.make(WS_METHODS.serverGetStandupState, {
+  payload: StandupStateInput,
+  success: StandupState,
+  error: Schema.Union([EnvironmentAuthorizationError, StandupError]),
+});
+
+/**
+ * Collects the day's work and asks the model to write the bullets. This is the
+ * only method that spends tokens, so the client calls it on an explicit open of
+ * an ungenerated day, or on the Regenerate button.
+ */
+const WsServerGenerateStandupSummaryRpc = Rpc.make(WS_METHODS.serverGenerateStandupSummary, {
+  payload: StandupGenerateInput,
+  success: StandupSummary,
+  error: Schema.Union([EnvironmentAuthorizationError, StandupError]),
+});
+
+/** Replaces the item list, which covers excluding a bullet and adding one. */
+const WsServerUpdateStandupItemsRpc = Rpc.make(WS_METHODS.serverUpdateStandupItems, {
+  payload: StandupUpdateItemsInput,
+  success: StandupSummary,
+  error: Schema.Union([EnvironmentAuthorizationError, StandupError]),
+});
+
+/**
+ * Records the text the user settled on. Later generations receive the most
+ * recent saved texts as style examples, so saving is how the summary learns.
+ */
+const WsServerSaveStandupSummaryRpc = Rpc.make(WS_METHODS.serverSaveStandupSummary, {
+  payload: StandupSaveInput,
+  success: StandupSummary,
+  error: Schema.Union([EnvironmentAuthorizationError, StandupError]),
 });
 
 const WsServerSignalProcessRpc = Rpc.make(WS_METHODS.serverSignalProcess, {
@@ -1407,6 +1459,10 @@ export const WsRpcGroup = RpcGroup.make(
   WsServerRetryResourceTelemetryRpc,
   WsServerGetUsageSummaryRpc,
   WsServerRefreshUsageRatesRpc,
+  WsServerGetStandupStateRpc,
+  WsServerGenerateStandupSummaryRpc,
+  WsServerUpdateStandupItemsRpc,
+  WsServerSaveStandupSummaryRpc,
   WsServerSignalProcessRpc,
   WsServerReportClientActivityRpc,
   WsServerReportHostPowerStateRpc,

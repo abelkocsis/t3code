@@ -147,6 +147,8 @@ import * as ResourceMonitorBinary from "./resourceTelemetry/ResourceMonitorBinar
 import * as ResourceTelemetry from "./resourceTelemetry/ResourceTelemetry.ts";
 import * as UsageLimitSources from "./usage/UsageLimitSources.ts";
 import * as UsageService from "./usage/UsageService.ts";
+import * as StandupService from "./standup/StandupService.ts";
+import * as StandupStore from "./standup/StandupStore.ts";
 import { OrchestrationLayerLive } from "./orchestration/runtimeLayer.ts";
 import {
   clearPersistedServerRuntimeState,
@@ -210,6 +212,13 @@ const BackgroundLayerLive = BackgroundPolicy.layer.pipe(
 );
 
 const UsageLayerLive = UsageService.layer.pipe(Layer.provide(ServerSettingsLayerLive));
+
+// The daily summary reads the projections, the worktrees and the pull request
+// hosts, so it sits downstream of every one of those rather than beside them.
+const StandupLayerLive = StandupService.layer.pipe(
+  Layer.provide(StandupStore.layer),
+  Layer.provide(ServerSettingsLayerLive),
+);
 
 const ResourceDiagnosticsLayerLive = Layer.mergeAll(
   HostResources.layer,
@@ -558,7 +567,7 @@ const RuntimeCoreDependenciesLive = ReactorLayerLive.pipe(
   ),
 );
 
-const RuntimeDependenciesLive = RuntimeCoreDependenciesLive.pipe(
+const RuntimeDependenciesBaseLive = RuntimeCoreDependenciesLive.pipe(
   // Misc.
   Layer.provideMerge(BackgroundLayerLive),
   Layer.provideMerge(ResourceDiagnosticsLayerLive),
@@ -569,6 +578,12 @@ const RuntimeDependenciesLive = RuntimeCoreDependenciesLive.pipe(
   Layer.provideMerge(RemoteOpenTargets.layer),
   Layer.provideMerge(ServerLifecycleEvents.layer),
   Layer.provide(NetService.layer),
+);
+
+// The daily summary consumes the git driver, the pull request service and text
+// generation, so it composes on top of the runtime rather than inside it.
+const RuntimeDependenciesLive = StandupLayerLive.pipe(
+  Layer.provideMerge(RuntimeDependenciesBaseLive),
 );
 
 const commandReadinessLayer = HttpRouter.middleware(

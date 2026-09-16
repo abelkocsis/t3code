@@ -59,6 +59,11 @@ export const RPC_REQUIRED_SCOPES = {
   [WS_METHODS.serverRetryResourceTelemetry]: AuthOrchestrationOperateScope,
   [WS_METHODS.serverGetUsageSummary]: AuthOrchestrationReadScope,
   [WS_METHODS.serverRefreshUsageRates]: AuthOrchestrationReadScope,
+  [WS_METHODS.serverGetStandupState]: AuthOrchestrationReadScope,
+  // Generating spends provider tokens, and the rest write the stored summary.
+  [WS_METHODS.serverGenerateStandupSummary]: AuthOrchestrationOperateScope,
+  [WS_METHODS.serverUpdateStandupItems]: AuthOrchestrationOperateScope,
+  [WS_METHODS.serverSaveStandupSummary]: AuthOrchestrationOperateScope,
   [WS_METHODS.serverSignalProcess]: AuthOrchestrationOperateScope,
   [WS_METHODS.serverReportClientActivity]: AuthOrchestrationReadScope,
   [WS_METHODS.serverReportHostPowerState]: AuthOrchestrationOperateScope,

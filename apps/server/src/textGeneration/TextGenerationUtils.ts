@@ -121,3 +121,43 @@ export function normalizeCliError(
     cause: error,
   });
 }
+
+const DAILY_SUMMARY_SOURCES = new Set(["thread", "commit", "pullRequest", "issue", "cliSession"]);
+
+const MAX_DAILY_SUMMARY_ITEMS = 20;
+const MAX_DAILY_SUMMARY_ITEM_CHARS = 500;
+
+/**
+ * Cleans the bullets a model returned for a daily summary.
+ *
+ * Models like to add the bullet character the UI draws itself, to wrap a line
+ * in quotes, and to invent a source name. Each of those breaks the rendering or
+ * the source filter, so all three are corrected here rather than in the client.
+ */
+export function sanitizeDailySummaryItems(
+  raw: ReadonlyArray<{ readonly text: string; readonly source: string }>,
+): ReadonlyArray<{ readonly text: string; readonly source: string }> {
+  const seen = new Set<string>();
+  const items: Array<{ text: string; source: string }> = [];
+  for (const candidate of raw) {
+    const text = candidate.text
+      .replace(/\s+/g, " ")
+      .trim()
+      .replace(/^[-*•]\s*/, "")
+      .replace(/^['"`]+|['"`]+$/g, "")
+      .trim();
+    if (text.length === 0) continue;
+    const key = text.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    items.push({
+      text:
+        text.length <= MAX_DAILY_SUMMARY_ITEM_CHARS
+          ? text
+          : `${text.slice(0, MAX_DAILY_SUMMARY_ITEM_CHARS - 3).trimEnd()}...`,
+      source: DAILY_SUMMARY_SOURCES.has(candidate.source) ? candidate.source : "thread",
+    });
+    if (items.length >= MAX_DAILY_SUMMARY_ITEMS) break;
+  }
+  return items;
+}

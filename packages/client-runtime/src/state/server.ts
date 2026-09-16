@@ -1048,6 +1048,13 @@ export function createServerEnvironmentAtoms<R, E>(
       staleTimeMs: 60_000,
       refreshTrigger: ({ environmentId }) => usagePricesAtom(environmentId),
     }),
+    // The state read is cheap and never calls the model, so the panel may ask
+    // for it on every open. Generating is a separate, explicit command.
+    standupState: createEnvironmentRpcQueryAtomFamily(runtime, {
+      label: "environment-data:server:standup-state",
+      tag: WS_METHODS.serverGetStandupState,
+      staleTimeMs: 30_000,
+    }),
     configProjection,
     welcome,
     consumeResetCredit: createEnvironmentRpcCommand(runtime, {
@@ -1117,6 +1124,24 @@ export function createServerEnvironmentAtoms<R, E>(
         mode: "singleFlight",
         key: ({ environmentId }) => environmentId,
       },
+    }),
+    // Generating spends provider tokens, so a second click on the same day
+    // joins the run in flight rather than starting another one.
+    generateStandupSummary: createEnvironmentRpcCommand(runtime, {
+      label: "environment-data:server:generate-standup-summary",
+      tag: WS_METHODS.serverGenerateStandupSummary,
+      concurrency: {
+        mode: "singleFlight",
+        key: ({ environmentId, input }) => JSON.stringify([environmentId, input.day]),
+      },
+    }),
+    updateStandupItems: createEnvironmentRpcCommand(runtime, {
+      label: "environment-data:server:update-standup-items",
+      tag: WS_METHODS.serverUpdateStandupItems,
+    }),
+    saveStandupSummary: createEnvironmentRpcCommand(runtime, {
+      label: "environment-data:server:save-standup-summary",
+      tag: WS_METHODS.serverSaveStandupSummary,
     }),
   };
 }

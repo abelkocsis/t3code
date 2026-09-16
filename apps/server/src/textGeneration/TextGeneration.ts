@@ -77,6 +77,35 @@ export interface ThreadTitleGenerationResult {
   needsRefinement?: boolean | undefined;
 }
 
+export interface DailySummaryGenerationInput {
+  /**
+   * Where the provider CLI runs. The prompt carries every fact already, so any
+   * readable directory works; the workspace root keeps provider config sane.
+   */
+  cwd: string;
+  /** The day being summarised, as `YYYY-MM-DD` in the user's zone. */
+  day: string;
+  /** The evidence block the collectors assembled. */
+  facts: string;
+  /** Bullets the user kept from an earlier run of the same day. */
+  keptItems: ReadonlyArray<string>;
+  /** Bullets the user removed from the same day. */
+  excludedItems: ReadonlyArray<string>;
+  /** Texts the user saved on earlier days, newest first. */
+  styleExamples: ReadonlyArray<string>;
+  /** What model and provider to use for generation. */
+  modelSelection: ModelSelection;
+}
+
+export interface DailySummaryGenerationItem {
+  text: string;
+  source: string;
+}
+
+export interface DailySummaryGenerationResult {
+  items: ReadonlyArray<DailySummaryGenerationItem>;
+}
+
 /**
  * TextGeneration - Service tag for commit and change request text generation.
  */
@@ -108,6 +137,11 @@ export class TextGeneration extends Context.Service<
     readonly generateThreadTitle: (
       input: ThreadTitleGenerationInput,
     ) => Effect.Effect<ThreadTitleGenerationResult, TextGenerationError>;
+
+    /** Write one day of collected work up as standup bullets. */
+    readonly generateDailySummary: (
+      input: DailySummaryGenerationInput,
+    ) => Effect.Effect<DailySummaryGenerationResult, TextGenerationError>;
   }
 >()("t3/textGeneration/TextGeneration") {}
 
@@ -115,7 +149,8 @@ type TextGenerationOp =
   | "generateCommitMessage"
   | "generatePrContent"
   | "generateBranchName"
-  | "generateThreadTitle";
+  | "generateThreadTitle"
+  | "generateDailySummary";
 
 const resolveInstance = (
   registry: ProviderInstanceRegistry.ProviderInstanceRegistry["Service"],
@@ -167,6 +202,10 @@ export const make = Effect.gen(function* () {
             return yield* textGeneration.generateThreadTitle({ ...input, linkedContext });
           }),
         ),
+      ),
+    generateDailySummary: (input) =>
+      resolveInstance(registry, "generateDailySummary", input.modelSelection.instanceId).pipe(
+        Effect.flatMap((textGeneration) => textGeneration.generateDailySummary(input)),
       ),
   });
 });
