@@ -10,6 +10,7 @@ import { ProviderCommandReactor } from "../Services/ProviderCommandReactor.ts";
 import { ProviderRuntimeIngestionService } from "../Services/ProviderRuntimeIngestion.ts";
 import { ThreadDeletionReactor } from "../Services/ThreadDeletionReactor.ts";
 import { ThreadForkReactor } from "../Services/ThreadForkReactor.ts";
+import * as ScheduledMessageReactor from "../ScheduledMessageReactor.ts";
 import * as ThreadSettlementReactor from "../ThreadSettlementReactor.ts";
 import * as PullRequestSyncReactor from "../PullRequestSyncReactor.ts";
 import * as ThreadPullRequestReactor from "../ThreadPullRequestReactor.ts";
@@ -114,6 +115,13 @@ describe("OrchestrationReactor", () => {
             drain: Effect.void,
             requestSync: () => Effect.void,
           }),
+          Layer.succeed(ScheduledMessageReactor.ScheduledMessageReactor, {
+            start: () => {
+              started.push("scheduled-message-reactor");
+              return Effect.void;
+            },
+            drain: Effect.void,
+          }),
         ),
         Layer.provideMerge(
           Layer.succeed(AgentAwarenessRelay.AgentAwarenessRelay, {
@@ -141,6 +149,7 @@ describe("OrchestrationReactor", () => {
       "thread-pull-request-reactor",
       "thread-settlement-reactor",
       "pull-request-sync-reactor",
+      "scheduled-message-reactor",
       "agent-awareness-relay",
       "storage-cleanup",
     ]);

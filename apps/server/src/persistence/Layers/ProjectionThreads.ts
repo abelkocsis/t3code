@@ -13,6 +13,11 @@ import {
   type ProjectionThreadRepositoryShape,
 } from "../Services/ProjectionThreads.ts";
 import { ModelSelection, ThreadLinkedPullRequest, ThreadTitleState } from "@t3tools/contracts";
+import {
+  ModelSelection,
+  ThreadLinkedPullRequest,
+  ThreadScheduledMessage,
+} from "@t3tools/contracts";
 
 const ProjectionThreadDbRow = ProjectionThread.mapFields(
   Struct.assign({
@@ -20,6 +25,7 @@ const ProjectionThreadDbRow = ProjectionThread.mapFields(
     titleState: Schema.NullOr(Schema.fromJsonString(ThreadTitleState)),
     linkedPullRequest: Schema.NullOr(Schema.fromJsonString(ThreadLinkedPullRequest)),
     branchPullRequest: Schema.NullOr(Schema.fromJsonString(ThreadLinkedPullRequest)),
+    scheduledMessage: Schema.NullOr(Schema.fromJsonString(ThreadScheduledMessage)),
   }),
 );
 
@@ -51,6 +57,7 @@ const makeProjectionThreadRepository = Effect.gen(function* () {
           unsettled_at,
           snoozed_until,
           snoozed_at,
+          scheduled_message_json,
           pinned_at,
           pin_order_key,
           active_order_key,
@@ -84,6 +91,7 @@ const makeProjectionThreadRepository = Effect.gen(function* () {
           ${row.unsettledAt},
           ${row.snoozedUntil},
           ${row.snoozedAt},
+          ${row.scheduledMessage === undefined || row.scheduledMessage === null ? null : JSON.stringify(row.scheduledMessage)},
           ${row.pinnedAt},
           ${row.pinOrderKey ?? null},
           ${row.activeOrderKey ?? null},
@@ -117,6 +125,7 @@ const makeProjectionThreadRepository = Effect.gen(function* () {
           unsettled_at = excluded.unsettled_at,
           snoozed_until = excluded.snoozed_until,
           snoozed_at = excluded.snoozed_at,
+          scheduled_message_json = excluded.scheduled_message_json,
           pinned_at = excluded.pinned_at,
           pin_order_key = excluded.pin_order_key,
           active_order_key = excluded.active_order_key,
@@ -157,6 +166,7 @@ const makeProjectionThreadRepository = Effect.gen(function* () {
           unsettled_at AS "unsettledAt",
           snoozed_until AS "snoozedUntil",
           snoozed_at AS "snoozedAt",
+          scheduled_message_json AS "scheduledMessage",
           pinned_at AS "pinnedAt",
           pin_order_key AS "pinOrderKey",
           active_order_key AS "activeOrderKey",
