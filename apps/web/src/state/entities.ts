@@ -202,6 +202,15 @@ export function readEnvironmentSupportsSnooze(environmentId: EnvironmentId): boo
   );
 }
 
+/** Whether the environment's server understands thread.message.schedule.
+    Same version-skew contract as settlement. */
+export function readEnvironmentSupportsMessageSchedule(environmentId: EnvironmentId): boolean {
+  return (
+    appAtomRegistry.get(environmentServerConfigsAtom).get(environmentId)?.environment.capabilities
+      .threadMessageSchedule === true
+  );
+}
+
 /** Whether the environment's server understands thread.pin/unpin.
     Same version-skew contract as settlement. */
 export function readEnvironmentSupportsPinning(environmentId: EnvironmentId): boolean {

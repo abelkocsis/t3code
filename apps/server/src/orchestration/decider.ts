@@ -746,6 +746,88 @@ export const decideOrchestrationCommand = Effect.fn("decideOrchestrationCommand"
       };
     }
 
+    case "thread.message.schedule": {
+      const thread = yield* requireThreadNotArchived({
+        readModel,
+        command,
+        threadId: command.threadId,
+      });
+      const occurredAt = yield* nowIso;
+      // A due time in the past would park a message the sweep sends on its
+      // next tick, which is not what the user asked for. Reject instead of
+      // normalizing, the same way snooze rejects a wake time behind it.
+      if (!(Date.parse(command.dueAt) > Date.parse(occurredAt))) {
+        return yield* Effect.fail(
+          new OrchestrationCommandInvariantError({
+            commandType: command.type,
+            detail: `thread ${command.threadId} scheduled message due time ${command.dueAt} is not in the future`,
+          }),
+        );
+      }
+      if (isImportedAgentSessionMessageId(command.message.messageId)) {
+        return yield* new OrchestrationCommandInvariantError({
+          commandType: command.type,
+          detail: `Message id '${command.message.messageId}' uses the reserved imported-session namespace.`,
+        });
+      }
+      // The first turn of a thread carries bootstrap work (worktree
+      // preparation, setup script) that only the client assembles. A parked
+      // message the server sends itself never carries it, so scheduling waits
+      // until one turn has run. Command read models carry no messages, so the
+      // turn record is what proves the thread already started.
+      if (thread.latestTurn === null) {
+        return yield* new OrchestrationCommandInvariantError({
+          commandType: command.type,
+          detail: `thread ${command.threadId} has not run a turn yet, so a message cannot be scheduled on it`,
+        });
+      }
+      return {
+        ...(yield* withEventBase({
+          aggregateKind: "thread",
+          aggregateId: command.threadId,
+          occurredAt,
+          commandId: command.commandId,
+        })),
+        type: "thread.message-scheduled",
+        payload: {
+          threadId: command.threadId,
+          scheduledMessage: {
+            messageId: command.message.messageId,
+            text: command.message.text,
+            dueAt: command.dueAt,
+            scheduledAt: command.createdAt,
+          },
+          updatedAt: occurredAt,
+        },
+      };
+    }
+
+    case "thread.message.unschedule": {
+      const thread = yield* requireThreadNotArchived({
+        readModel,
+        command,
+        threadId: command.threadId,
+      });
+      // Idempotent by re-emission (see thread.unsnooze): cancelling a thread
+      // with nothing parked lands on the same null state.
+      const nothingScheduled = thread.scheduledMessage == null;
+      const occurredAt = yield* nowIso;
+      return {
+        ...(yield* withEventBase({
+          aggregateKind: "thread",
+          aggregateId: command.threadId,
+          occurredAt,
+          commandId: command.commandId,
+        })),
+        type: "thread.message-unscheduled",
+        payload: {
+          threadId: command.threadId,
+          reason: "user",
+          updatedAt: nothingScheduled ? thread.updatedAt : occurredAt,
+        },
+      };
+    }
+
     case "thread.pin": {
       const thread = yield* requireThreadNotArchived({
         readModel,
@@ -1511,6 +1593,25 @@ export const decideOrchestrationCommand = Effect.fn("decideOrchestrationCommand"
           payload: {
             threadId: command.threadId,
             reason: "activity",
+            updatedAt: command.createdAt,
+          },
+        });
+      }
+      // The sweep sends a parked message through this same command, keeping
+      // its scheduled messageId. Clearing the schedule in the same decision
+      // means no window exists where a later tick could send it twice.
+      if (targetThread.scheduledMessage?.messageId === command.message.messageId) {
+        lifecycleResetEvents.push({
+          ...(yield* withEventBase({
+            aggregateKind: "thread",
+            aggregateId: command.threadId,
+            occurredAt: command.createdAt,
+            commandId: command.commandId,
+          })),
+          type: "thread.message-unscheduled",
+          payload: {
+            threadId: command.threadId,
+            reason: "sent",
             updatedAt: command.createdAt,
           },
         });

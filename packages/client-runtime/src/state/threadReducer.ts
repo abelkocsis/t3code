@@ -215,6 +215,26 @@ export function applyThreadDetailEvent(
         },
       };
 
+    case "thread.message-scheduled":
+      return {
+        kind: "updated",
+        thread: {
+          ...thread,
+          scheduledMessage: event.payload.scheduledMessage,
+          updatedAt: event.payload.updatedAt,
+        },
+      };
+
+    case "thread.message-unscheduled":
+      return {
+        kind: "updated",
+        thread: {
+          ...thread,
+          scheduledMessage: null,
+          updatedAt: event.payload.updatedAt,
+        },
+      };
+
     case "thread.pinned":
       return {
         kind: "updated",

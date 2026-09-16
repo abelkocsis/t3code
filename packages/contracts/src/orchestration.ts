@@ -643,6 +643,18 @@ export type ThreadTitleRegeneration = typeof ThreadTitleRegeneration.Type;
  * request (see `@t3tools/shared/threadPullRequests`) so clients from before
  * `pullRequests` keep working independently of their release schedule.
  */
+ * A message the user parked for a later time, most often a provider quota
+ * reset. One per thread: scheduling again replaces the pending message. The
+ * server sends it once the due time passes and the thread is idle.
+ */
+export const ThreadScheduledMessage = Schema.Struct({
+  messageId: MessageId,
+  text: TrimmedNonEmptyString,
+  dueAt: IsoDateTime,
+  scheduledAt: IsoDateTime,
+});
+export type ThreadScheduledMessage = typeof ThreadScheduledMessage.Type;
+
 export const ThreadLinkedPullRequest = Schema.Struct({
   projectId: ProjectId,
   repository: TrimmedNonEmptyString,
@@ -773,6 +785,9 @@ export const OrchestrationThread = Schema.Struct({
   // Manual Active placement. Keyless threads retain their creation/re-entry
   // order above the arranged run. Settling clears this slot.
   activeOrderKey: Schema.optional(Schema.NullOr(TrimmedNonEmptyString)),
+  // The one message parked for a later send, or null. Optional so payloads
+  // from pre-scheduling servers still decode.
+  scheduledMessage: Schema.optional(Schema.NullOr(ThreadScheduledMessage)),
   // Pending-only state. Optional so older servers remain compatible.
   titleRegeneration: Schema.optional(Schema.NullOr(ThreadTitleRegeneration)),
   titleState: Schema.optional(Schema.NullOr(ThreadTitleState)),
@@ -843,6 +858,9 @@ export const OrchestrationThreadShell = Schema.Struct({
   pinnedAt: Schema.optional(Schema.NullOr(IsoDateTime)),
   pinOrderKey: Schema.optional(Schema.NullOr(TrimmedNonEmptyString)),
   activeOrderKey: Schema.optional(Schema.NullOr(TrimmedNonEmptyString)),
+  // The one message parked for a later send, or null. Optional so payloads
+  // from pre-scheduling servers still decode.
+  scheduledMessage: Schema.optional(Schema.NullOr(ThreadScheduledMessage)),
   titleRegeneration: Schema.optional(Schema.NullOr(ThreadTitleRegeneration)),
   titleState: Schema.optional(Schema.NullOr(ThreadTitleState)),
   session: Schema.NullOr(OrchestrationSession),
@@ -1124,6 +1142,26 @@ const ThreadUnsnoozeCommand = Schema.Struct({
   reason: Schema.Literal("user"),
 });
 
+const ThreadMessageScheduleCommand = Schema.Struct({
+  type: Schema.Literal("thread.message.schedule"),
+  commandId: CommandId,
+  threadId: ThreadId,
+  message: Schema.Struct({
+    messageId: MessageId,
+    text: TrimmedNonEmptyString,
+  }),
+  // When the server should send the message. Must be in the future, like a
+  // snooze wake time.
+  dueAt: IsoDateTime,
+  createdAt: IsoDateTime,
+});
+
+const ThreadMessageUnscheduleCommand = Schema.Struct({
+  type: Schema.Literal("thread.message.unschedule"),
+  commandId: CommandId,
+  threadId: ThreadId,
+});
+
 const ThreadPinCommand = Schema.Struct({
   type: Schema.Literal("thread.pin"),
   commandId: CommandId,
@@ -1370,6 +1408,8 @@ const DispatchableClientOrchestrationCommand = Schema.Union([
   ThreadUnsettleCommand,
   ThreadSnoozeCommand,
   ThreadUnsnoozeCommand,
+  ThreadMessageScheduleCommand,
+  ThreadMessageUnscheduleCommand,
   ThreadPinCommand,
   ThreadUnpinCommand,
   ThreadPinReorderCommand,
@@ -1404,6 +1444,8 @@ export const ClientOrchestrationCommand = Schema.Union([
   ThreadUnsettleCommand,
   ThreadSnoozeCommand,
   ThreadUnsnoozeCommand,
+  ThreadMessageScheduleCommand,
+  ThreadMessageUnscheduleCommand,
   ThreadPinCommand,
   ThreadUnpinCommand,
   ThreadPinReorderCommand,
@@ -1635,6 +1677,8 @@ export const OrchestrationEventType = Schema.Literals([
   "thread.unsettled",
   "thread.snoozed",
   "thread.unsnoozed",
+  "thread.message-scheduled",
+  "thread.message-unscheduled",
   "thread.pinned",
   "thread.unpinned",
   "thread.pin-reordered",
@@ -1754,6 +1798,21 @@ export const ThreadUnsnoozedPayload = Schema.Struct({
   // thread.unsettled's activity resets. Timer wakes emit no event: clients
   // derive them from snoozedUntil passing.
   reason: Schema.Literals(["user", "activity"]),
+  updatedAt: IsoDateTime,
+});
+
+export const ThreadMessageScheduledPayload = Schema.Struct({
+  threadId: ThreadId,
+  scheduledMessage: ThreadScheduledMessage,
+  updatedAt: IsoDateTime,
+});
+
+export const ThreadMessageUnscheduledPayload = Schema.Struct({
+  threadId: ThreadId,
+  // user: the user cancelled the pending message. sent: the due time passed
+  // and the server started the turn, so the same event clears the schedule
+  // the turn consumed.
+  reason: Schema.Literals(["user", "sent"]),
   updatedAt: IsoDateTime,
 });
 
@@ -2032,6 +2091,16 @@ export const OrchestrationEvent = Schema.Union([
     ...EventBaseFields,
     type: Schema.Literal("thread.unsnoozed"),
     payload: ThreadUnsnoozedPayload,
+  }),
+  Schema.Struct({
+    ...EventBaseFields,
+    type: Schema.Literal("thread.message-scheduled"),
+    payload: ThreadMessageScheduledPayload,
+  }),
+  Schema.Struct({
+    ...EventBaseFields,
+    type: Schema.Literal("thread.message-unscheduled"),
+    payload: ThreadMessageUnscheduledPayload,
   }),
   Schema.Struct({
     ...EventBaseFields,

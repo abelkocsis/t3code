@@ -53,6 +53,23 @@ messages while disconnected. Uploads resume when you reconnect. Drafts and queue
 messages survive app restarts. Signing out of T3 Connect keeps that work on your
 device until you sign back into the same account.
 
+## Schedule a message
+
+The alarm-clock button beside Send parks the draft and sends it later. Pick the
+time in the popover, then choose **Schedule**. The time defaults to the next
+usage-limit reset your provider reports, which is the common case: you hit the
+session limit, park the next instruction, and the agent picks it up once the
+quota returns.
+
+The server owns the timer, so the message goes out even with no app window open.
+It does need the server to be running at that time. If the thread is busy when
+the time arrives, the message waits for the current turn, approval, or question
+to finish, and goes out after that.
+
+Each thread holds one scheduled message. Scheduling again replaces it, and the
+same popover cancels it. A scheduled message carries text only: clear the
+attachments and contexts from the draft before you schedule it.
+
 ## Custom models
 
 On web and desktop, use Settings → Providers → **Models** to add an unlisted model with a custom

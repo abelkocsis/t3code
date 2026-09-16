@@ -8,6 +8,9 @@ import {
 } from "@t3tools/shared/usageLimits";
 import { feedbackBannerItem } from "./chat/ComposerFeedback";
 import { usageLimitsBannerItem } from "./chat/ComposerUsageLimits";
+import type { ComposerMessageScheduling } from "./chat/ComposerScheduleAction";
+import { defaultScheduleDueAt } from "./chat/composerScheduleTime";
+import { snoozeWakeDescription } from "./Sidebar.snooze";
 import { derivePendingRequests } from "@t3tools/client-runtime/pending-requests";
 import {
   questionAttachmentDraftId,
@@ -344,6 +347,7 @@ import { useProjectClone } from "../state/projectClones";
 import { projectCloneDisplayName, projectCloneProgressSummary } from "@t3tools/contracts";
 import { useEnvironments, usePrimaryEnvironment } from "../state/environments";
 import {
+  readEnvironmentSupportsMessageSchedule,
   useProject,
   useProjects,
   useThread,
@@ -1455,7 +1459,13 @@ export default function ChatView(props: ChatViewProps) {
   const threadSyncPhase = routeKind === "server" ? (props.threadSyncPhase ?? null) : null;
   const threadDetailLoading = threadSyncPhase === "loading";
   const handleNewThread = useNewThreadHandler();
-  const { settleThread, pinThread, confirmAndUnpinThread } = useThreadActions();
+  const {
+    settleThread,
+    pinThread,
+    confirmAndUnpinThread,
+    scheduleThreadMessage,
+    unscheduleThreadMessage,
+  } = useThreadActions();
   const routeThreadRef = useMemo(
     () => scopeThreadRef(environmentId, threadId),
     [environmentId, threadId],
@@ -7267,6 +7277,100 @@ export default function ChatView(props: ChatViewProps) {
     ],
   );
 
+  // Parking a message for later. The command carries the prompt text only, so
+  // the composer's attachments and contexts stay where they are and the
+  // server can send the turn on its own.
+  // The shell is the live source here: thread-detail streams carry only the
+  // six conversation events, so a schedule change reaches this view through
+  // the shell upsert, not through the detail subscription.
+  const pendingScheduledMessage =
+    activeThreadShell?.scheduledMessage ?? activeThread?.scheduledMessage ?? null;
+  const scheduleDisabledReason = !isServerThread
+    ? "Send a message before scheduling one"
+    : !readEnvironmentSupportsMessageSchedule(environmentId)
+      ? "This server does not support scheduled messages yet"
+      : (activeThreadShell?.latestTurn ?? activeThread?.latestTurn ?? null) === null
+        ? "Send a message before scheduling one"
+        : composerHasNonPromptContent
+          ? "A scheduled message carries text only"
+          : null;
+  const handleScheduleMessage = useCallback(
+    async (dueAt: string) => {
+      const text = promptRef.current.trim();
+      if (text.length === 0) {
+        toastManager.add({ type: "warning", title: "Write the message you want to schedule" });
+        return;
+      }
+      const result = await scheduleThreadMessage(
+        routeThreadRef,
+        { messageId: newMessageId(), text },
+        dueAt,
+      );
+      if (result._tag === "Failure") {
+        if (isAtomCommandInterrupted(result)) return;
+        const error = squashAtomCommandFailure(result);
+        toastManager.add(
+          stackedThreadToast({
+            type: "error",
+            title: "Could not schedule the message",
+            description: error instanceof Error ? error.message : "Failed to schedule.",
+          }),
+        );
+        return;
+      }
+      promptRef.current = "";
+      setComposerDraftPrompt(composerDraftTarget, "");
+      composerRef.current?.resetCursorState();
+      toastManager.add({
+        type: "success",
+        title: `Sending ${snoozeWakeDescription(dueAt, new Date(), timestampFormat)}`,
+      });
+    },
+    [
+      composerDraftTarget,
+      composerRef,
+      promptRef,
+      routeThreadRef,
+      scheduleThreadMessage,
+      setComposerDraftPrompt,
+      timestampFormat,
+    ],
+  );
+  const handleCancelScheduledMessage = useCallback(async () => {
+    const result = await unscheduleThreadMessage(routeThreadRef);
+    if (result._tag === "Failure" && !isAtomCommandInterrupted(result)) {
+      const error = squashAtomCommandFailure(result);
+      toastManager.add(
+        stackedThreadToast({
+          type: "error",
+          title: "Could not cancel the scheduled message",
+          description: error instanceof Error ? error.message : "Failed to cancel.",
+        }),
+      );
+    }
+  }, [routeThreadRef, unscheduleThreadMessage]);
+  const messageScheduling = useMemo<ComposerMessageScheduling | null>(
+    () =>
+      isServerThread
+        ? {
+            pending: pendingScheduledMessage,
+            disabledReason: scheduleDisabledReason,
+            // Read at open time: the quota reset moves while the composer sits.
+            resolveDefaultDueAt: () => defaultScheduleDueAt(contextWindowUsageLimits, Date.now()),
+            onSchedule: (dueAt: string) => void handleScheduleMessage(dueAt),
+            onCancel: () => void handleCancelScheduledMessage(),
+          }
+        : null,
+    [
+      contextWindowUsageLimits,
+      handleCancelScheduledMessage,
+      handleScheduleMessage,
+      isServerThread,
+      pendingScheduledMessage,
+      scheduleDisabledReason,
+    ],
+  );
+
   const onSend = async (
     e?: { preventDefault: () => void },
     submissionIntent: ComposerSubmissionIntent = "foreground",
@@ -9767,6 +9871,7 @@ export default function ChatView(props: ChatViewProps) {
                             activeThreadModelSelection={activeThread?.modelSelection}
                             activeContextWindow={activeContextWindow}
                             contextWindowUsageLimits={contextWindowUsageLimits}
+                            messageScheduling={messageScheduling}
                             compactThreadUnavailable={compactThreadUnavailable}
                             compactDisabled={compactDisabled}
                             compactDisabledReason={compactDisabledReason}
