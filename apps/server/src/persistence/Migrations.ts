@@ -69,6 +69,7 @@ import Migration0054 from "./Migrations/054_ProjectionThreadsAutoSettleDisabledA
 // This fork numbers its own migrations from 900 so an upstream release can
 // never claim one of their ids. See docs in 900_ProjectionThreadsScheduledMessage.
 import Migration0900 from "./Migrations/900_ProjectionThreadsScheduledMessage.ts";
+import Migration0901 from "./Migrations/901_RepairThreadPullRequests.ts";
 
 /**
  * Migration loader with all migrations defined inline.
@@ -136,6 +137,7 @@ const migrationEntries = [
   [53, "PullRequestFilesViewed", Migration0053],
   [54, "ProjectionThreadsAutoSettleDisabledAt", Migration0054],
   [900, "ProjectionThreadsScheduledMessage", Migration0900],
+  [901, "RepairThreadPullRequests", Migration0901],
 ] as const;
 
 export const migrationManifest = migrationEntries.map(([id, name]) => [id, name] as const);
