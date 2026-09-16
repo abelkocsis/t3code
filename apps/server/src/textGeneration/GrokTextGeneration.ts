@@ -17,11 +17,13 @@ import {
   buildBranchNamePrompt,
   buildCommitMessagePrompt,
   buildPrContentPrompt,
+  buildDailySummaryPrompt,
   buildThreadTitlePrompt,
 } from "./TextGenerationPrompts.ts";
 import {
   sanitizeCommitSubject,
   sanitizePrTitle,
+  sanitizeDailySummaryItems,
   sanitizeThreadTitle,
 } from "./TextGenerationUtils.ts";
 import {
@@ -54,7 +56,8 @@ export const makeGrokTextGeneration = Effect.fn("makeGrokTextGeneration")(functi
       | "generateCommitMessage"
       | "generatePrContent"
       | "generateBranchName"
-      | "generateThreadTitle";
+      | "generateThreadTitle"
+      | "generateDailySummary";
     cwd: string;
     prompt: string;
     outputSchemaJson: S;
@@ -263,10 +266,34 @@ export const makeGrokTextGeneration = Effect.fn("makeGrokTextGeneration")(functi
       } satisfies TextGeneration.ThreadTitleGenerationResult;
     });
 
+  const generateDailySummary: TextGeneration.TextGeneration["Service"]["generateDailySummary"] =
+    Effect.fn("GrokTextGeneration.generateDailySummary")(function* (input) {
+      const { prompt, outputSchema } = buildDailySummaryPrompt({
+        day: input.day,
+        facts: input.facts,
+        keptItems: input.keptItems,
+        excludedItems: input.excludedItems,
+        styleExamples: input.styleExamples,
+      });
+
+      const generated = yield* runGrokJson({
+        operation: "generateDailySummary",
+        cwd: input.cwd,
+        prompt,
+        outputSchemaJson: outputSchema,
+        modelSelection: input.modelSelection,
+      });
+
+      return {
+        items: sanitizeDailySummaryItems(generated.items),
+      } satisfies TextGeneration.DailySummaryGenerationResult;
+    });
+
   return {
     generateCommitMessage,
     generatePrContent,
     generateBranchName,
     generateThreadTitle,
+    generateDailySummary,
   } satisfies TextGeneration.TextGeneration["Service"];
 });

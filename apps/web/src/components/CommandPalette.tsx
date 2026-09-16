@@ -42,7 +42,11 @@ import { useLocation, useNavigate, useParams } from "@tanstack/react-router";
 import * as Option from "effect/Option";
 import {
   ArrowLeftIcon,
+<<<<<<< HEAD
   ChartNoAxesColumnIcon,
+=======
+  ListChecksIcon,
+>>>>>>> b95dad0112 (feat: summarise a day's work for standup)
   CornerLeftUpIcon,
   FileSearchIcon,
   FolderIcon,
@@ -1827,6 +1831,20 @@ function OpenCommandPaletteDialog(props: {
         },
       });
     }
+  if (activeThread) {
+    actionItems.push({
+      kind: "action",
+      value: "action:open-standup",
+      searchTerms: ["standup", "daily summary", "what did i do", "yesterday", "recap", "report"],
+      title: "Daily summary",
+      description: "What you worked on, ready to paste into standup",
+      icon: <ListChecksIcon className={ITEM_ICON_CLASS} />,
+      run: async () => {
+        useRightPanelStore
+          .getState()
+          .open(scopeThreadRef(activeThread.environmentId, activeThread.id), "standup");
+      },
+    });
   }
 
   actionItems.push({

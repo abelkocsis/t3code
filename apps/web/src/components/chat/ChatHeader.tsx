@@ -493,15 +493,16 @@ export const ChatHeader = memo(function ChatHeader({
         data-chat-header-actions
         className={cn(
           "flex shrink-0 items-center justify-end gap-2 @3xl/header-actions:gap-3",
-          // Reserve two panel toggles plus their 4px gaps and 1px edge inset.
-          // The page header adds 8px more right padding at sm. The desktop
-          // build carries a third control, the step away button, so it
-          // reserves one more 32px toggle and its 4px gap.
+          // Reserve the panel toggles plus their 4px gaps and 1px edge inset.
+          // Upstream counts two; this fork adds the daily summary everywhere,
+          // and the step away control on the desktop build. Each one costs a
+          // 32px toggle and its 4px gap. The page header adds 8px more right
+          // padding at sm.
           rightPanelOpen
             ? "pr-0"
             : isElectron
-              ? "pr-27.25 sm:pr-23.25"
-              : "pr-18.25 sm:pr-14.25",
+              ? "pr-36.25 sm:pr-32.25"
+              : "pr-27.25 sm:pr-23.25",
           "[[data-panel-animations=true]_&]:motion-safe:transition-[padding-right] [[data-panel-animations=true]_&]:motion-safe:duration-(--panel-animation-duration) [[data-panel-animations=true]_&]:motion-safe:ease-out",
         )}
       >
