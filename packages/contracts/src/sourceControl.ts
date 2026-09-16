@@ -284,7 +284,7 @@ export const SourceControlIssueDetailsResult = Schema.Struct({
 });
 export type SourceControlIssueDetailsResult = typeof SourceControlIssueDetailsResult.Type;
 
-export class SourceControlIssueError extends Schema.TaggedErrorClass<SourceControlIssueError>()(
+export class SourceControlIssueError extends Schema.TaggedError<SourceControlIssueError>()(
   "SourceControlIssueError",
   {
     provider: SourceControlProviderKind,
