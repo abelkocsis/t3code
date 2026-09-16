@@ -15,7 +15,7 @@ set -euo pipefail
 BRANCH="bitsafe"
 # The tag this branch is currently based on. The script rewrites this line
 # after a successful rebase, so the next run knows which range to replay.
-BASE_TAG="v0.0.40"
+BASE_TAG="v0.0.42"
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$REPO_ROOT"
@@ -41,7 +41,11 @@ die() { printf '\n\033[31m%s\033[0m\n' "$*" >&2; exit 1; }
 say "Fetching upstream…"
 git fetch upstream --tags --quiet
 
-LATEST_TAG="$(git tag --sort=-creatordate | grep -vE 'nightly|preview' | head -1)"
+# Matched by shape rather than by excluding names. Upstream publishes nightly
+# and preview tags, and this fork publishes its own `-bitsafe` ones; an
+# exclude list has to grow for each, and the fork's own tag being newest would
+# otherwise make the next update try to rebase onto itself.
+LATEST_TAG="$(git tag --sort=-creatordate | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | head -1)"
 [ -n "$LATEST_TAG" ] || die "No stable tag found."
 
 # Already current is not the same as nothing to do: --build still has a build
