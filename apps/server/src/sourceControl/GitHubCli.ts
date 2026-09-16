@@ -215,7 +215,7 @@ export class GitHubRepositoryDecodeError extends Schema.TaggedError<GitHubReposi
   }
 }
 
-export class GitHubIssueSearchDecodeError extends Schema.TaggedErrorClass<GitHubIssueSearchDecodeError>()(
+export class GitHubIssueSearchDecodeError extends Schema.TaggedError<GitHubIssueSearchDecodeError>()(
   "GitHubIssueSearchDecodeError",
   gitHubCliDecodeFields,
 ) {
@@ -228,7 +228,7 @@ export class GitHubIssueSearchDecodeError extends Schema.TaggedErrorClass<GitHub
   }
 }
 
-export class GitHubIssueDecodeError extends Schema.TaggedErrorClass<GitHubIssueDecodeError>()(
+export class GitHubIssueDecodeError extends Schema.TaggedError<GitHubIssueDecodeError>()(
   "GitHubIssueDecodeError",
   gitHubCliDecodeFields,
 ) {

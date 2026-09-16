@@ -1831,6 +1831,8 @@ function OpenCommandPaletteDialog(props: {
         },
       });
     }
+  }
+
   if (activeThread) {
     actionItems.push({
       kind: "action",

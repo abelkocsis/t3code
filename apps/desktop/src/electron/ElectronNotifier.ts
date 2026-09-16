@@ -13,7 +13,7 @@ export interface ElectronNotificationRequest {
   readonly onClick: () => void;
 }
 
-export class ElectronNotifierError extends Schema.TaggedErrorClass<ElectronNotifierError>()(
+export class ElectronNotifierError extends Schema.TaggedError<ElectronNotifierError>()(
   "ElectronNotifierError",
   {
     operation: Schema.Literals(["show", "setBadgeCount"]),
