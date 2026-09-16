@@ -25,11 +25,13 @@ import {
   buildBranchNamePrompt,
   buildCommitMessagePrompt,
   buildPrContentPrompt,
+  buildDailySummaryPrompt,
   buildThreadTitlePrompt,
 } from "./TextGenerationPrompts.ts";
 import {
   sanitizeCommitSubject,
   sanitizePrTitle,
+  sanitizeDailySummaryItems,
   sanitizeThreadTitle,
 } from "./TextGenerationUtils.ts";
 
@@ -405,10 +407,30 @@ export const makeAntigravityTextGeneration = Effect.fn("makeAntigravityTextGener
       };
     });
 
+  const generateDailySummary: TextGeneration.TextGeneration["Service"]["generateDailySummary"] =
+    Effect.fn("AntigravityTextGeneration.generateDailySummary")(function* (input) {
+      const generated = yield* runAntigravityJson({
+        operation: "generateDailySummary",
+        ...buildDailySummaryPrompt({
+          day: input.day,
+          facts: input.facts,
+          keptItems: input.keptItems,
+          excludedItems: input.excludedItems,
+          styleExamples: input.styleExamples,
+        }),
+        modelSelection: input.modelSelection,
+      });
+
+      return {
+        items: sanitizeDailySummaryItems(generated.items),
+      };
+    });
+
   return {
     generateCommitMessage,
     generatePrContent,
     generateBranchName,
     generateThreadTitle,
+    generateDailySummary,
   } satisfies TextGeneration.TextGeneration["Service"];
 });

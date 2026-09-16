@@ -327,3 +327,84 @@ export function buildThreadTitlePrompt(input: ThreadTitlePromptInput) {
 
   return { prompt, outputSchema };
 }
+
+// ---------------------------------------------------------------------------
+// Daily summary
+// ---------------------------------------------------------------------------
+
+export interface DailySummaryPromptInput {
+  /** The day being summarised, as `YYYY-MM-DD` in the user's zone. */
+  day: string;
+  /** The evidence block, already grouped and capped by the collectors. */
+  facts: string;
+  /**
+   * Bullets the user kept from an earlier run of this same day, which a
+   * regeneration should not throw away.
+   */
+  keptItems: ReadonlyArray<string>;
+  /** Bullets the user removed from this day. They must not come back. */
+  excludedItems: ReadonlyArray<string>;
+  /**
+   * The texts the user saved on earlier days, newest first. These carry the
+   * user's own wording, so they matter more than any style rule we could write.
+   */
+  styleExamples: ReadonlyArray<string>;
+}
+
+export function buildDailySummaryPrompt(input: DailySummaryPromptInput) {
+  const lines: string[] = [
+    "You write a developer's daily standup update.",
+    "Return a JSON object with key: items.",
+    "`items` is an array of objects with keys: text, source.",
+    "`source` is one of: thread, commit, pullRequest, issue, cliSession.",
+    "",
+    "Rules:",
+    "- Write one item per stream of work, not one per commit or per thread.",
+    "- Group work on the same repository, feature or incident into a single item.",
+    "- Say what the user achieved, in the past tense. Name the result, not the activity.",
+    "- Keep the repository or project name when it tells the reader where the work landed.",
+    "- Keep pull request and issue numbers when the evidence shows them.",
+    "- Name a blocker when the evidence shows one.",
+    "- Write plain sentences. No headings, no bold, no leading bullet character.",
+    "- Use only the evidence below. Never invent work, numbers or names.",
+    "- Aim for three to eight items. Fewer is better than padded.",
+    `- The day is ${input.day}.`,
+  ];
+
+  if (input.styleExamples.length > 0) {
+    lines.push(
+      "",
+      "The user's own updates from earlier days. Match this voice and this level of detail:",
+      ...input.styleExamples.map((example) => limitSection(example, 2_000)),
+    );
+  }
+
+  if (input.keptItems.length > 0) {
+    lines.push(
+      "",
+      "The user kept these items from an earlier run of this day. Keep their meaning:",
+      ...input.keptItems.map((item) => `- ${limitSection(item, 500)}`),
+    );
+  }
+
+  if (input.excludedItems.length > 0) {
+    lines.push(
+      "",
+      "The user removed these items from this day. Do not report this work again:",
+      ...input.excludedItems.map((item) => `- ${limitSection(item, 500)}`),
+    );
+  }
+
+  lines.push("", "Evidence:", limitSection(input.facts, 120_000));
+
+  const outputSchema = Schema.Struct({
+    items: Schema.Array(
+      Schema.Struct({
+        text: Schema.String,
+        source: Schema.String,
+      }),
+    ),
+  });
+
+  return { prompt: lines.join("\n"), outputSchema };
+}

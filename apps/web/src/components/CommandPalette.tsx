@@ -48,6 +48,7 @@ import {
   ChartNoAxesColumnIcon,
   CheckIcon,
   ChevronRightIcon,
+  ListChecksIcon,
   CornerLeftUpIcon,
   FileSearchIcon,
   FolderGit2Icon,
@@ -1971,6 +1972,20 @@ function OpenCommandPaletteDialog(props: {
         },
       });
     }
+  if (activeThread) {
+    actionItems.push({
+      kind: "action",
+      value: "action:open-standup",
+      searchTerms: ["standup", "daily summary", "what did i do", "yesterday", "recap", "report"],
+      title: "Daily summary",
+      description: "What you worked on, ready to paste into standup",
+      icon: <ListChecksIcon className={ITEM_ICON_CLASS} />,
+      run: async () => {
+        useRightPanelStore
+          .getState()
+          .open(scopeThreadRef(activeThread.environmentId, activeThread.id), "standup");
+      },
+    });
   }
 
   if (activeThread !== null) {

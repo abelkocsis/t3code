@@ -313,6 +313,7 @@ function createTextGeneration(
       Effect.succeed({
         title: "Update workflow",
       }),
+    generateDailySummary: () => Effect.succeed({ items: [] }),
     ...overrides,
   };
 
@@ -356,6 +357,17 @@ function createTextGeneration(
           (cause) =>
             new TextGenerationError({
               operation: "generateThreadTitle",
+              detail: "fake text generation failed",
+              ...(cause !== undefined ? { cause } : {}),
+            }),
+        ),
+      ),
+    generateDailySummary: (input) =>
+      implementation.generateDailySummary(input).pipe(
+        Effect.mapError(
+          (cause) =>
+            new TextGenerationError({
+              operation: "generateDailySummary",
               detail: "fake text generation failed",
               ...(cause !== undefined ? { cause } : {}),
             }),
