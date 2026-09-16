@@ -172,8 +172,8 @@ export interface FileRoutesByFullPath {
   '/settings/general': typeof SettingsGeneralRoute
   '/settings/integrations': typeof SettingsIntegrationsRoute
   '/settings/keybindings': typeof SettingsKeybindingsRoute
-  '/settings/open-source-licenses': typeof SettingsOpenSourceLicensesRoute
   '/settings/notifications': typeof SettingsNotificationsRoute
+  '/settings/open-source-licenses': typeof SettingsOpenSourceLicensesRoute
   '/settings/projects': typeof SettingsProjectsRoute
   '/settings/providers': typeof SettingsProvidersRoute
   '/settings/snap-shot': typeof SettingsSnapShotRoute
@@ -196,8 +196,8 @@ export interface FileRoutesByTo {
   '/settings/general': typeof SettingsGeneralRoute
   '/settings/integrations': typeof SettingsIntegrationsRoute
   '/settings/keybindings': typeof SettingsKeybindingsRoute
-  '/settings/open-source-licenses': typeof SettingsOpenSourceLicensesRoute
   '/settings/notifications': typeof SettingsNotificationsRoute
+  '/settings/open-source-licenses': typeof SettingsOpenSourceLicensesRoute
   '/settings/projects': typeof SettingsProjectsRoute
   '/settings/providers': typeof SettingsProvidersRoute
   '/settings/snap-shot': typeof SettingsSnapShotRoute
@@ -223,8 +223,8 @@ export interface FileRoutesById {
   '/settings/general': typeof SettingsGeneralRoute
   '/settings/integrations': typeof SettingsIntegrationsRoute
   '/settings/keybindings': typeof SettingsKeybindingsRoute
-  '/settings/open-source-licenses': typeof SettingsOpenSourceLicensesRoute
   '/settings/notifications': typeof SettingsNotificationsRoute
+  '/settings/open-source-licenses': typeof SettingsOpenSourceLicensesRoute
   '/settings/projects': typeof SettingsProjectsRoute
   '/settings/providers': typeof SettingsProvidersRoute
   '/settings/snap-shot': typeof SettingsSnapShotRoute
@@ -251,8 +251,8 @@ export interface FileRouteTypes {
     | '/settings/general'
     | '/settings/integrations'
     | '/settings/keybindings'
-    | '/settings/open-source-licenses'
     | '/settings/notifications'
+    | '/settings/open-source-licenses'
     | '/settings/projects'
     | '/settings/providers'
     | '/settings/snap-shot'
@@ -275,8 +275,8 @@ export interface FileRouteTypes {
     | '/settings/general'
     | '/settings/integrations'
     | '/settings/keybindings'
-    | '/settings/open-source-licenses'
     | '/settings/notifications'
+    | '/settings/open-source-licenses'
     | '/settings/projects'
     | '/settings/providers'
     | '/settings/snap-shot'
@@ -301,8 +301,8 @@ export interface FileRouteTypes {
     | '/settings/general'
     | '/settings/integrations'
     | '/settings/keybindings'
-    | '/settings/open-source-licenses'
     | '/settings/notifications'
+    | '/settings/open-source-licenses'
     | '/settings/projects'
     | '/settings/providers'
     | '/settings/snap-shot'
@@ -519,8 +519,8 @@ interface SettingsRouteChildren {
   SettingsGeneralRoute: typeof SettingsGeneralRoute
   SettingsIntegrationsRoute: typeof SettingsIntegrationsRoute
   SettingsKeybindingsRoute: typeof SettingsKeybindingsRoute
-  SettingsOpenSourceLicensesRoute: typeof SettingsOpenSourceLicensesRoute
   SettingsNotificationsRoute: typeof SettingsNotificationsRoute
+  SettingsOpenSourceLicensesRoute: typeof SettingsOpenSourceLicensesRoute
   SettingsProjectsRoute: typeof SettingsProjectsRoute
   SettingsProvidersRoute: typeof SettingsProvidersRoute
   SettingsSnapShotRoute: typeof SettingsSnapShotRoute
@@ -535,8 +535,8 @@ const SettingsRouteChildren: SettingsRouteChildren = {
   SettingsGeneralRoute: SettingsGeneralRoute,
   SettingsIntegrationsRoute: SettingsIntegrationsRoute,
   SettingsKeybindingsRoute: SettingsKeybindingsRoute,
-  SettingsOpenSourceLicensesRoute: SettingsOpenSourceLicensesRoute,
   SettingsNotificationsRoute: SettingsNotificationsRoute,
+  SettingsOpenSourceLicensesRoute: SettingsOpenSourceLicensesRoute,
   SettingsProjectsRoute: SettingsProjectsRoute,
   SettingsProvidersRoute: SettingsProvidersRoute,
   SettingsSnapShotRoute: SettingsSnapShotRoute,
