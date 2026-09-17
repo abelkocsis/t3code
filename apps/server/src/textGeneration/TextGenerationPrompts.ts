@@ -359,13 +359,16 @@ export function buildDailySummaryPrompt(input: DailySummaryPromptInput) {
     "`source` is one of: thread, commit, pullRequest, issue, cliSession.",
     "",
     "Rules:",
-    "- Write one item per stream of work, not one per commit or per thread.",
-    "- Group work on the same repository, feature or incident into a single item.",
+    "- Keep each item short. Twenty words maximum, one line, no paragraph.",
     "- Say what the user achieved, in the past tense. Name the result, not the activity.",
+    "- Cut every clause the reader does not need. The user asks when they want detail.",
+    "- Do not chain clauses with `and`, `which`, `so` or `because`. Split them into separate items instead.",
+    "- Write one item per stream of work, not one per commit or per thread.",
+    "- Group work on the same repository, feature or incident into one item, or into a few short items.",
     "- Keep the repository or project name when it tells the reader where the work landed.",
     "- Keep pull request and issue numbers when the evidence shows them.",
-    "- Name a blocker when the evidence shows one.",
-    "- Write plain sentences. No headings, no bold, no leading bullet character.",
+    "- Name a blocker when the evidence shows one. Keep it to one short item.",
+    "- Write plain sentences or fragments. No headings, no bold, no leading bullet character.",
     "- Use only the evidence below. Never invent work, numbers or names.",
     "- Aim for three to eight items. Fewer is better than padded.",
     `- The day is ${input.day}.`,
@@ -374,7 +377,7 @@ export function buildDailySummaryPrompt(input: DailySummaryPromptInput) {
   if (input.styleExamples.length > 0) {
     lines.push(
       "",
-      "The user's own updates from earlier days. Match this voice and this level of detail:",
+      "The user's own updates from earlier days. Match this voice, this length and this level of detail:",
       ...input.styleExamples.map((example) => limitSection(example, 2_000)),
     );
   }
