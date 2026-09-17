@@ -1,6 +1,7 @@
 import {
   CommandId,
   EventId,
+  MessageId,
   ThreadId,
   type OrchestrationEvent,
   type OrchestrationThread,
@@ -210,20 +211,30 @@ const make = Effect.gen(function* () {
         // reuse the source event ids.
         serverEventId.pipe(Effect.map((id) => ({ ...activity, id }))),
       );
+      // A message id is unique across the environment, not inside a thread, so
+      // a copy that reuses the source id moves the source's row into the fork
+      // instead of duplicating it.
+      const messages = yield* Effect.forEach(slice.messages, (message) =>
+        randomUUID.pipe(
+          Effect.map((uuid) => {
+            const role = message.role === "assistant" ? ("assistant" as const) : ("user" as const);
+            return {
+              messageId: MessageId.make(role === "assistant" ? `assistant:${uuid}` : uuid),
+              role,
+              text: message.text,
+              turnId: message.turnId,
+              createdAt: message.createdAt,
+            };
+          }),
+        ),
+      );
       yield* orchestrationEngine.dispatch({
         type: "thread.fork.hydrate",
         commandId: yield* serverCommandId("thread-fork-hydrate"),
         threadId: forkThreadId,
         sourceThreadId: threadId,
         turnCount,
-        messages: slice.messages.map((message) => ({
-          messageId: message.id,
-          role: message.role === "assistant" ? ("assistant" as const) : ("user" as const),
-          text: message.text,
-          turnId: message.turnId,
-          createdAt: message.createdAt,
-        })),
-
+        messages,
         activities,
         createdAt: now,
       });
