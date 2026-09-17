@@ -333,6 +333,11 @@ describe("ThreadForkReactor", () => {
       expect(fork?.activities.map((activity) => activity.summary)).toEqual(["Edited README.md"]);
       // A copied activity is a new row, so it never reuses the source event id.
       expect(fork?.activities[0]?.id).not.toBe("event-activity-1");
+      // The same holds for a message: a copy that reuses the source id moves
+      // the source thread's message into the fork instead of duplicating it.
+      expect(fork?.messages[0]?.id).not.toBe("message-user");
+      const source = readModel.threads.find((thread) => thread.id === sourceThreadId);
+      expect(source?.messages.map((message) => message.text)).toEqual(["Please edit the README"]);
     }).pipe(Effect.scoped, Effect.provide(harness.layer));
   });
 
