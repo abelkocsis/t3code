@@ -7225,6 +7225,32 @@ export default function ChatView(props: ChatViewProps) {
       detectTrigger: true,
     });
   };
+  // A fork's thread row only lands once the server has built its worktree. A
+  // jump made before that reads the thread as missing and bounces to the
+  // new-thread screen, so the jump waits for the row.
+  const [pendingFork, setPendingFork] = useState<{
+    readonly ref: ScopedThreadRef;
+    readonly requestedAt: string;
+  } | null>(null);
+  const pendingForkShell = useThreadShell(pendingFork?.ref ?? null);
+  useEffect(() => {
+    if (pendingFork === null || pendingForkShell === null) return;
+    setPendingFork(null);
+    void navigate({
+      to: "/$environmentId/$threadId",
+      params: buildThreadRouteParams(pendingFork.ref),
+    });
+  }, [navigate, pendingFork, pendingForkShell]);
+  // A fork the server refuses reports itself on the source thread's timeline,
+  // and that report is the end of the wait.
+  useEffect(() => {
+    if (pendingFork === null) return;
+    const failed = threadActivities.some(
+      (activity) =>
+        activity.kind === "thread.fork.failed" && activity.createdAt >= pendingFork.requestedAt,
+    );
+    if (failed) setPendingFork(null);
+  }, [pendingFork, threadActivities]);
   const onForkFromTurnCount = useCallback(
     async (turnCount: number) => {
       if (!activeThread || turnCount < 1) return;
@@ -7263,11 +7289,9 @@ export default function ChatView(props: ChatViewProps) {
         );
         return;
       }
-      // The fork's thread row arrives over the shell subscription once the
-      // server finishes its worktree; the route resolves as soon as it lands.
-      await navigate({
-        to: "/$environmentId/$threadId",
-        params: buildThreadRouteParams(scopeThreadRef(activeThread.environmentId, forkThreadId)),
+      setPendingFork({
+        ref: scopeThreadRef(activeThread.environmentId, forkThreadId),
+        requestedAt: new Date().toISOString(),
       });
     },
     [
@@ -7276,7 +7300,6 @@ export default function ChatView(props: ChatViewProps) {
       activeEnvironmentUnavailableLabel,
       environmentId,
       forkThread,
-      navigate,
       setThreadError,
       supportsConversationFork,
     ],
@@ -9688,9 +9711,7 @@ export default function ChatView(props: ChatViewProps) {
                   paintOnlyDisplayedTimeline ? noopHeldRevert : onRevertTimelineTurn
                 }
                 isRevertingCheckpoint={!paintOnlyDisplayedTimeline && isRevertingCheckpoint}
-                supportsConversationFork={
-                  !paintOnlyDisplayedTimeline && supportsConversationFork
-                }
+                supportsConversationFork={!paintOnlyDisplayedTimeline && supportsConversationFork}
                 onForkFromTurnCount={onForkTimelineTurn}
                 onUseArtifactTemplate={useArtifactTemplate}
                 onImageExpand={onExpandTimelineImage}
