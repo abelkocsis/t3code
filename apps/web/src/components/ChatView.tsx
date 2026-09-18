@@ -150,7 +150,7 @@ import {
   type PendingUserInputDraftAnswer,
 } from "../pendingUserInput";
 import { useWindowFocused } from "../hooks/useWindowFocused";
-import { useUiStateStore } from "../uiStateStore";
+import { resolveThreadVisitStamp, useUiStateStore } from "../uiStateStore";
 import {
   latestWorkspaceMutationId,
   useWorkspaceMutationRefresh,
@@ -2072,11 +2072,10 @@ export default function ChatView(props: ChatViewProps) {
   const activeRunningTurnId =
     (activeThread?.session?.status === "running" ? activeThread.session.activeTurnId : null) ??
     (activeLatestTurn?.state === "running" ? activeLatestTurn.turnId : null);
-  // Reading a finished thread clears the sidebar's Done badge. The visit is
-  // stamped at the turn's completion time — not now/updatedAt — so it clears
-  // exactly the completion the user is looking at: a wake or completion that
-  // lands later still gets its signal (markThreadVisited never moves the
-  // timestamp backwards).
+  // Reading a thread clears the sidebar's Done badge. `resolveThreadVisitStamp`
+  // owns which time the visit carries and when there is nothing to record;
+  // `markThreadVisited` never moves the timestamp backwards, so a completion
+  // that lands later still gets its signal.
   //
   // A thread being on screen is not the same as the user reading it. Without
   // the focus check, a turn finishing while the user works in another
@@ -2085,12 +2084,16 @@ export default function ChatView(props: ChatViewProps) {
   // case where those signals matter most. Focus returning re-runs this effect,
   // so the visit is recorded as soon as the user is actually looking.
   useEffect(() => {
-    if (!windowFocused) return;
-    const completedAt = serverThread?.latestTurn?.completedAt;
-    if (!serverThread?.id || !completedAt) return;
+    const visitedAt = resolveThreadVisitStamp({
+      windowFocused,
+      hasOpenThread: Boolean(serverThread?.id),
+      latestTurnCompletedAt: serverThread?.latestTurn?.completedAt,
+      now: new Date().toISOString(),
+    });
+    if (visitedAt === null || !serverThread?.id) return;
     markThreadVisited(
       scopedThreadKey(scopeThreadRef(serverThread.environmentId, serverThread.id)),
-      completedAt,
+      visitedAt,
     );
   }, [
     markThreadVisited,
