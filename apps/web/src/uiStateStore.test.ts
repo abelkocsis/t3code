@@ -10,6 +10,7 @@ import {
   type PersistedUiState,
   persistState,
   reorderProjects,
+  resolveThreadVisitStamp,
   resolveProjectExpanded,
   setDefaultAdvertisedEndpointKey,
   setProjectExpanded,
@@ -40,6 +41,46 @@ describe("uiStateStore pure functions", () => {
     expect(visited.threadLastVisitedAtById[threadId]).toBe("2026-02-25T12:30:00.700Z");
     expect(markThreadVisited(visited, threadId, "2026-02-25T12:30:00.000Z")).toBe(visited);
     expect(markThreadVisited(visited, threadId, "not-a-date")).toBe(visited);
+  });
+
+  it("stamps an open thread that has never finished a turn, so its first completion signals", () => {
+    const now = "2026-02-25T12:30:00.000Z";
+    expect(
+      resolveThreadVisitStamp({
+        windowFocused: true,
+        hasOpenThread: true,
+        latestTurnCompletedAt: null,
+        now,
+      }),
+    ).toBe(now);
+    expect(
+      resolveThreadVisitStamp({
+        windowFocused: true,
+        hasOpenThread: true,
+        latestTurnCompletedAt: "2026-02-25T12:00:00.000Z",
+        now,
+      }),
+    ).toBe("2026-02-25T12:00:00.000Z");
+  });
+
+  it("records nothing while the window is unfocused or no thread is open", () => {
+    const now = "2026-02-25T12:30:00.000Z";
+    expect(
+      resolveThreadVisitStamp({
+        windowFocused: false,
+        hasOpenThread: true,
+        latestTurnCompletedAt: "2026-02-25T12:00:00.000Z",
+        now,
+      }),
+    ).toBeNull();
+    expect(
+      resolveThreadVisitStamp({
+        windowFocused: true,
+        hasOpenThread: false,
+        latestTurnCompletedAt: null,
+        now,
+      }),
+    ).toBeNull();
   });
 
   it("marks a completed thread unread using the server completion timestamp", () => {
