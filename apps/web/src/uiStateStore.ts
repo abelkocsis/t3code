@@ -247,6 +247,29 @@ export function persistState(state: UiState): void {
 
 const debouncedPersistState = new Debouncer(persistState, { wait: 500 });
 
+/**
+ * When to stamp a visit on the thread the user has open, and with what time.
+ *
+ * A finished turn stamps its own completion, so reading it clears exactly that
+ * completion and a later one still signals. A thread with no finished turn —
+ * every thread on its first run — has no completion to stamp, and recording
+ * nothing left it "never visited", which counts as seen: its first completion
+ * then reached neither the sidebar highlight, nor the dock badge, nor the
+ * overlay. Having it open while looking at the app is the visit.
+ *
+ * Returns null when there is nothing to record, which includes an unfocused
+ * window: a thread on screen while the user works elsewhere is not read.
+ */
+export function resolveThreadVisitStamp(input: {
+  readonly windowFocused: boolean;
+  readonly hasOpenThread: boolean;
+  readonly latestTurnCompletedAt: string | null | undefined;
+  readonly now: string;
+}): string | null {
+  if (!input.windowFocused || !input.hasOpenThread) return null;
+  return input.latestTurnCompletedAt ?? input.now;
+}
+
 export function markThreadVisited(state: UiState, threadId: string, visitedAt: string): UiState {
   const visitedAtMs = Date.parse(visitedAt);
   if (!Number.isFinite(visitedAtMs)) {
