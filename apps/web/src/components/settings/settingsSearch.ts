@@ -321,6 +321,12 @@ export const SETTINGS_SEARCH_ITEMS = [
     searchTerms: ["quick reply chip composer shortcut go continue commit phrase"],
   },
   {
+    id: "upstream-release",
+    title: "Upstream release",
+    to: "/settings/general",
+    searchTerms: ["fork base tag rebase upstream t3code stable update"],
+  },
+  {
     id: "time-format",
     title: "Time format",
     to: "/settings/general",

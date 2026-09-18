@@ -13,12 +13,16 @@
 set -euo pipefail
 
 BRANCH="bitsafe"
-# The tag this branch is currently based on. The script rewrites this line
-# after a successful rebase, so the next run knows which range to replay.
-BASE_TAG="v0.0.42"
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$REPO_ROOT"
+
+# The tag this branch is currently based on. It lives in the web app because
+# Settings shows it there, next to what upstream has released since. This
+# script rewrites that line after a successful rebase, so one file records the
+# base and both readers agree.
+BASE_TAG_FILE="apps/web/src/upstreamBase.ts"
+BASE_TAG="$(sed -n 's/^export const UPSTREAM_BASE_TAG = "\(.*\)";$/\1/p' "$BASE_TAG_FILE")"
 
 BUILD=0
 CHECK_ONLY=0
@@ -36,6 +40,8 @@ command -v vp >/dev/null || { echo "vp not found. See docs/internals/scripts.md"
 
 say() { printf '\n\033[1m%s\033[0m\n' "$*"; }
 die() { printf '\n\033[31m%s\033[0m\n' "$*" >&2; exit 1; }
+
+[ -n "$BASE_TAG" ] || die "No UPSTREAM_BASE_TAG in ${BASE_TAG_FILE}."
 
 # ── Where are we? ────────────────────────────────────────────────────────────
 say "Fetching upstream…"
@@ -125,9 +131,11 @@ vp test run \
   || die "Tests failed. Do not install this build."
 
 if [ "$UP_TO_DATE" = "0" ]; then
-  # Record the new base so the next run replays the right range.
-  sed -i '' "s/^BASE_TAG=\".*\"$/BASE_TAG=\"$LATEST_TAG\"/" "$REPO_ROOT/scripts/fork-update.sh"
-  say "Checks passed. Base tag recorded as $LATEST_TAG — commit this script's change."
+  # Record the new base so the next run replays the right range, and so
+  # Settings stops reporting an update this branch has already taken.
+  sed -i '' "s/^export const UPSTREAM_BASE_TAG = \".*\";$/export const UPSTREAM_BASE_TAG = \"$LATEST_TAG\";/" \
+    "$REPO_ROOT/$BASE_TAG_FILE"
+  say "Checks passed. Base tag recorded as $LATEST_TAG — commit ${BASE_TAG_FILE}."
 else
   say "Checks passed."
 fi
