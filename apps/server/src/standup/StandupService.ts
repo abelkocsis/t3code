@@ -54,6 +54,7 @@ import {
   toStandupDay,
 } from "./standupDays.ts";
 import {
+  buildCommitLogArgs,
   FACT_LIMITS,
   hasStandupWork,
   renderStandupFacts,
@@ -104,11 +105,29 @@ export const make = Effect.gen(function* () {
   // Collectors
   // -------------------------------------------------------------------------
 
+  /** The git identity a worktree commits under. Empty when git has none configured. */
+  const readGitIdentity = (cwd: string) =>
+    Effect.forEach(["user.email", "user.name"], (key) =>
+      git
+        .execute({
+          operation: "StandupService.readGitIdentity",
+          cwd,
+          args: ["config", "--get", key],
+          timeoutMs: GIT_TIMEOUT_MS,
+        })
+        .pipe(
+          Effect.map((result) => result.stdout.trim()),
+          Effect.catchCause(() => Effect.succeed("")),
+        ),
+    ).pipe(Effect.map((values) => values.filter((value) => value.length > 0)));
+
   /**
    * Commits the user authored in each project worktree during the window.
    *
-   * `--author` is deliberately absent: a worktree is already the user's own
-   * checkout, and a name filter drops commits made under a second git identity.
+   * `--all` also walks fetched remote branches, so a worktree holds the whole
+   * team's commits. Without an author filter, a colleague's day was reported as
+   * the user's. The filter matches the worktree's own git identity by email and
+   * by name, so a second identity that keeps the same name still counts.
    */
   const collectCommits = Effect.fn("StandupService.collectCommits")(function* (window: {
     readonly startMs: number;
@@ -120,41 +139,39 @@ export const make = Effect.gen(function* () {
     const perProject = yield* Effect.forEach(
       projects,
       (project) =>
-        git
-          .execute({
-            operation: "StandupService.collectCommits",
-            cwd: project.workspace_root,
-            args: [
-              "log",
-              "--all",
-              "--pretty=format:%h %s",
-              `--since=${toIsoUtc(window.startMs)}`,
-              `--until=${toIsoUtc(window.endMs)}`,
-              "--max-count=200",
-            ],
-            timeoutMs: GIT_TIMEOUT_MS,
-          })
-          .pipe(
-            Effect.map((result) =>
-              result.stdout
-                .split("\n")
-                .map((line) => line.trim())
-                .filter((line) => line.length > 0)
-                .map((line): StandupCommitFact => {
-                  // An abbreviated sha holds no space, so the first one splits the line.
-                  const separator = line.indexOf(" ");
-                  return separator === -1
-                    ? { projectTitle: project.title, sha: line, subject: "" }
-                    : {
-                        projectTitle: project.title,
-                        sha: line.slice(0, separator),
-                        subject: line.slice(separator + 1),
-                      };
-                }),
-            ),
-            // A project whose directory has moved must not fail the summary.
-            Effect.catchCause(() => Effect.succeed([] as ReadonlyArray<StandupCommitFact>)),
+        readGitIdentity(project.workspace_root).pipe(
+          Effect.flatMap((identity) =>
+            git.execute({
+              operation: "StandupService.collectCommits",
+              cwd: project.workspace_root,
+              args: buildCommitLogArgs({
+                identity,
+                sinceIso: toIsoUtc(window.startMs),
+                untilIso: toIsoUtc(window.endMs),
+              }),
+              timeoutMs: GIT_TIMEOUT_MS,
+            }),
           ),
+          Effect.map((result) =>
+            result.stdout
+              .split("\n")
+              .map((line) => line.trim())
+              .filter((line) => line.length > 0)
+              .map((line): StandupCommitFact => {
+                // An abbreviated sha holds no space, so the first one splits the line.
+                const separator = line.indexOf(" ");
+                return separator === -1
+                  ? { projectTitle: project.title, sha: line, subject: "" }
+                  : {
+                      projectTitle: project.title,
+                      sha: line.slice(0, separator),
+                      subject: line.slice(separator + 1),
+                    };
+              }),
+          ),
+          // A project whose directory has moved must not fail the summary.
+          Effect.catchCause(() => Effect.succeed([] as ReadonlyArray<StandupCommitFact>)),
+        ),
       { concurrency: 4 },
     );
     const seen = new Set<string>();

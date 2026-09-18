@@ -64,6 +64,35 @@ export interface StandupFacts {
   readonly cliSessions: ReadonlyArray<StandupCliSessionFact>;
 }
 
+/**
+ * The `git log` arguments that list only the user's own commits in a window.
+ *
+ * `--all` walks fetched remote branches too, so the worktree holds the whole
+ * team's commits. Each identity value becomes one `--author` match, and git
+ * ORs them. `--fixed-strings` keeps a dot in an email address literal. The
+ * `refs/t3/*` checkpoints are T3 Code's own commits, never the user's.
+ *
+ * With no identity there is nothing to match against, so the log stays
+ * unfiltered rather than empty.
+ */
+export function buildCommitLogArgs(input: {
+  readonly identity: ReadonlyArray<string>;
+  readonly sinceIso: string;
+  readonly untilIso: string;
+}): ReadonlyArray<string> {
+  return [
+    "log",
+    "--exclude=refs/t3/*",
+    "--all",
+    "--fixed-strings",
+    ...input.identity.map((value) => `--author=${value}`),
+    "--pretty=format:%h %s",
+    `--since=${input.sinceIso}`,
+    `--until=${input.untilIso}`,
+    "--max-count=200",
+  ];
+}
+
 export function hasStandupWork(facts: StandupFacts): boolean {
   return (
     facts.threads.length > 0 ||
