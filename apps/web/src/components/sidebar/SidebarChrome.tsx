@@ -4,6 +4,7 @@ import { memo, useCallback } from "react";
 import { Link, useLocation, useNavigate } from "@tanstack/react-router";
 
 import { useEnvironmentIdentificationMode } from "../../hooks/useSettings";
+import { useUpstreamRelease } from "../../hooks/useUpstreamRelease";
 import { cn } from "../../lib/utils";
 import { useEnvironments } from "../../state/environments";
 import { T3Wordmark } from "../T3Wordmark";
@@ -104,10 +105,15 @@ function SidebarBrand({ onBackdrop }: { onBackdrop: boolean }) {
 function SidebarUtilityItem({
   icon,
   label,
+  badge = false,
+  badgeLabel,
   onClick,
 }: {
   icon: ReactNode;
   label: string;
+  /** A dot on the icon, for something waiting behind this entry. */
+  badge?: boolean;
+  badgeLabel?: string;
   onClick: () => void;
 }) {
   return (
@@ -115,12 +121,23 @@ function SidebarUtilityItem({
       <Tooltip>
         <TooltipTrigger
           render={
-            <SidebarMenuButton aria-label={label} onClick={onClick} size="icon">
+            <SidebarMenuButton
+              aria-label={badge && badgeLabel ? `${label}. ${badgeLabel}` : label}
+              onClick={onClick}
+              size="icon"
+              className="relative"
+            >
               {icon}
+              {badge ? (
+                <span
+                  aria-hidden
+                  className="absolute end-1.5 top-1.5 size-1.5 rounded-full bg-warning"
+                />
+              ) : null}
             </SidebarMenuButton>
           }
         />
-        <TooltipPopup side="top">{label}</TooltipPopup>
+        <TooltipPopup side="top">{badge && badgeLabel ? badgeLabel : label}</TooltipPopup>
       </Tooltip>
     </SidebarMenuItem>
   );
@@ -129,6 +146,7 @@ function SidebarUtilityItem({
 export const SidebarUtilityMenu = memo(function SidebarUtilityMenu() {
   const navigate = useNavigate();
   const navigateToMainApp = useNavigateToMainApp();
+  const upstreamRelease = useUpstreamRelease();
   const { isMobile, setOpenMobile } = useSidebar();
   const isOnUtilityPage = useLocation({
     select: (location) => isSidebarUtilityPage(location.pathname),
@@ -182,6 +200,10 @@ export const SidebarUtilityMenu = memo(function SidebarUtilityMenu() {
           <SidebarUtilityItem
             icon={<SettingsIcon />}
             label="Settings"
+            badge={upstreamRelease?.isBehind === true}
+            {...(upstreamRelease?.isBehind === true
+              ? { badgeLabel: `Settings. Upstream ${upstreamRelease.latest.tag} is out` }
+              : {})}
             onClick={handleSettingsClick}
           />
           {pullRequestsSupported ? (

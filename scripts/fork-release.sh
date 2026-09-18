@@ -45,8 +45,9 @@ command -v vp >/dev/null || die "vp not found. See docs/internals/scripts.md"
 
 # The upstream release this fork currently sits on. `fork-update.sh` rewrites
 # it after every successful replay, so it is always the real base.
-BASE_TAG="$(sed -n 's/^BASE_TAG="\(.*\)"$/\1/p' scripts/fork-update.sh)"
-[ -n "$BASE_TAG" ] || die "Could not read BASE_TAG from scripts/fork-update.sh."
+BASE_TAG_FILE="apps/web/src/upstreamBase.ts"
+BASE_TAG="$(sed -n 's/^export const UPSTREAM_BASE_TAG = "\(.*\)";$/\1/p' "$BASE_TAG_FILE")"
+[ -n "$BASE_TAG" ] || die "Could not read UPSTREAM_BASE_TAG from ${BASE_TAG_FILE}."
 BASE_VERSION="${BASE_TAG#v}"
 
 if [ -z "$VERSION" ]; then

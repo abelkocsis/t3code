@@ -1,5 +1,6 @@
 import { SettingsGroup } from "./SettingsGroup";
 import { Spinner } from "~/components/ui/spinner";
+import { UpstreamReleaseSection } from "./UpstreamReleaseSection";
 import { NotificationSettings } from "./NotificationSettings";
 <<<<<<< HEAD
 import { ArchiveIcon, ArchiveX, CheckIcon, ChevronRightIcon, SettingsIcon } from "lucide-react";
@@ -3244,6 +3245,7 @@ export function GeneralSettingsPanel() {
             description="Current version of the application."
           />
         )}
+        <UpstreamReleaseSection />
       </SettingsSection>
       <SettingsSection title="Diagnostics">
         <SettingsRow
