@@ -103,6 +103,18 @@ The quoted text and comment count toward the message limit.
 Mobile displays saved quotes and comments, but does not create citations or
 navigate to their sources.
 
+## Quick replies
+
+While the composer is empty, it offers a row of chips above the input. Click one to send that
+reply straight away. Shift-click puts its text in the composer instead, so you can add to it before
+sending. The chips are hidden while you type, while a question or an approval is waiting, and on a
+thread that has not started yet.
+
+Edit the list in **Settings → General → Behavior → Quick replies**. Each chip has a label, which is
+what the chip shows, and a message, which is what the agent receives. Remove every row to turn the
+chips off. The list belongs to the environment, so every client attached to it offers the same
+replies. Quick replies are not available on mobile yet.
+
 ## Recall a sent prompt
 
 Press `ArrowUp` in an empty composer to bring back the last prompt you sent in this thread. Press

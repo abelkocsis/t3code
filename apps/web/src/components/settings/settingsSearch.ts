@@ -315,6 +315,12 @@ export const SETTINGS_SEARCH_ITEMS = [
     searchTerms: ["notification toast popup completion input approval failure"],
   },
   {
+    id: "quick-replies",
+    title: "Quick replies",
+    to: "/settings/general",
+    searchTerms: ["quick reply chip composer shortcut go continue commit phrase"],
+  },
+  {
     id: "time-format",
     title: "Time format",
     to: "/settings/general",

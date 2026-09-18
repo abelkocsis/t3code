@@ -23,6 +23,7 @@ import type {
   ProjectId,
   PullRequestListInput,
   PreviewAnnotationPayload,
+  QuickReply,
   ProviderApprovalDecision,
   ProviderInteractionMode,
   ResolvedKeybindingsConfig,
@@ -251,6 +252,8 @@ import { ComposerScheduleAction, type ComposerMessageScheduling } from "./Compos
 import { ComposerPendingApprovalPanel } from "./ComposerPendingApprovalPanel";
 import { ComposerPendingUserInputPanel } from "./ComposerPendingUserInputPanel";
 import { ComposerPlanFollowUpBanner } from "./ComposerPlanFollowUpBanner";
+import { ComposerQuickReplies } from "./ComposerQuickReplies";
+import { shouldShowQuickReplies } from "./quickReplyVisibility";
 import {
   ComposerControl,
   ComposerControlIcon,
@@ -2497,6 +2500,16 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
     (!isComposerCollapsedMobile && showPlanFollowUpPrompt && activeProposedPlan !== null);
   const showCollapsedMobilePromptRow =
     isComposerCollapsedMobile && !isComposerApprovalState && pendingUserInputs.length === 0;
+  const showQuickReplies = shouldShowQuickReplies({
+    replyCount: settings.quickReplies.length,
+    isDraftThread: routeKind === "draft",
+    hasSendableContent: composerSendState.hasSendableContent,
+    hasPendingApproval: isComposerApprovalState,
+    pendingUserInputCount: pendingUserInputs.length,
+    showPlanFollowUpPrompt,
+    isSendDisabled,
+    isComposerCollapsedMobile,
+  });
   const showComposerAttachAction =
     fileStagingLimit !== null &&
     (!activePendingProgress ||
@@ -3875,7 +3888,7 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
     promptHistoryPositionRef.current = null;
   }, [promptHistoryTargetKey]);
 
-  const replacePromptFromHistory = useCallback(
+  const replaceComposerPrompt = useCallback(
     (nextPrompt: string) => {
       promptRef.current = nextPrompt;
       setComposerDraftPrompt(composerDraftTarget, nextPrompt);
@@ -3884,6 +3897,22 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
       setComposerHighlightedItemId(null);
     },
     [composerDraftTarget, promptRef, setComposerDraftPrompt],
+  );
+
+  const applyQuickReply = useCallback(
+    (reply: QuickReply, insertOnly: boolean) => {
+      replaceComposerPrompt(reply.text);
+      // Filling the composer is an edit like any other, so it ends browsing.
+      promptHistoryPositionRef.current = null;
+      if (insertOnly) {
+        scheduleComposerFocus();
+        return;
+      }
+      // `submitComposer` reads the prompt from the ref the line above wrote,
+      // so the send carries the reply without waiting for a render.
+      submitComposer(undefined, "foreground");
+    },
+    [replaceComposerPrompt, scheduleComposerFocus, submitComposer],
   );
 
   const navigatePromptHistory = useCallback(
@@ -3922,7 +3951,7 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
       });
       if (!step) return false;
       promptHistoryPositionRef.current = step.position;
-      replacePromptFromHistory(step.prompt);
+      replaceComposerPrompt(step.prompt);
       return true;
     },
     [
@@ -3934,7 +3963,7 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
       isComposerApprovalState,
       pendingUserInputs.length,
       promptRef,
-      replacePromptFromHistory,
+      replaceComposerPrompt,
     ],
   );
 
@@ -6143,6 +6172,9 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
                 ) : null}
               </ComposerBanner.Root>
             </ComposerBanner.Attachment>
+          ) : null}
+          {showQuickReplies ? (
+            <ComposerQuickReplies replies={settings.quickReplies} onSelect={applyQuickReply} />
           ) : null}
           {!activityStackItem &&
           isTasksDrawerOpen &&

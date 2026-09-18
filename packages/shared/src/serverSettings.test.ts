@@ -34,6 +34,19 @@ describe("serverSettings helpers", () => {
     expect(applyServerSettingsPatch(edited, { deviceHosts: [] }).deviceHosts).toEqual([]);
   });
 
+  it("replaces the quick reply list, including an empty one that turns the chips off", () => {
+    expect(DEFAULT_SERVER_SETTINGS.quickReplies.map((reply) => reply.text)).toEqual([
+      "go",
+      "try again",
+      "continue from where you left off",
+      "commit, push",
+    ]);
+    const shortened = [{ id: "go", label: "Go", text: "go" }];
+    const saved = applyServerSettingsPatch(DEFAULT_SERVER_SETTINGS, { quickReplies: shortened });
+    expect(saved.quickReplies).toEqual(shortened);
+    expect(applyServerSettingsPatch(saved, { quickReplies: [] }).quickReplies).toEqual([]);
+  });
+
   it("inherits actions, preserves existing actions, and supports empty overrides and reset", () => {
     const project = { id: ProjectId.make("project-actions"), scripts: [] };
     const action = {
