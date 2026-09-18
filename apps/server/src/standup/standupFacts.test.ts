@@ -1,6 +1,11 @@
 import { describe, expect, it } from "@effect/vitest";
 
-import { hasStandupWork, renderStandupFacts, type StandupFacts } from "./standupFacts.ts";
+import {
+  buildCommitLogArgs,
+  hasStandupWork,
+  renderStandupFacts,
+  type StandupFacts,
+} from "./standupFacts.ts";
 
 const EMPTY: StandupFacts = {
   day: "2026-09-15",
@@ -103,5 +108,26 @@ describe("renderStandupFacts", () => {
     });
     expect(rendered).toContain("message 5");
     expect(rendered).not.toContain("message 6");
+  });
+});
+
+describe("buildCommitLogArgs", () => {
+  const window = { sinceIso: "2026-09-16T22:00:00.000Z", untilIso: "2026-09-17T22:00:00.000Z" };
+
+  it("matches each identity value as a literal author and skips T3 checkpoints", () => {
+    const args = buildCommitLogArgs({
+      identity: ["abel@bitsafe.finance", "Ábel Kocsis"],
+      ...window,
+    });
+    expect(args.indexOf("--exclude=refs/t3/*")).toBeLessThan(args.indexOf("--all"));
+    expect(args).toContain("--fixed-strings");
+    expect(args).toContain("--author=abel@bitsafe.finance");
+    expect(args).toContain("--author=Ábel Kocsis");
+  });
+
+  it("leaves the log unfiltered when the worktree has no git identity", () => {
+    const args = buildCommitLogArgs({ identity: [], ...window });
+    expect(args.some((arg) => arg.startsWith("--author="))).toBe(false);
+    expect(args).toContain("--exclude=refs/t3/*");
   });
 });
