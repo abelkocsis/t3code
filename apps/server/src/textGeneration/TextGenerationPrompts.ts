@@ -370,6 +370,7 @@ export function buildDailySummaryPrompt(input: DailySummaryPromptInput) {
     "- Name a blocker when the evidence shows one. Keep it to one short item.",
     "- Write plain sentences or fragments. No headings, no bold, no leading bullet character.",
     "- Use only the evidence below. Never invent work, numbers or names.",
+    "- Report only what the user did. A pull request number in a commit subject is a reference, not proof that the user merged it.",
     "- Aim for three to eight items. Fewer is better than padded.",
     `- The day is ${input.day}.`,
   ];
