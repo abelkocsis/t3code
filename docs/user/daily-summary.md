@@ -18,8 +18,9 @@ The server reads four sources for the day, on the machine it runs on:
 - The pull requests you authored that moved that day.
 - The Claude Code sessions you ran in a terminal.
 
-The model only ever sees what the server collected, so it cannot report work that did not happen.
-The summary covers one environment. Work on another machine needs that machine's own summary.
+The model only ever sees what the server collected, and the server drops any bullet that names a
+repository or a pull request number the day's evidence never showed. The summary covers one
+environment. Work on another machine needs that machine's own summary.
 
 ## Choosing what goes in
 
@@ -42,11 +43,13 @@ browsing back through the week costs you nothing.
 **Regenerate** rewrites the day on screen. It spends provider tokens, so it only ever runs when
 you press it, or the first time you open a day that has work and no summary yet.
 
-## How it learns your style
+## Copying it out
 
-**Copy** puts the kept bullets on your clipboard and saves them as the day's final version. The
-next summary receives your most recent saved versions as examples, so the wording drifts towards
-how you actually write. The more days you copy, the closer it gets.
+**Copy** puts the kept bullets on your clipboard and saves them as the day's final version, so the
+panel shows what you actually sent when you come back to it.
+
+No summary reaches another day. Each day is written from that day's evidence alone, which is what
+keeps last week's work out of today's update.
 
 T3 Code never posts to Slack or anywhere else. Copying and pasting stays your decision.
 
@@ -56,4 +59,4 @@ The summary uses the same model as T3 Code's other short generations, such as co
 thread titles. Change it under **Settings → Source control → Text generation**.
 
 The writing style set on that screen applies to commits and change requests only. The summary
-takes its style from the versions you saved, not from that setting.
+follows its own style rules.

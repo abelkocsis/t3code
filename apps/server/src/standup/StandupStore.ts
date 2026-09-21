@@ -24,9 +24,9 @@ import { writeFileStringAtomically } from "../atomicWrite.ts";
 /**
  * How many days of summaries the file keeps.
  *
- * An old summary only earns its place as a style example, and a year of them
- * would make every read parse a file nobody looks at. Trimming on write keeps
- * the file small without a separate sweep.
+ * A user reads back the last few days at most, and a year of summaries would
+ * make every read parse a file nobody looks at. Trimming on write keeps the
+ * file small without a separate sweep.
  */
 export const MAX_STORED_DAYS = 180;
 
@@ -46,16 +46,6 @@ export class StandupStore extends Context.Service<
     readonly read: (day: string) => Effect.Effect<StandupSummary | null>;
     /** Replaces the summary for its day, leaving every other day untouched. */
     readonly write: (summary: StandupSummary) => Effect.Effect<void>;
-    /**
-     * The texts the user saved, newest first, for use as style examples.
-     *
-     * Only saved text counts. A generated summary the user never accepted says
-     * nothing about how the user writes.
-     */
-    readonly readStyleExamples: (options: {
-      readonly limit: number;
-      readonly excludeDay: string;
-    }) => Effect.Effect<ReadonlyArray<string>>;
   }
 >()("t3/standup/StandupStore") {}
 
@@ -69,7 +59,7 @@ export const make = Effect.gen(function* () {
 
   /**
    * A missing or unreadable file reads as empty. Losing old summaries costs the
-   * user their style examples; failing the read would cost them the feature.
+   * user their history; failing the read would cost them the feature.
    */
   const readAll: Effect.Effect<ReadonlyArray<StandupSummary>> = Effect.gen(function* () {
     const raw = yield* fileSystem
@@ -91,8 +81,8 @@ export const make = Effect.gen(function* () {
         Effect.provideService(FileSystem.FileSystem, fileSystem),
         Effect.provideService(Path.Path, path),
       );
-      // A failed write costs the user their style examples, never the summary
-      // they are looking at.
+      // A failed write costs the user their history, never the summary they
+      // are looking at.
     }).pipe(Effect.catchCause(() => Effect.void));
 
   return StandupStore.of({
@@ -105,17 +95,6 @@ export const make = Effect.gen(function* () {
       readAll.pipe(
         Effect.flatMap((summaries) =>
           writeAll([summary, ...summaries.filter((s) => s.day !== summary.day)]),
-        ),
-      ),
-
-    readStyleExamples: (options) =>
-      readAll.pipe(
-        Effect.map((summaries) =>
-          summaries
-            .filter((summary) => summary.day !== options.excludeDay)
-            .map((summary) => summary.savedText?.trim())
-            .filter((text): text is string => text !== undefined && text.length > 0)
-            .slice(0, options.limit),
         ),
       ),
   });

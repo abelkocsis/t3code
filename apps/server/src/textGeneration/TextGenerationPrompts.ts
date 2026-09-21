@@ -344,13 +344,16 @@ export interface DailySummaryPromptInput {
   keptItems: ReadonlyArray<string>;
   /** Bullets the user removed from this day. They must not come back. */
   excludedItems: ReadonlyArray<string>;
-  /**
-   * The texts the user saved on earlier days, newest first. These carry the
-   * user's own wording, so they matter more than any style rule we could write.
-   */
-  styleExamples: ReadonlyArray<string>;
 }
 
+/**
+ * Writes the daily summary prompt.
+ *
+ * The prompt carries no summary from another day. A model reads an earlier
+ * summary as evidence however it is labelled, and then reports that day's work
+ * again under today's date, with the numbers moved on. Only the current day's
+ * kept and excluded items appear, because both belong to the day being written.
+ */
 export function buildDailySummaryPrompt(input: DailySummaryPromptInput) {
   const lines: string[] = [
     "You write a developer's daily standup update.",
@@ -371,17 +374,10 @@ export function buildDailySummaryPrompt(input: DailySummaryPromptInput) {
     "- Write plain sentences or fragments. No headings, no bold, no leading bullet character.",
     "- Use only the evidence below. Never invent work, numbers or names.",
     "- Report only what the user did. A pull request number in a commit subject is a reference, not proof that the user merged it.",
-    "- Aim for three to eight items. Fewer is better than padded.",
+    "- Report every stream of work the evidence shows, then stop. Eight items is the maximum.",
+    "- Never pad the list. Two well-supported items beat eight invented ones.",
     `- The day is ${input.day}.`,
   ];
-
-  if (input.styleExamples.length > 0) {
-    lines.push(
-      "",
-      "The user's own updates from earlier days. Match this voice, this length and this level of detail:",
-      ...input.styleExamples.map((example) => limitSection(example, 2_000)),
-    );
-  }
 
   if (input.keptItems.length > 0) {
     lines.push(
