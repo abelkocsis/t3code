@@ -95,6 +95,40 @@ export function parseCliPromptLine(line: string): CliPrompt | null {
 }
 
 /**
+ * The prefix of the scratch directories T3 Code runs its own CLI calls in.
+ *
+ * Kept in step with `ClaudeTextGeneration`, which names a title directory.
+ */
+const T3_SCRATCH_PREFIX = "t3code-claude-";
+
+/** Splits a path on either separator, so a Windows transcript reads the same. */
+function pathSegments(value: string): ReadonlyArray<string> {
+  return value.split(/[/\\]/).filter((segment) => segment.length > 0);
+}
+
+/**
+ * True when a session belongs in the summary.
+ *
+ * Two kinds of session do not. T3 Code writes a transcript for its own CLI
+ * calls, such as thread titling, and reporting those as the user's work is
+ * reporting the app to itself. A session inside a T3 Code worktree is a thread
+ * the projections already carry, so counting it again gives one piece of work
+ * two bullets.
+ */
+export function isReportableWorkspace(input: {
+  readonly cwd: string;
+  readonly worktreesDir: string;
+}): boolean {
+  const segments = pathSegments(input.cwd);
+  const directory = segments.at(-1);
+  if (directory !== undefined && directory.startsWith(T3_SCRATCH_PREFIX)) return false;
+
+  const worktrees = pathSegments(input.worktreesDir);
+  if (worktrees.length === 0) return true;
+  return !worktrees.every((segment, index) => segments[index] === segment);
+}
+
+/**
  * Groups prompts into one entry per working directory, newest directory first.
  *
  * A developer runs many sessions in one repository over a day. The repository
