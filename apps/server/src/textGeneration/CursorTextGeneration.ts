@@ -271,7 +271,6 @@ export const makeCursorTextGeneration = Effect.fn("makeCursorTextGeneration")(fu
         facts: input.facts,
         keptItems: input.keptItems,
         excludedItems: input.excludedItems,
-        styleExamples: input.styleExamples,
       });
 
       const generated = yield* runCursorJson({

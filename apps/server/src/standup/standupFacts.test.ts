@@ -2,6 +2,7 @@ import { describe, expect, it } from "@effect/vitest";
 
 import {
   buildCommitLogArgs,
+  findUnsupportedClaims,
   hasStandupWork,
   renderStandupFacts,
   type StandupFacts,
@@ -129,5 +130,47 @@ describe("buildCommitLogArgs", () => {
     const args = buildCommitLogArgs({ identity: [], ...window });
     expect(args.some((arg) => arg.startsWith("--author="))).toBe(false);
     expect(args).toContain("--exclude=refs/t3/*");
+  });
+});
+
+describe("findUnsupportedClaims", () => {
+  const knownNames = ["dlc-attestor-stack", "decentralization-manager", "t3code", "admin"];
+  const evidence = [
+    "## Commits",
+    "- [dlc-attestor-stack] cdee71cb fix(config): keep secrets out of the config parse error",
+    "## Pull requests you touched",
+    "- DLC-link/dlc-attestor-stack#685 (merged) Trim comments in PR 646",
+  ].join("\n");
+
+  it("accepts a bullet whose repository and number are both in the evidence", () => {
+    expect(
+      findUnsupportedClaims({
+        text: "Opened dlc-attestor-stack PR #685 to cut the comment bulk from PR #646.",
+        evidence,
+        knownNames,
+      }),
+    ).toEqual([]);
+  });
+
+  it("rejects a bullet naming a repository the day never touched", () => {
+    expect(
+      findUnsupportedClaims({
+        text: "Landed decentralization-manager fixes and bumped to 1.11.0.",
+        evidence,
+        knownNames,
+      }),
+    ).toEqual(["decentralization-manager is in no evidence"]);
+  });
+
+  it("rejects a pull request number the evidence never showed", () => {
+    expect(
+      findUnsupportedClaims({ text: "Merged dlc-attestor-stack #470.", evidence, knownNames }),
+    ).toEqual(["#470 is in no evidence"]);
+  });
+
+  it("leaves a name that reads as an ordinary word alone", () => {
+    expect(
+      findUnsupportedClaims({ text: "Wrote the admin runbook.", evidence, knownNames }),
+    ).toEqual([]);
   });
 });

@@ -20,7 +20,6 @@ export const FACT_LIMITS = {
   pullRequests: 40,
   cliSessions: 30,
   promptsPerCliSession: 3,
-  styleExamples: 5,
 } as const;
 
 export interface StandupThreadFact {
@@ -91,6 +90,62 @@ export function buildCommitLogArgs(input: {
     `--until=${input.untilIso}`,
     "--max-count=200",
   ];
+}
+
+/**
+ * True when a name is specific enough to judge a bullet by.
+ *
+ * A project called `admin` or `general` is an ordinary English word, and a
+ * bullet may use it as one. A name that carries a hyphen, an underscore, a dot
+ * or a digit is a repository, so a bullet that uses it names where work landed.
+ */
+function isCheckableName(name: string): boolean {
+  return name.length >= 3 && /[-_.0-9]/.test(name);
+}
+
+function escapeForRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+function mentionsName(text: string, name: string): boolean {
+  return new RegExp(`(?<![A-Za-z0-9-])${escapeForRegExp(name)}(?![A-Za-z0-9-])`, "i").test(text);
+}
+
+/**
+ * The reasons one generated bullet is not supported by the day's evidence.
+ *
+ * The prompt forbids invention, and a model still invents. The two claims a
+ * reader acts on are the place and the number: a repository name tells them
+ * where to look, and a pull request number tells them what to open. Both are
+ * checkable against the evidence, so both are checked here, and an item that
+ * fails is dropped rather than shown.
+ *
+ * `knownNames` holds every project in the environment, not only the day's, so
+ * a repository the user did not touch that day is recognised as a place and
+ * rejected. A name absent from that list cannot be judged and is left alone.
+ *
+ * An empty result means the bullet is supported.
+ */
+export function findUnsupportedClaims(input: {
+  readonly text: string;
+  readonly evidence: string;
+  readonly knownNames: ReadonlyArray<string>;
+}): ReadonlyArray<string> {
+  const reasons: string[] = [];
+
+  const evidenceNumbers = new Set(input.evidence.match(/\d+/g) ?? []);
+  for (const reference of input.text.match(/#\d+/g) ?? []) {
+    const digits = reference.slice(1);
+    if (!evidenceNumbers.has(digits)) reasons.push(`${reference} is in no evidence`);
+  }
+
+  for (const name of new Set(input.knownNames)) {
+    if (!isCheckableName(name)) continue;
+    if (!mentionsName(input.text, name)) continue;
+    if (!mentionsName(input.evidence, name)) reasons.push(`${name} is in no evidence`);
+  }
+
+  return reasons;
 }
 
 export function hasStandupWork(facts: StandupFacts): boolean {

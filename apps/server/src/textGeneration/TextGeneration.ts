@@ -91,8 +91,6 @@ export interface DailySummaryGenerationInput {
   keptItems: ReadonlyArray<string>;
   /** Bullets the user removed from the same day. */
   excludedItems: ReadonlyArray<string>;
-  /** Texts the user saved on earlier days, newest first. */
-  styleExamples: ReadonlyArray<string>;
   /** What model and provider to use for generation. */
   modelSelection: ModelSelection;
 }

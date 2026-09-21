@@ -1,6 +1,10 @@
 import { describe, expect, it } from "@effect/vitest";
 
-import { groupPromptsByWorkspace, parseCliPromptLine } from "./standupCliTranscripts.ts";
+import {
+  groupPromptsByWorkspace,
+  isReportableWorkspace,
+  parseCliPromptLine,
+} from "./standupCliTranscripts.ts";
 
 function line(record: unknown): string {
   return JSON.stringify(record);
@@ -113,5 +117,37 @@ describe("groupPromptsByWorkspace", () => {
       { workspaces: 1, promptsPerWorkspace: 1 },
     );
     expect(grouped).toEqual([{ workspace: "/b", prompts: ["three"] }]);
+  });
+});
+
+describe("isReportableWorkspace", () => {
+  const worktreesDir = "/home/dev/.t3/worktrees";
+
+  it("keeps a session the user ran in their own checkout", () => {
+    expect(isReportableWorkspace({ cwd: "/home/dev/code/attestor", worktreesDir })).toBe(true);
+  });
+
+  it("drops T3 Code's own title directory", () => {
+    expect(
+      isReportableWorkspace({ cwd: "/var/folders/T/t3code-claude-title-3iUiKp", worktreesDir }),
+    ).toBe(false);
+  });
+
+  it("drops a session inside a T3 Code worktree, which a thread already reports", () => {
+    expect(
+      isReportableWorkspace({
+        cwd: "/home/dev/.t3/worktrees/attestor/t3code-5e948e28",
+        worktreesDir,
+      }),
+    ).toBe(false);
+  });
+
+  it("reads a Windows path with the same rules", () => {
+    expect(
+      isReportableWorkspace({
+        cwd: "C:\\Users\\dev\\.t3\\worktrees\\attestor",
+        worktreesDir: "C:\\Users\\dev\\.t3\\worktrees",
+      }),
+    ).toBe(false);
   });
 });

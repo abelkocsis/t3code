@@ -429,7 +429,6 @@ export const makeCodexTextGeneration = Effect.fn("makeCodexTextGeneration")(func
         facts: input.facts,
         keptItems: input.keptItems,
         excludedItems: input.excludedItems,
-        styleExamples: input.styleExamples,
       });
 
       const generated = yield* runCodexJson({

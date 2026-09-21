@@ -43,6 +43,7 @@ import * as ServerConfig from "../config.ts";
 
 import {
   groupPromptsByWorkspace,
+  isReportableWorkspace,
   parseCliPromptLine,
   type CliPrompt,
 } from "./standupCliTranscripts.ts";
@@ -56,6 +57,7 @@ import {
 import {
   buildCommitLogArgs,
   FACT_LIMITS,
+  findUnsupportedClaims,
   hasStandupWork,
   renderStandupFacts,
   type StandupCommitFact,
@@ -238,7 +240,12 @@ export const make = Effect.gen(function* () {
                 .filter((prompt): prompt is CliPrompt => prompt !== null)
                 .filter(
                   (prompt) =>
-                    prompt.timestampMs >= window.startMs && prompt.timestampMs < window.endMs,
+                    prompt.timestampMs >= window.startMs &&
+                    prompt.timestampMs < window.endMs &&
+                    isReportableWorkspace({
+                      cwd: prompt.cwd,
+                      worktreesDir: config.worktreesDir,
+                    }),
                 ),
             ),
             Effect.catchCause(() => Effect.succeed([] as ReadonlyArray<CliPrompt>)),
@@ -362,33 +369,30 @@ export const make = Effect.gen(function* () {
       }
 
       const previous = yield* store.read(input.day);
-      const [styleExamples, settings] = yield* Effect.all([
-        store.readStyleExamples({ limit: FACT_LIMITS.styleExamples, excludeDay: input.day }),
-        settingsService.getSettings.pipe(
-          Effect.mapError(
-            (cause) =>
-              new StandupError({
-                reason: "generateFailed",
-                detail: "Server settings could not be read, so no model is selected.",
-                cause,
-              }),
-          ),
+      const settings = yield* settingsService.getSettings.pipe(
+        Effect.mapError(
+          (cause) =>
+            new StandupError({
+              reason: "generateFailed",
+              detail: "Server settings could not be read, so no model is selected.",
+              cause,
+            }),
         ),
-      ]);
+      );
 
+      const evidence = renderStandupFacts(facts);
       const cwd = yield* resolveGenerationCwd;
       const generated = yield* textGeneration
         .generateDailySummary({
           cwd,
           day: input.day,
-          facts: renderStandupFacts(facts),
+          facts: evidence,
           keptItems: (previous?.items ?? [])
             .filter((item) => !item.excluded && item.source !== "manual")
             .map((item) => item.text),
           excludedItems: (previous?.items ?? [])
             .filter((item) => item.excluded)
             .map((item) => item.text),
-          styleExamples,
           modelSelection: settings.textGenerationModelSelection,
         })
         .pipe(
@@ -402,13 +406,33 @@ export const make = Effect.gen(function* () {
           ),
         );
 
+      // A bullet that names a repository or a pull request the evidence never
+      // mentioned is invented, whatever the prompt told the model.
+      const knownNames = yield* readProjectRoots(sql).pipe(
+        Effect.map((projects) => projects.map((project) => project.title)),
+        Effect.catchCause(() => Effect.succeed([] as ReadonlyArray<string>)),
+      );
+      const supportedItems: Array<{ readonly text: string; readonly source: string }> = [];
+      for (const item of generated.items) {
+        const reasons = findUnsupportedClaims({ text: item.text, evidence, knownNames });
+        if (reasons.length === 0) {
+          supportedItems.push(item);
+          continue;
+        }
+        yield* Effect.logWarning("dropped a standup item the evidence does not support", {
+          day: input.day,
+          text: item.text,
+          reasons,
+        });
+      }
+
       // Items the user typed are theirs, so a regeneration keeps them verbatim.
       const manualItems = (previous?.items ?? []).filter((item) => item.source === "manual");
       const summary: StandupSummary = {
         day: StandupDay.make(input.day),
         timeZone: input.timeZone,
         items: [
-          ...generated.items.map((item, index): StandupItem => ({
+          ...supportedItems.map((item, index): StandupItem => ({
             itemId: `${input.day}-${index}`,
             text: item.text,
             source: item.source as StandupItem["source"],
