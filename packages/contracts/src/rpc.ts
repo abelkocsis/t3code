@@ -257,6 +257,7 @@ import {
   StandupSummary,
   StandupUpdateItemsInput,
 } from "./standup.ts";
+import { TodoError, TodoList, TodoListInput } from "./todos.ts";
 import { ServerSettings, ServerSettingsError, ServerSettingsPatch } from "./settings.ts";
 import {
   ProjectCloneActionInput,
@@ -397,6 +398,8 @@ export const WS_METHODS = {
   serverGenerateStandupSummary: "server.generateStandupSummary",
   serverUpdateStandupItems: "server.updateStandupItems",
   serverSaveStandupSummary: "server.saveStandupSummary",
+  serverGetTodoList: "server.getTodoList",
+  serverSetTodoList: "server.setTodoList",
 
   // Cloud environment methods
   cloudGetRelayClientStatus: "cloud.getRelayClientStatus",
@@ -696,6 +699,24 @@ const WsServerSaveStandupSummaryRpc = Rpc.make(WS_METHODS.serverSaveStandupSumma
   payload: StandupSaveInput,
   success: StandupSummary,
   error: Schema.Union([EnvironmentAuthorizationError, StandupError]),
+});
+
+/** Reads the environment's to-do list. Costs a file read and nothing else. */
+const WsServerGetTodoListRpc = Rpc.make(WS_METHODS.serverGetTodoList, {
+  payload: Schema.Struct({}),
+  success: TodoList,
+  error: Schema.Union([EnvironmentAuthorizationError, TodoError]),
+});
+
+/**
+ * Replaces the list. Every edit is a replacement, so the last client to write
+ * wins: the list is short, one person owns it, and merging two orders would
+ * cost more than it saves.
+ */
+const WsServerSetTodoListRpc = Rpc.make(WS_METHODS.serverSetTodoList, {
+  payload: TodoListInput,
+  success: TodoList,
+  error: Schema.Union([EnvironmentAuthorizationError, TodoError]),
 });
 
 const WsServerSignalProcessRpc = Rpc.make(WS_METHODS.serverSignalProcess, {
@@ -1463,6 +1484,8 @@ export const WsRpcGroup = RpcGroup.make(
   WsServerGenerateStandupSummaryRpc,
   WsServerUpdateStandupItemsRpc,
   WsServerSaveStandupSummaryRpc,
+  WsServerGetTodoListRpc,
+  WsServerSetTodoListRpc,
   WsServerSignalProcessRpc,
   WsServerReportClientActivityRpc,
   WsServerReportHostPowerStateRpc,

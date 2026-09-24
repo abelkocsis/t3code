@@ -1055,6 +1055,13 @@ export function createServerEnvironmentAtoms<R, E>(
       tag: WS_METHODS.serverGetStandupState,
       staleTimeMs: 30_000,
     }),
+    // A short list read from one file. Another device may have changed it, so
+    // the panel re-reads rather than trusting what it last wrote.
+    todoList: createEnvironmentRpcQueryAtomFamily(runtime, {
+      label: "environment-data:server:todo-list",
+      tag: WS_METHODS.serverGetTodoList,
+      staleTimeMs: 15_000,
+    }),
     configProjection,
     welcome,
     consumeResetCredit: createEnvironmentRpcCommand(runtime, {
@@ -1142,6 +1149,10 @@ export function createServerEnvironmentAtoms<R, E>(
     saveStandupSummary: createEnvironmentRpcCommand(runtime, {
       label: "environment-data:server:save-standup-summary",
       tag: WS_METHODS.serverSaveStandupSummary,
+    }),
+    setTodoList: createEnvironmentRpcCommand(runtime, {
+      label: "environment-data:server:set-todo-list",
+      tag: WS_METHODS.serverSetTodoList,
     }),
   };
 }

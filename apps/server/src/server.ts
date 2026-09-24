@@ -149,6 +149,7 @@ import * as UsageLimitSources from "./usage/UsageLimitSources.ts";
 import * as UsageService from "./usage/UsageService.ts";
 import * as StandupService from "./standup/StandupService.ts";
 import * as StandupStore from "./standup/StandupStore.ts";
+import * as TodoStore from "./todos/TodoStore.ts";
 import { OrchestrationLayerLive } from "./orchestration/runtimeLayer.ts";
 import {
   clearPersistedServerRuntimeState,
@@ -584,7 +585,7 @@ const RuntimeDependenciesBaseLive = RuntimeCoreDependenciesLive.pipe(
 
 // The daily summary consumes the git driver, the pull request service and text
 // generation, so it composes on top of the runtime rather than inside it.
-const RuntimeDependenciesLive = StandupLayerLive.pipe(
+const RuntimeDependenciesLive = Layer.mergeAll(StandupLayerLive, TodoStore.layer).pipe(
   Layer.provideMerge(RuntimeDependenciesBaseLive),
 );
 

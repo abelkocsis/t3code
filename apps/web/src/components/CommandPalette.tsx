@@ -42,6 +42,7 @@ import { useLocation, useNavigate, useParams } from "@tanstack/react-router";
 import * as Option from "effect/Option";
 import {
   ArrowLeftIcon,
+  CalendarDaysIcon,
   ListChecksIcon,
   CornerLeftUpIcon,
   FileSearchIcon,
@@ -1740,11 +1741,24 @@ function OpenCommandPaletteDialog(props: {
       searchTerms: ["standup", "daily summary", "what did i do", "yesterday", "recap", "report"],
       title: "Daily summary",
       description: "What you worked on, ready to paste into standup",
-      icon: <ListChecksIcon className={ITEM_ICON_CLASS} />,
+      icon: <CalendarDaysIcon className={ITEM_ICON_CLASS} />,
       run: async () => {
         useRightPanelStore
           .getState()
           .open(scopeThreadRef(activeThread.environmentId, activeThread.id), "standup");
+      },
+    });
+    actionItems.push({
+      kind: "action",
+      value: "action:open-todos",
+      searchTerms: ["todo", "to-do", "todos", "task list", "next", "backlog"],
+      title: "To-do list",
+      description: "Your ordered list of what to do next",
+      icon: <ListChecksIcon className={ITEM_ICON_CLASS} />,
+      run: async () => {
+        useRightPanelStore
+          .getState()
+          .open(scopeThreadRef(activeThread.environmentId, activeThread.id), "todos");
       },
     });
   }

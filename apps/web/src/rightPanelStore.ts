@@ -30,6 +30,7 @@ const RIGHT_PANEL_KINDS = [
   "pull-requests",
   "agents",
   "standup",
+  "todos",
 ] as const;
 export type RightPanelKind = (typeof RIGHT_PANEL_KINDS)[number];
 
@@ -91,7 +92,9 @@ export type RightPanelSurface =
    * The daily summary. A singleton, and the only surface that is not about the
    * thread it is opened from: it spans every project in the environment.
    */
-  | { id: "standup"; kind: "standup" };
+  | { id: "standup"; kind: "standup" }
+  /** The environment's to-do list. A singleton, and also not about one thread. */
+  | { id: "todos"; kind: "todos" };
 
 const RIGHT_PANEL_STORAGE_KEY = "t3code:right-panel-state:v2";
 // v9 removed the "plan" surface kind (plans render inline in the transcript).
@@ -201,6 +204,8 @@ const singletonSurface = (
       return { id: "device", kind };
     case "standup":
       return { id: "standup", kind };
+    case "todos":
+      return { id: "todos", kind };
   }
 };
 

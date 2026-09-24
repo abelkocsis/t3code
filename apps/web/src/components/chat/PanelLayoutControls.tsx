@@ -1,4 +1,5 @@
 import {
+  CalendarDaysIcon,
   CoffeeIcon,
   ListChecksIcon,
   Maximize2Icon,
@@ -30,6 +31,9 @@ interface PanelLayoutControlsProps {
    */
   onOpenStandup?: (() => void) | undefined;
   standupOpen?: boolean;
+  /** Opens the to-do list. Absent for the same reason the summary's is. */
+  onOpenTodos?: (() => void) | undefined;
+  todosOpen?: boolean;
   onToggleTerminal: () => void;
   onToggleRightPanel: () => void;
 }
@@ -46,6 +50,8 @@ export const PanelLayoutControls = memo(function PanelLayoutControls({
   liveAgentCount,
   onOpenStandup,
   standupOpen = false,
+  onOpenTodos,
+  todosOpen = false,
   onToggleTerminal,
   onToggleRightPanel,
 }: PanelLayoutControlsProps) {
@@ -55,6 +61,7 @@ export const PanelLayoutControls = memo(function PanelLayoutControls({
       data-panel-layout-controls
     >
       <StepAwayToggle />
+      {onOpenTodos ? <TodoToggle open={todosOpen} onOpen={onOpenTodos} /> : null}
       {onOpenStandup ? <StandupToggle open={standupOpen} onOpen={onOpenStandup} /> : null}
       {showTerminalControl ? (
         <Tooltip>
@@ -177,10 +184,37 @@ function StandupToggle({ open, onOpen }: { open: boolean; onOpen: () => void }) 
           variant="ghost"
           size="sm"
         >
-          <ListChecksIcon className="size-4" />
+          <CalendarDaysIcon className="size-4" />
         </Toggle>
       </TooltipTrigger>
       <TooltipPopup side="bottom">Daily summary for your standup</TooltipPopup>
+    </Tooltip>
+  );
+}
+
+/**
+ * Opens the to-do list, which spans the whole environment rather than the
+ * thread it is opened from.
+ *
+ * It leads the row: the list is what the user reaches for between threads, and
+ * a checklist icon reads as a list at this size.
+ */
+function TodoToggle({ open, onOpen }: { open: boolean; onOpen: () => void }) {
+  return (
+    <Tooltip>
+      <TooltipTrigger render={<span className="flex shrink-0" />}>
+        <Toggle
+          className="shrink-0 [-webkit-app-region:no-drag]"
+          pressed={open}
+          onPressedChange={onOpen}
+          aria-label="To-do list"
+          variant="ghost"
+          size="sm"
+        >
+          <ListChecksIcon className="size-4" />
+        </Toggle>
+      </TooltipTrigger>
+      <TooltipPopup side="bottom">Your to-do list</TooltipPopup>
     </Tooltip>
   );
 }
