@@ -17,6 +17,7 @@ import {
   Bot,
   Smartphone,
   ChevronDown,
+  CalendarDays,
   ListChecks,
   ChevronLeft,
   ChevronRight,
@@ -635,6 +636,8 @@ function surfaceTitle(
       return surface.title ?? surface.target?.name ?? "Device";
     case "standup":
       return "Daily summary";
+    case "todos":
+      return "To-do list";
     case "preview": {
       const snapshot = surface.resourceId ? sessions[surface.resourceId] : null;
       if (!snapshot || snapshot.navStatus._tag === "Idle") return "Browser";
@@ -727,6 +730,8 @@ function SurfaceIcon({
         <Smartphone className="size-3 shrink-0" />
       );
     case "standup":
+      return <CalendarDays className="size-3 shrink-0" />;
+    case "todos":
       return <ListChecks className="size-3 shrink-0" />;
   }
 }

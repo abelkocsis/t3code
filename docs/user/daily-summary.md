@@ -3,8 +3,8 @@
 ## Write your standup in one click
 
 **Daily summary** collects what you did on a day and writes it up as bullets you can paste into
-a standup message. Open it with the clipboard icon in the top-right corner, next to the step-away
-control, or from the command palette.
+a standup message. Open it with the calendar icon in the top-right corner, next to the to-do list,
+or from the command palette.
 
 The panel opens on the last day the server recorded work. On a Monday that is Friday, not an
 empty Sunday.
