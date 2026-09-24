@@ -160,6 +160,7 @@ import * as AnalyticsService from "./telemetry/AnalyticsService.ts";
 import * as UsageLimitSources from "./usage/UsageLimitSources.ts";
 import * as UsageService from "./usage/UsageService.ts";
 import * as StandupService from "./standup/StandupService.ts";
+import * as TodoStore from "./todos/TodoStore.ts";
 import * as TraceDiagnostics from "./diagnostics/TraceDiagnostics.ts";
 import * as PullRequestService from "./pullRequest/PullRequestService.ts";
 import { listLinkedPullRequestThreads } from "./pullRequest/linkedThreads.ts";
@@ -678,6 +679,7 @@ const makeWsRpcLayer = (
       const resourceTelemetry = yield* ResourceTelemetry.ResourceTelemetry;
       const usage = yield* UsageService.UsageService;
       const standup = yield* StandupService.StandupService;
+      const todos = yield* TodoStore.TodoStore;
       const relayClient = yield* RelayClient.RelayClient;
       const authorizationError = (requiredScope: AuthEnvironmentScope) =>
         new EnvironmentAuthorizationError({
@@ -2718,6 +2720,14 @@ const makeWsRpcLayer = (
           }),
         [WS_METHODS.serverSaveStandupSummary]: (input) =>
           observeRpcEffect(WS_METHODS.serverSaveStandupSummary, standup.save(input), {
+            "rpc.aggregate": "server",
+          }),
+        [WS_METHODS.serverGetTodoList]: (_input) =>
+          observeRpcEffect(WS_METHODS.serverGetTodoList, todos.read, {
+            "rpc.aggregate": "server",
+          }),
+        [WS_METHODS.serverSetTodoList]: (input) =>
+          observeRpcEffect(WS_METHODS.serverSetTodoList, todos.write(input.items), {
             "rpc.aggregate": "server",
           }),
         [WS_METHODS.serverRetryResourceTelemetry]: (_input) =>

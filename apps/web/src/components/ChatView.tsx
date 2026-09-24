@@ -383,6 +383,7 @@ import { resolveComposerTimelineInset, resolveScrollToEndClearance } from "./com
 import { ChatHeader } from "./chat/ChatHeader";
 import { PanelLayoutControls, RightPanelMaximizeControl } from "./chat/PanelLayoutControls";
 import { StandupPanel } from "./StandupPanel";
+import { TodoPanel } from "./TodoPanel";
 import { expandedImageKey, type ExpandedImagePreview } from "./chat/ExpandedImagePreview";
 import { NoActiveThreadState } from "./NoActiveThreadState";
 import { WorkspacePageHeader } from "./WorkspacePageHeader";
@@ -4713,6 +4714,10 @@ export default function ChatView(props: ChatViewProps) {
   const addStandupSurface = useCallback(() => {
     if (!activeThreadRef) return;
     useRightPanelStore.getState().open(activeThreadRef, "standup");
+  }, [activeThreadRef]);
+  const addTodoSurface = useCallback(() => {
+    if (!activeThreadRef) return;
+    useRightPanelStore.getState().open(activeThreadRef, "todos");
   }, [activeThreadRef]);
   const openFileSurface = useCallback(
     (relativePath: string) => {
@@ -9728,6 +9733,8 @@ export default function ChatView(props: ChatViewProps) {
       }
       onOpenStandup={activeThreadRef ? addStandupSurface : undefined}
       standupOpen={rightPanelOpen && activeRightPanelSurface?.kind === "standup"}
+      onOpenTodos={activeThreadRef ? addTodoSurface : undefined}
+      todosOpen={rightPanelOpen && activeRightPanelSurface?.kind === "todos"}
       onToggleTerminal={toggleTerminalVisibility}
       onToggleRightPanel={toggleRightPanel}
     />
@@ -9879,6 +9886,8 @@ export default function ChatView(props: ChatViewProps) {
       </Suspense>
     ) : renderedRightPanelSurface?.kind === "standup" ? (
       <StandupPanel environmentId={activeThreadRef?.environmentId ?? null} />
+    ) : renderedRightPanelSurface?.kind === "todos" ? (
+      <TodoPanel environmentId={activeThreadRef?.environmentId ?? null} />
     ) : (renderedRightPanelSurface?.kind === "files" ||
         renderedRightPanelSurface?.kind === "file") &&
       ((activeProject && activeWorkspaceRoot) ||
