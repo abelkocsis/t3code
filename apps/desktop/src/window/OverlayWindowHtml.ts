@@ -105,6 +105,16 @@ export const buildOverlayDataUrl = (): string => {
       }
       .item .project { font-size: 10.5px; color: var(--muted); margin-top: 2px; }
       .item .phase { font-size: 10.5px; font-weight: 700; white-space: nowrap; }
+      /* Hiding a row is a second action on a row whose whole surface already
+         opens the thread, so it needs its own target, kept quiet until the
+         pointer is on the row. */
+      .item .dismiss {
+        flex: none; width: 18px; height: 18px; border-radius: 5px;
+        display: flex; align-items: center; justify-content: center;
+        font-size: 13px; line-height: 1; color: var(--muted); opacity: 0;
+      }
+      .item:hover .dismiss { opacity: 1; }
+      .item .dismiss:hover { background: rgba(255, 255, 255, 0.14); color: var(--fg); }
       .waiting_for_approval { color: var(--amber); }
       .waiting_for_input { color: var(--indigo); }
       .completed { color: var(--emerald); }
@@ -163,6 +173,8 @@ export const buildOverlayDataUrl = (): string => {
       #shell.stepaway .item .title { font-size: 22px; font-weight: 600; }
       #shell.stepaway .item .project { font-size: 15px; margin-top: 4px; }
       #shell.stepaway .item .phase { font-size: 15px; }
+      /* Read from a few steps back, so the target is large and always shown. */
+      #shell.stepaway .item .dismiss { width: 30px; height: 30px; font-size: 22px; opacity: 1; }
       /* The way out is as large as everything else: it is pressed from a
          standing start, often at arm's length. */
       #exit {
@@ -203,6 +215,7 @@ export const buildOverlayDataUrl = (): string => {
         <div class="row" data-hide="tomorrow">Until tomorrow</div>
         <div class="row" data-hide="indefinitely">Until I turn it back on</div>
         <div class="sep"></div>
+        <div class="row hidden" id="restore" data-restore="1">Bring back hidden threads</div>
         <div class="row" data-stepaway="1">Step away mode</div>
         <div class="row" data-settings="1">Notification settings…</div>
       </div>
@@ -219,6 +232,9 @@ export const buildOverlayDataUrl = (): string => {
         }
 
         function render(state) {
+          document
+            .getElementById("restore")
+            .classList.toggle("hidden", !(state.dismissedCount > 0));
           var isPill = state.mode === "pill";
           var isStepAway = state.mode === "stepAway";
           var shell = document.getElementById("shell");
@@ -265,7 +281,21 @@ export const buildOverlayDataUrl = (): string => {
             var phase = document.createElement("div");
             phase.className = "phase " + item.phase;
             phase.textContent = item.phaseLabel || labelFor(item.phase);
-            row.append(bar, text, phase);
+            var dismiss = document.createElement("div");
+            dismiss.className = "dismiss";
+            dismiss.title = "Hide until something new happens";
+            dismiss.textContent = "\u00d7";
+            dismiss.addEventListener("click", function (event) {
+              // The row underneath opens the thread, which is the opposite of
+              // what this button is for.
+              event.stopPropagation();
+              bridge.send({
+                kind: "dismiss-item",
+                environmentId: item.environmentId,
+                threadId: item.threadId,
+              });
+            });
+            row.append(bar, text, phase, dismiss);
             // Only a real click opens a thread. Without this a drag that
             // happens to finish over a row navigates, so the window can never
             // be moved by grabbing one.
@@ -334,9 +364,15 @@ export const buildOverlayDataUrl = (): string => {
           menu.classList.remove("open");
         });
         menu.addEventListener("click", function (event) {
-          var target = event.target.closest("[data-hide], [data-settings], [data-stepaway]");
+          var target = event.target.closest(
+            "[data-hide], [data-settings], [data-stepaway], [data-restore]",
+          );
           if (!target) return;
           menu.classList.remove("open");
+          if (target.dataset.restore) {
+            bridge.send({ kind: "restore-dismissed" });
+            return;
+          }
           if (target.dataset.stepaway) {
             bridge.send({ kind: "step-away", enabled: true });
             return;

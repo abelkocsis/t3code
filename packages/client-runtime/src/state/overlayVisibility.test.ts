@@ -18,6 +18,7 @@ const ITEM: OverlayItem = {
   threadTitle: "Fix participant reconnect loop",
   projectTitle: "bitsafe-scan",
   phase: "waiting_for_approval",
+  at: NOW,
 };
 
 function makeInput(overrides: Partial<OverlayVisibilityInput> = {}): OverlayVisibilityInput {
@@ -30,6 +31,7 @@ function makeInput(overrides: Partial<OverlayVisibilityInput> = {}): OverlayVisi
     workingCount: 2,
     showIdlePill: true,
     stepAway: false,
+    dismissedCount: 0,
     ...overrides,
   };
 }
