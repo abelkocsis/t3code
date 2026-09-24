@@ -222,6 +222,8 @@ export const DesktopOverlayStateSchema = Schema.Struct({
   workingCount: Schema.Int,
   /** Whether to hold off display sleep while the overlay shows. */
   keepAwake: Schema.Boolean,
+  /** How many threads the user hid from the overlay and can bring back. */
+  dismissedCount: Schema.Int,
   /** Where the user last dragged the overlay, or null for the default corner. */
   position: Schema.NullOr(Schema.Struct({ x: Schema.Int, y: Schema.Int })),
 });
@@ -238,6 +240,17 @@ export const DesktopOverlayActionSchema = Schema.Union([
     kind: Schema.Literal("hide"),
     duration: Schema.Literals(["hour", "tomorrow", "indefinitely"]),
   }),
+  /**
+   * Takes one thread off the overlay without reading it. The thread keeps its
+   * unread mark in the main UI, and newer work on it raises the row again.
+   */
+  Schema.Struct({
+    kind: Schema.Literal("dismiss-item"),
+    environmentId: Schema.String,
+    threadId: Schema.String,
+  }),
+  /** Puts every hidden thread back on the overlay. */
+  Schema.Struct({ kind: Schema.Literal("restore-dismissed") }),
   Schema.Struct({ kind: Schema.Literal("open-settings") }),
   /** Turned on from the overlay's own menu, and off from its exit button. */
   Schema.Struct({ kind: Schema.Literal("step-away"), enabled: Schema.Boolean }),

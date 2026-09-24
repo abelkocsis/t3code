@@ -5,6 +5,7 @@ import type { AwarenessThreadShell } from "@t3tools/shared/agentAwareness";
 import {
   detectPhaseChanges,
   isPhaseNotifiable,
+  isThreadAttentionDismissed,
   isThreadAttentionUnseen,
   resolveNotifiableAwarenessPhase,
   resolveThreadAttention,
@@ -144,6 +145,28 @@ describe("isThreadAttentionUnseen", () => {
 
   it("treats a malformed visit stamp as unseen rather than swallowing the signal", () => {
     expect(isThreadAttentionUnseen({ attention, lastVisitedAt: "not-a-date" })).toBe(true);
+  });
+});
+
+describe("isThreadAttentionDismissed", () => {
+  const attention = { phase: "completed", at: THREAD_UPDATED_AT } as const;
+
+  it("hides a phase the user dismissed at that same time", () => {
+    expect(isThreadAttentionDismissed({ attention, dismissedAt: THREAD_UPDATED_AT })).toBe(true);
+  });
+
+  it("raises the thread again once something newer happens", () => {
+    expect(isThreadAttentionDismissed({ attention, dismissedAt: "2026-04-10T11:00:00.000Z" })).toBe(
+      false,
+    );
+  });
+
+  it("leaves a thread the user never dismissed alone", () => {
+    expect(isThreadAttentionDismissed({ attention, dismissedAt: null })).toBe(false);
+  });
+
+  it("treats a malformed dismissal stamp as no dismissal at all", () => {
+    expect(isThreadAttentionDismissed({ attention, dismissedAt: "not-a-date" })).toBe(false);
   });
 });
 

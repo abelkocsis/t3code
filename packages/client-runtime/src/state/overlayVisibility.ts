@@ -17,12 +17,15 @@ export interface OverlayItem {
   readonly threadTitle: string;
   readonly projectTitle: string | null;
   readonly phase: AttentionPhase;
+  /** The attention time a dismissal stamps, so newer work raises the row again. */
+  readonly at: string;
 }
 
 export interface OverlayState {
   readonly mode: OverlayMode;
   readonly items: readonly OverlayItem[];
   readonly workingCount: number;
+  readonly dismissedCount: number;
 }
 
 export interface OverlayVisibilityInput {
@@ -40,6 +43,8 @@ export interface OverlayVisibilityInput {
   readonly showIdlePill: boolean;
   /** The user said they are leaving the machine, so show everything, large. */
   readonly stepAway: boolean;
+  /** Threads the user hid from the overlay, for the menu's restore row. */
+  readonly dismissedCount: number;
 }
 
 /**
@@ -59,9 +64,14 @@ export interface OverlayVisibilityInput {
  * turned on, which is the one thing it must not do.
  */
 export function resolveOverlayState(input: OverlayVisibilityInput): OverlayState {
-  const hidden: OverlayState = { mode: "hidden", items: [], workingCount: 0 };
+  const hidden: OverlayState = { mode: "hidden", items: [], workingCount: 0, dismissedCount: 0 };
   if (input.stepAway) {
-    return { mode: "stepAway", items: input.unseen, workingCount: input.workingCount };
+    return {
+      mode: "stepAway",
+      items: input.unseen,
+      workingCount: input.workingCount,
+      dismissedCount: input.dismissedCount,
+    };
   }
   if (!input.enabled) return hidden;
   if (isOverlayHiddenNow({ hiddenUntil: input.hiddenUntil, now: input.now })) return hidden;
@@ -71,6 +81,7 @@ export function resolveOverlayState(input: OverlayVisibilityInput): OverlayState
     mode: input.unseen.length === 0 ? "pill" : "full",
     items: input.unseen,
     workingCount: input.workingCount,
+    dismissedCount: input.dismissedCount,
   };
 }
 

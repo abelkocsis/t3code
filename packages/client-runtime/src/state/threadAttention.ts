@@ -96,6 +96,25 @@ export function isThreadAttentionUnseen(input: {
   return attentionAtMs > lastVisitedAtMs;
 }
 
+/**
+ * Whether the user hid this thread from the away-from-the-app surfaces.
+ *
+ * A dismissal is stamped with the attention time it hid, so it covers that
+ * phase only: newer work on the thread raises the row again. Unlike a visit, a
+ * dismissal says nothing about the main UI, which keeps its unread mark.
+ */
+export function isThreadAttentionDismissed(input: {
+  readonly attention: ThreadAttention;
+  readonly dismissedAt: string | null | undefined;
+}): boolean {
+  if (input.dismissedAt == null) return false;
+  const dismissedAtMs = Date.parse(input.dismissedAt);
+  if (Number.isNaN(dismissedAtMs)) return false;
+  const attentionAtMs = Date.parse(input.attention.at);
+  if (Number.isNaN(attentionAtMs)) return false;
+  return attentionAtMs <= dismissedAtMs;
+}
+
 /** Which phases the user asked to hear about. Mirrors RelayAgentAwarenessPreferences. */
 export interface AttentionNotificationPreferences {
   readonly notifyOnApproval: boolean;

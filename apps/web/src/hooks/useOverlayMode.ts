@@ -1,4 +1,5 @@
 import { useNavigate } from "@tanstack/react-router";
+import { scopedThreadKey, scopeThreadRef } from "@t3tools/client-runtime/environment";
 import {
   resolveOverlayHideUntil,
   resolveOverlayState,
@@ -12,6 +13,7 @@ import type {
 import { useEffect, useEffectEvent, useMemo } from "react";
 
 import { useStepAwayStore } from "../stepAwayStore";
+import { useUiStateStore } from "../uiStateStore";
 import { buildThreadRouteParams } from "../threadRoutes";
 import { attentionItemLabel, useAttentionThreads } from "./useAttentionThreads";
 import { useNowMinute } from "./useNowMinute";
@@ -28,7 +30,7 @@ import { useWindowFocused } from "./useWindowFocused";
  */
 export function useOverlayMode(): void {
   const navigate = useNavigate();
-  const { unseen, workingCount } = useAttentionThreads();
+  const { unseen, workingCount, dismissedCount } = useAttentionThreads();
   const appFocused = useWindowFocused();
   const updateSettings = useUpdateClientSettings();
   // A temporary hide expires on the clock, not on a thread event, so the
@@ -41,6 +43,8 @@ export function useOverlayMode(): void {
   const showIdlePill = useClientSettings((settings) => settings.overlayShowIdlePill);
   const stepAway = useStepAwayStore((state) => state.active);
   const setStepAway = useStepAwayStore((state) => state.setActive);
+  const dismissOverlayThread = useUiStateStore((state) => state.dismissOverlayThread);
+  const restoreOverlayDismissals = useUiStateStore((state) => state.restoreOverlayDismissals);
 
   const state = useMemo<DesktopOverlayState>(() => {
     const resolved = resolveOverlayState({
@@ -52,6 +56,7 @@ export function useOverlayMode(): void {
       workingCount,
       showIdlePill,
       stepAway,
+      dismissedCount,
     });
     return {
       mode: resolved.mode,
@@ -64,6 +69,7 @@ export function useOverlayMode(): void {
         phaseLabel: attentionItemLabel(item),
       })),
       workingCount: resolved.workingCount,
+      dismissedCount: resolved.dismissedCount,
       // Holding off display sleep is the point of step away mode: a dark
       // screen cannot be read from across the room.
       keepAwake: keepAwake || stepAway,
@@ -71,6 +77,7 @@ export function useOverlayMode(): void {
     };
   }, [
     appFocused,
+    dismissedCount,
     enabled,
     hiddenUntil,
     keepAwake,
@@ -95,6 +102,27 @@ export function useOverlayMode(): void {
           threadId: action.threadId as ThreadId,
         }),
       });
+      return;
+    }
+    if (action.kind === "dismiss-item") {
+      // The row carries the attention time it was drawn from, so hiding it
+      // covers this phase and nothing the agent does afterwards.
+      const item = unseen.find(
+        (candidate) =>
+          candidate.environmentId === action.environmentId &&
+          candidate.threadId === action.threadId,
+      );
+      if (item === undefined) return;
+      dismissOverlayThread(
+        scopedThreadKey(
+          scopeThreadRef(item.environmentId as EnvironmentId, item.threadId as ThreadId),
+        ),
+        item.at,
+      );
+      return;
+    }
+    if (action.kind === "restore-dismissed") {
+      restoreOverlayDismissals();
       return;
     }
     if (action.kind === "step-away") {
