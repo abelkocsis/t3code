@@ -38,10 +38,11 @@ export function QuickRepliesSettings() {
   const rows = draft ?? replies;
 
   const commit = (next: ReadonlyArray<QuickReply>) => {
-    setDraft(null);
     // An empty label or text cannot be decoded, and a half-typed row is not a
-    // reason to reject the rest of the edit.
+    // reason to reject the rest of the edit. The half-typed row stays in the
+    // draft so moving between its two fields does not erase it.
     const usable = next.filter((reply) => reply.label.trim() !== "" && reply.text.trim() !== "");
+    setDraft(sameReplies(usable, next) ? null : next);
     if (sameReplies(usable, replies)) return;
     updateSettings({ quickReplies: usable });
   };
