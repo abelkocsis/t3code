@@ -2,6 +2,7 @@ import { ProjectId, ThreadId } from "@t3tools/contracts";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
 
 import {
+  dismissOverlayThread,
   legacyProjectCwdPreferenceKey,
   markThreadUnread,
   markThreadVisited,
@@ -10,6 +11,7 @@ import {
   type PersistedUiState,
   persistState,
   reorderProjects,
+  restoreOverlayDismissals,
   resolveThreadVisitStamp,
   resolveProjectExpanded,
   setDefaultAdvertisedEndpointKey,
@@ -25,6 +27,7 @@ function makeUiState(overrides: Partial<UiState> = {}): UiState {
     projectOrder: [],
     sidebarProjectScopeKey: null,
     threadLastVisitedAtById: {},
+    overlayDismissedAtById: {},
     threadChangedFilesExpandedById: {},
     defaultAdvertisedEndpointKey: null,
     pullRequestMergeMethod: "merge",
@@ -95,6 +98,31 @@ describe("uiStateStore pure functions", () => {
 
     expect(next.threadLastVisitedAtById[threadId]).toBe("2026-02-25T12:29:59.999Z");
     expect(markThreadUnread(next, threadId, null)).toBe(next);
+  });
+
+  it("hides a thread from the overlay without touching its unread mark", () => {
+    const threadId = ThreadId.make("thread-1");
+    const initialState = makeUiState();
+
+    const next = dismissOverlayThread(initialState, threadId, "2026-02-25T12:30:00.000Z");
+
+    expect(next.overlayDismissedAtById[threadId]).toBe("2026-02-25T12:30:00.000Z");
+    expect(next.threadLastVisitedAtById).toEqual({});
+  });
+
+  it("keeps the newest dismissal, so an older stamp cannot raise the row again", () => {
+    const threadId = ThreadId.make("thread-1");
+    const newer = dismissOverlayThread(makeUiState(), threadId, "2026-02-25T12:30:00.000Z");
+
+    expect(dismissOverlayThread(newer, threadId, "2026-02-25T12:00:00.000Z")).toBe(newer);
+  });
+
+  it("brings every hidden thread back at once", () => {
+    const threadId = ThreadId.make("thread-1");
+    const dismissed = dismissOverlayThread(makeUiState(), threadId, "2026-02-25T12:30:00.000Z");
+
+    expect(restoreOverlayDismissals(dismissed).overlayDismissedAtById).toEqual({});
+    expect(restoreOverlayDismissals(makeUiState())).toEqual(makeUiState());
   });
 
   it("resolves project expansion from logical, physical, and legacy preference keys", () => {
@@ -241,6 +269,7 @@ describe("parsePersistedState", () => {
       threadLastVisitedAtById: {
         "environment:thread-1": "2026-02-25T12:35:00.000Z",
       },
+      overlayDismissedAtById: {},
       defaultAdvertisedEndpointKey: "desktop-core:lan:http",
       sidebarProjectScopeKey: null,
       pullRequestMergeMethod: "merge",
@@ -363,6 +392,7 @@ describe("uiStateStore persistence", () => {
       threadLastVisitedAtById: {
         "environment:thread-1": "2026-02-25T12:35:00.000Z",
       },
+      overlayDismissedAtById: {},
       defaultAdvertisedEndpointKey: "desktop-core:lan:http",
       sidebarProjectScopeKey: null,
       threadChangedFilesExpansionVersion: 2,
