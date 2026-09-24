@@ -158,6 +158,22 @@ describe("buildThreadTitlePrompt", () => {
     });
   });
 
+  // The two prompts are separate strings that must agree on the house style.
+  // Drift between them is the failure this catches.
+  it.each([
+    ["a new thread", undefined],
+    ["an existing thread", "Old title"],
+  ])("asks for a short label with its identifier when titling %s", (_case, previousTitle) => {
+    const result = buildThreadTitlePrompt({
+      message: "Review the reconnect changes in pull request 313",
+      ...(previousTitle === undefined ? {} : { previousTitle }),
+    });
+
+    expect(result.prompt).toContain("2-5 words, fewer than 30 characters.");
+    expect(result.prompt).toContain("Write a label, never a sentence.");
+    expect(result.prompt).toContain('lead with its identifier, such as "PR#313 review"');
+  });
+
   it("includes the user message without absent attachment metadata", () => {
     const result = buildThreadTitlePrompt({
       message: "Investigate reconnect regressions after session restore",

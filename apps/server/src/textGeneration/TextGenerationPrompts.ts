@@ -231,12 +231,13 @@ Before answering, silently reduce the request to:
 Title the subject and outcome. Discard incidental instructions.
 
 Editorial rules:
-- 3-8 words, fewer than 40 characters.
-- Use a compact noun phrase or clear action phrase.
+- 2-5 words, fewer than 30 characters. The sidebar is narrow, and a title it cannot show is no title at all.
+- Write a label, never a sentence. No verb is needed when a noun phrase identifies the work.
+- When the thread is about a pull request or an issue, lead with its identifier, such as "PR#313 review" or "Issue #341 - this task". The number is how the user recognizes the thread.
 - Capture the umbrella goal when the request lists several symptoms or steps.
-- Name the product change, not the mock, plan, report, branch, or PR used to produce it.
+- Name the product change, not the mock, plan, report, or branch used to produce it.
 - Models, subagents, tools, output formats, and monitoring instructions do not belong in the title unless they are themselves the topic.
-- For reviews, name what is being reviewed and the relevant concern. Avoid generic titles such as "Review PR 123" when linked or attached context reveals the subject.
+- For reviews, name what is being reviewed. Add the concern only if it still fits the character limit.
 - For research, name the question domain rather than the requested research process.
 - Do not claim the work is complete.
 - Do not copy and truncate the user's message.
@@ -244,7 +245,11 @@ Editorial rules:
 - Use attached images as primary context for UI issues.
 - When a URL or attachment is the only source of the subject, use available tools to inspect it directly.
 - Local git history is not evidence of what a linked PR or issue is about. Never title the thread after branch names, commit messages, or merged commits found in the checkout.
-- If a linked PR or issue cannot be read, fall back to the user's stated action plus its number, such as "Take Over PR 8588". This is the one case where a PR or issue number belongs in the title.`;
+
+Examples of the length and shape:
+- "PR#313 review", not "Review the reconnect changes in pull request 313".
+- "Issue #341 - this task", not "Work through the reported authentication retry problem".
+- "Overlay dismiss button", not "Add a way to dismiss a notification from the floating overlay".`;
 
 function regenerateThreadTitlePrompt(previousTitle: string): string {
   return `Regenerate the title for an existing T3 Code thread so the user can recognize it weeks later.
@@ -258,27 +263,27 @@ Determine the title in this order:
 4. Title the durable subject and desired outcome, not the current workflow state.
 
 Editorial rules:
-- 3-8 words, fewer than 40 characters.
-- Use a compact noun phrase or clear action phrase.
+- 2-5 words, fewer than 30 characters. The sidebar is narrow, and a title it cannot show is no title at all.
+- Write a label, never a sentence. No verb is needed when a noun phrase identifies the work.
+- When the thread is about a pull request or an issue, lead with its identifier, such as "PR#313 review" or "Issue #341 - this task". The number is how the user recognizes the thread.
 - Preserve the umbrella subject when later messages focus on one finding, provider, platform, or implementation detail.
 - A thread progressing through research, planning, implementation, review, CI, merge, and monitoring has usually not changed subjects.
 - Ignore deliverables and operations such as mocks, plans, HTML, branches, PRs, tests, CI, commits, merging, and monitoring unless they are the actual topic.
 - Models, subagents, tools, output formats, and monitoring instructions do not belong in the title unless they are themselves the topic.
 - Treat final operational follow-ups and assistant completion summaries as weak evidence of subject.
-- For reviews, name the reviewed feature or system and its durable concern, not one finding from the review.
+- For reviews, name the reviewed feature or system, not one finding from the review.
 - For research, name the question domain rather than the research process.
 - Do not claim the work is complete.
 - Do not copy and truncate a thread message.
-- Avoid project names already visible in the UI, PR numbers, quotes, labels, filler, and trailing punctuation.
+- Avoid project names already visible in the UI, quotes, labels, filler, and trailing punctuation.
 - Use attached images as primary context for UI issues.
 - When a URL or attachment is the only source of the subject, use available tools to inspect it directly.
 - Local git history is not evidence of what a linked PR or issue is about. Never title the thread after branch names, commit messages, or merged commits found in the checkout.
-- If a linked PR or issue cannot be read, fall back to the user's stated action plus its number, such as "Take Over PR 8588". This is the one case where a PR or issue number belongs in the title.
 - Keep the previous title unchanged if it is already accurate. Otherwise return a meaningfully improved title, not a cosmetic paraphrase.
 
 Examples of the distinction:
-- A subagent-monitoring review that finds a Codex roster bug remains "Review Subagent Monitoring Risks," not "Codex Roster Bug Review."
-- A vague failing-test request later identified as a lazy thread-feed mismatch becomes "Fix Lazy Thread Feed Test," not "Prevent Mobile Feed Regressions."
+- A subagent-monitoring review that finds a Codex roster bug remains "Subagent monitoring review", not "Codex roster bug".
+- A vague failing-test request later identified as a lazy thread-feed mismatch becomes "Lazy feed test", not "Mobile feed regressions".
 - A QR-sharing overhaul that ends with CI and merge work remains about QR sharing, not the PR lifecycle.`;
 }
 
