@@ -26,12 +26,13 @@ interface PanelLayoutControlsProps {
   /** Running + waiting subagents in this thread; badges the right panel toggle. */
   liveAgentCount: number;
   /**
-   * Opens the daily summary. Absent on a surface that has no right panel to
-   * open it in, which is why the control is not offered there.
+   * Opens the daily summary, or closes the panel when the summary already
+   * shows. Absent on a surface that has no right panel to open it in, which is
+   * why the control is not offered there.
    */
   onOpenStandup?: (() => void) | undefined;
   standupOpen?: boolean;
-  /** Opens the to-do list. Absent for the same reason the summary's is. */
+  /** Toggles the to-do list. Absent for the same reason the summary's is. */
   onOpenTodos?: (() => void) | undefined;
   todosOpen?: boolean;
   onToggleTerminal: () => void;
@@ -159,7 +160,8 @@ export const RightPanelMaximizeControl = memo(function RightPanelMaximizeControl
 });
 
 /**
- * Opens the daily summary beside the thread.
+ * Opens the daily summary beside the thread, and closes the panel when the
+ * summary is the tab on screen.
  *
  * It sits next to step away rather than inside the right panel's own tab strip,
  * because the summary is the one surface there that is not about the code on
@@ -194,7 +196,8 @@ function StandupToggle({ open, onOpen }: { open: boolean; onOpen: () => void }) 
 
 /**
  * Opens the to-do list, which spans the whole environment rather than the
- * thread it is opened from.
+ * thread it is opened from. A second press closes the panel while the list is
+ * the tab on screen.
  *
  * It leads the row: the list is what the user reaches for between threads, and
  * a checklist icon reads as a list at this size.
