@@ -37,6 +37,7 @@ import { resolveClaudeHomePath } from "../provider/Drivers/ClaudeHome.ts";
 import { ServerSettingsService } from "../serverSettings.ts";
 import { PullRequestService } from "../pullRequest/PullRequestService.ts";
 import { TextGeneration } from "../textGeneration/TextGeneration.ts";
+import { TodoStore } from "../todos/TodoStore.ts";
 import { listTranscriptFiles } from "../usage/usageTranscriptReader.ts";
 import * as GitVcsDriver from "../vcs/GitVcsDriver.ts";
 import * as ServerConfig from "../config.ts";
@@ -63,6 +64,7 @@ import {
   type StandupCommitFact,
   type StandupFacts,
   type StandupPullRequestFact,
+  type StandupTodoFact,
 } from "./standupFacts.ts";
 import { StandupStore } from "./StandupStore.ts";
 import { readLatestWorkInstantMs, readProjectRoots, readThreadFacts } from "./StandupWorkQuery.ts";
@@ -95,6 +97,7 @@ export const make = Effect.gen(function* () {
   const settingsService = yield* ServerSettingsService;
   const store = yield* StandupStore;
   const textGeneration = yield* TextGeneration;
+  const todos = yield* TodoStore;
 
   const assertDay = (day: string) =>
     isStandupDay(day)
@@ -264,17 +267,42 @@ export const make = Effect.gen(function* () {
     });
   });
 
+  /**
+   * To-do items the user ticked off during the window.
+   *
+   * The store keeps a cleared item for a month, so a list the user tidied up
+   * still reports the day it was worked through. An unreadable list costs the
+   * summary one source, like every other collector here.
+   */
+  const collectTodos = Effect.fn("StandupService.collectTodos")(function* (window: {
+    readonly startMs: number;
+    readonly endMs: number;
+  }) {
+    const completed = yield* todos.readCompleted.pipe(
+      Effect.catchCause(() => Effect.succeed([] as ReadonlyArray<never>)),
+    );
+    return completed
+      .flatMap((item): ReadonlyArray<StandupTodoFact> => {
+        if (item.doneAt === undefined) return [];
+        const doneMs = parseIsoUtc(item.doneAt);
+        if (doneMs === null || doneMs < window.startMs || doneMs >= window.endMs) return [];
+        return [{ text: item.text, doneAt: item.doneAt }];
+      })
+      .slice(0, FACT_LIMITS.todos);
+  });
+
   const collectFacts = Effect.fn("StandupService.collectFacts")(function* (
     day: string,
     timeZone: string,
   ) {
     const window = standupDayWindow(day, timeZone);
-    const [threads, commits, prs, cliSessions] = yield* Effect.all(
+    const [threads, commits, prs, cliSessions, todoFacts] = yield* Effect.all(
       [
         readThreadFacts(sql, window).pipe(Effect.catchCause(() => Effect.succeed([]))),
         collectCommits(window),
         collectPullRequests(window),
         collectCliSessions(window),
+        collectTodos(window),
       ],
       { concurrency: 4 },
     );
@@ -285,6 +313,7 @@ export const make = Effect.gen(function* () {
       commits,
       pullRequests: prs,
       cliSessions,
+      todos: todoFacts,
     } satisfies StandupFacts;
   });
 
@@ -364,7 +393,7 @@ export const make = Effect.gen(function* () {
       if (!hasStandupWork(facts)) {
         return yield* new StandupError({
           reason: "noWork",
-          detail: `No thread, commit or session was recorded on ${input.day}.`,
+          detail: `No thread, commit, session or to-do was recorded on ${input.day}.`,
         });
       }
 

@@ -17,7 +17,12 @@ export const TodoItem = Schema.Struct({
   text: TrimmedNonEmptyString,
   /** A done item stays in the list until the user clears it, so a mis-click costs nothing. */
   done: Schema.Boolean,
-  /** UTC instant the user ticked the item off. Absent while the item is open. */
+  /**
+   * UTC instant the item first reached the list. The server stamps it, because
+   * the daily summary reports by day and a client clock can be wrong.
+   */
+  createdAt: Schema.optional(TrimmedNonEmptyString),
+  /** UTC instant the user ticked the item off, stamped by the server. Absent while the item is open. */
   doneAt: Schema.optional(TrimmedNonEmptyString),
 });
 export type TodoItem = typeof TodoItem.Type;

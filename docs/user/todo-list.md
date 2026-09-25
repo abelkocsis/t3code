@@ -20,6 +20,15 @@ all read and write the same items.
 
 Every change is stored as you make it. There is no save button.
 
+## The list and the daily summary
+
+The server records when you add an item and when you tick it off. The **daily summary** reads the
+items you ticked off on the day it reports, so work you tracked only on the list still reaches
+your standup.
+
+**Clear done** hides the items from the panel. The server keeps them for a month so a day you
+already tidied up can still be summarised.
+
 ## What the list is not
 
 The list is yours to write. T3 Code never adds an item to it, and an agent cannot read it or
