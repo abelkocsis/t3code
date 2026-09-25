@@ -216,6 +216,8 @@ const UsageLayerLive = UsageService.layer.pipe(Layer.provide(ServerSettingsLayer
 
 // The daily summary reads the projections, the worktrees and the pull request
 // hosts, so it sits downstream of every one of those rather than beside them.
+// The to-do list is one of its evidence sources, so the same store the RPCs
+// write is the one the summary reads.
 const StandupLayerLive = StandupService.layer.pipe(
   Layer.provide(StandupStore.layer),
   Layer.provide(ServerSettingsLayerLive),
@@ -585,7 +587,8 @@ const RuntimeDependenciesBaseLive = RuntimeCoreDependenciesLive.pipe(
 
 // The daily summary consumes the git driver, the pull request service and text
 // generation, so it composes on top of the runtime rather than inside it.
-const RuntimeDependenciesLive = Layer.mergeAll(StandupLayerLive, TodoStore.layer).pipe(
+const RuntimeDependenciesLive = StandupLayerLive.pipe(
+  Layer.provideMerge(TodoStore.layer),
   Layer.provideMerge(RuntimeDependenciesBaseLive),
 );
 

@@ -20,6 +20,7 @@ export const FACT_LIMITS = {
   pullRequests: 40,
   cliSessions: 30,
   promptsPerCliSession: 3,
+  todos: 40,
 } as const;
 
 export interface StandupThreadFact {
@@ -54,6 +55,12 @@ export interface StandupCliSessionFact {
   readonly prompts: ReadonlyArray<string>;
 }
 
+export interface StandupTodoFact {
+  readonly text: string;
+  /** UTC instant the user ticked the item off, which is what places it on a day. */
+  readonly doneAt: string;
+}
+
 export interface StandupFacts {
   readonly day: string;
   readonly timeZone: string;
@@ -61,6 +68,8 @@ export interface StandupFacts {
   readonly commits: ReadonlyArray<StandupCommitFact>;
   readonly pullRequests: ReadonlyArray<StandupPullRequestFact>;
   readonly cliSessions: ReadonlyArray<StandupCliSessionFact>;
+  /** To-do items the user ticked off during the day. */
+  readonly todos: ReadonlyArray<StandupTodoFact>;
 }
 
 /**
@@ -153,7 +162,8 @@ export function hasStandupWork(facts: StandupFacts): boolean {
     facts.threads.length > 0 ||
     facts.commits.length > 0 ||
     facts.pullRequests.length > 0 ||
-    facts.cliSessions.length > 0
+    facts.cliSessions.length > 0 ||
+    facts.todos.length > 0
   );
 }
 
@@ -210,6 +220,13 @@ export function renderStandupFacts(facts: StandupFacts): string {
       return [`- ${session.workspace}`, ...prompts].join("\n");
     });
     sections.push(`## Terminal agent sessions\n${lines.join("\n")}`);
+  }
+
+  if (facts.todos.length > 0) {
+    const lines = facts.todos
+      .slice(0, FACT_LIMITS.todos)
+      .map((todo) => `- ${truncate(todo.text, 200)}`);
+    sections.push(`## To-do items you ticked off\n${lines.join("\n")}`);
   }
 
   return sections.join("\n\n");
