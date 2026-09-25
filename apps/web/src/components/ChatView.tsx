@@ -4654,13 +4654,13 @@ export default function ChatView(props: ChatViewProps) {
     );
     if (!sessionStillExists) usePreviewMiniPlayerStore.getState().close(activeThreadRef);
   }, [activePreviewMiniPlayer, activeThreadRef, deviceState.sessions, deviceStateLoaded]);
-  const addStandupSurface = useCallback(() => {
+  const toggleStandupSurface = useCallback(() => {
     if (!activeThreadRef) return;
-    useRightPanelStore.getState().open(activeThreadRef, "standup");
+    useRightPanelStore.getState().toggle(activeThreadRef, "standup");
   }, [activeThreadRef]);
-  const addTodoSurface = useCallback(() => {
+  const toggleTodoSurface = useCallback(() => {
     if (!activeThreadRef) return;
-    useRightPanelStore.getState().open(activeThreadRef, "todos");
+    useRightPanelStore.getState().toggle(activeThreadRef, "todos");
   }, [activeThreadRef]);
   const openFileSurface = useCallback(
     (relativePath: string) => {
@@ -9343,9 +9343,9 @@ export default function ChatView(props: ChatViewProps) {
       liveAgentCount={
         rightPanelOpen && activeRightPanelSurface?.kind === "agents" ? 0 : agentPanelModel.liveCount
       }
-      onOpenStandup={activeThreadRef ? addStandupSurface : undefined}
+      onOpenStandup={activeThreadRef ? toggleStandupSurface : undefined}
       standupOpen={rightPanelOpen && activeRightPanelSurface?.kind === "standup"}
-      onOpenTodos={activeThreadRef ? addTodoSurface : undefined}
+      onOpenTodos={activeThreadRef ? toggleTodoSurface : undefined}
       todosOpen={rightPanelOpen && activeRightPanelSurface?.kind === "todos"}
       onToggleTerminal={toggleTerminalVisibility}
       onToggleRightPanel={toggleRightPanel}
