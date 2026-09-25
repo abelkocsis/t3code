@@ -1,6 +1,8 @@
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import { assert, it } from "@effect/vitest";
 import type { TodoItem } from "@t3tools/contracts";
+import * as Clock from "effect/Clock";
+import * as DateTime from "effect/DateTime";
 import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
 import * as Layer from "effect/Layer";
@@ -54,14 +56,97 @@ it.layer(NodeServices.layer)("to-do store", (it) => {
     ),
   );
 
-  it.effect("keeps a done item and the time it was ticked off", () =>
+  it.effect("stamps the instant an item was added and the instant it was ticked off", () =>
     withStore(
       Effect.gen(function* () {
         const store = yield* TodoStore.TodoStore;
-        yield* store.write([{ ...ITEM, done: true, doneAt: "2026-09-24T09:00:00.000Z" }]);
+        yield* store.write([ITEM]);
+        const open = (yield* store.read).items[0];
+        assert.isString(open?.createdAt);
+        assert.equal(open?.doneAt, undefined);
+
+        yield* store.write([{ ...ITEM, done: true }]);
+        const done = (yield* store.read).items[0];
+        assert.equal(done?.createdAt, open?.createdAt);
+        assert.isString(done?.doneAt);
+
+        // A later write must not move the instant the user ticked the item off.
+        yield* store.write([{ ...ITEM, text: "Review PR#314", done: true }]);
+        assert.equal((yield* store.read).items[0]?.doneAt, done?.doneAt);
+      }),
+    ),
+  );
+
+  // The client sends the whole list on every change, so a wrong clock or a
+  // replayed write must not decide which day the summary reports the item on.
+  it.effect("ignores the timestamps the client sends", () =>
+    withStore(
+      Effect.gen(function* () {
+        const store = yield* TodoStore.TodoStore;
+        yield* store.write([
+          {
+            ...ITEM,
+            done: true,
+            createdAt: "1999-01-01T00:00:00.000Z",
+            doneAt: "1999-01-01T00:00:00.000Z",
+          },
+        ]);
         const stored = (yield* store.read).items[0];
-        assert.equal(stored?.done, true);
-        assert.equal(stored?.doneAt, "2026-09-24T09:00:00.000Z");
+        assert.notEqual(stored?.createdAt, "1999-01-01T00:00:00.000Z");
+        assert.notEqual(stored?.doneAt, "1999-01-01T00:00:00.000Z");
+      }),
+    ),
+  );
+
+  it.effect("reports a done item the user has already cleared", () =>
+    withStore(
+      Effect.gen(function* () {
+        const store = yield* TodoStore.TodoStore;
+        yield* store.write([{ ...ITEM, done: true }]);
+        const doneAt = (yield* store.read).items[0]?.doneAt;
+        yield* store.write([]);
+
+        assert.deepEqual((yield* store.read).items, []);
+        const completed = yield* store.readCompleted;
+        assert.equal(completed.length, 1);
+        assert.equal(completed[0]?.text, ITEM.text);
+        assert.equal(completed[0]?.doneAt, doneAt);
+      }),
+    ),
+  );
+
+  it.effect("forgets a cleared item once it is older than the retention window", () =>
+    withStore(
+      Effect.gen(function* () {
+        const store = yield* TodoStore.TodoStore;
+        const config = yield* ServerConfig.ServerConfig;
+        const fs = yield* FileSystem.FileSystem;
+        const path = yield* Path.Path;
+        const storePath = path.join(config.stateDir, "todos.json");
+        const nowMs = yield* Clock.currentTimeMillis;
+        const stale = DateTime.formatIso(
+          DateTime.makeUnsafe(nowMs - TodoStore.ARCHIVE_RETENTION_MS - 60_000),
+        );
+        yield* fs.writeFileString(
+          storePath,
+          `{"version":2,"items":[],"archive":[{"itemId":"todo-old","text":"Last month","done":true,"doneAt":"${stale}"}],"updatedAt":"${stale}"}`,
+        );
+
+        assert.equal((yield* store.readCompleted).length, 1);
+        yield* store.write([ITEM]);
+        assert.deepEqual(yield* store.readCompleted, []);
+      }),
+    ),
+  );
+
+  // An open item the user deletes was never done, so nothing should keep it.
+  it.effect("does not archive an item the user deleted while it was open", () =>
+    withStore(
+      Effect.gen(function* () {
+        const store = yield* TodoStore.TodoStore;
+        yield* store.write([ITEM]);
+        yield* store.write([]);
+        assert.deepEqual(yield* store.readCompleted, []);
       }),
     ),
   );
@@ -79,7 +164,9 @@ it.layer(NodeServices.layer)("to-do store", (it) => {
         yield* fs.writeFileString(path.join(config.stateDir, "todos.json"), "{ not json");
         assert.deepEqual((yield* store.read).items, []);
         yield* store.write([ITEM]);
-        assert.deepEqual((yield* store.read).items, [ITEM]);
+        const repaired = (yield* store.read).items;
+        assert.equal(repaired.length, 1);
+        assert.equal(repaired[0]?.text, ITEM.text);
       }),
     ),
   );

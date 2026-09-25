@@ -11,12 +11,13 @@ empty Sunday.
 
 ## Where the summary comes from
 
-The server reads four sources for the day, on the machine it runs on:
+The server reads five sources for the day, on the machine it runs on:
 
 - The T3 Code threads you ran, with your messages and the files the turns changed.
 - The commits in every project's working directory.
 - The pull requests you authored that moved that day.
 - The Claude Code sessions you ran in a terminal.
+- The to-do items you ticked off that day, including ones you have since cleared.
 
 The model only ever sees what the server collected, and the server drops any bullet that names a
 repository or a pull request number the day's evidence never showed. The summary covers one

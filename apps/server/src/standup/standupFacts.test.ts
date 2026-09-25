@@ -15,11 +15,21 @@ const EMPTY: StandupFacts = {
   commits: [],
   pullRequests: [],
   cliSessions: [],
+  todos: [],
 };
 
 describe("hasStandupWork", () => {
   it("is false for a day with nothing recorded", () => {
     expect(hasStandupWork(EMPTY)).toBe(false);
+  });
+
+  it("is true for a day whose only record is a ticked-off to-do", () => {
+    expect(
+      hasStandupWork({
+        ...EMPTY,
+        todos: [{ text: "Answer Huba on the BETH design", doneAt: "2026-09-15T14:00:00.000Z" }],
+      }),
+    ).toBe(true);
   });
 
   it("is true when any one source has something", () => {
@@ -33,6 +43,15 @@ describe("hasStandupWork", () => {
 });
 
 describe("renderStandupFacts", () => {
+  it("reports the to-do items the user ticked off", () => {
+    const rendered = renderStandupFacts({
+      ...EMPTY,
+      todos: [{ text: "Answer Huba on the BETH design", doneAt: "2026-09-15T14:00:00.000Z" }],
+    });
+    expect(rendered).toContain("## To-do items you ticked off");
+    expect(rendered).toContain("- Answer Huba on the BETH design");
+  });
+
   it("leaves out a section that has nothing in it", () => {
     const rendered = renderStandupFacts({
       ...EMPTY,
