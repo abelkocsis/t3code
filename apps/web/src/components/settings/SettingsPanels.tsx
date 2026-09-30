@@ -2,12 +2,8 @@ import { SettingsGroup } from "./SettingsGroup";
 import { Spinner } from "~/components/ui/spinner";
 import { UpstreamReleaseSection } from "./UpstreamReleaseSection";
 import { NotificationSettings } from "./NotificationSettings";
-<<<<<<< HEAD
-import { ArchiveIcon, ArchiveX, CheckIcon, ChevronRightIcon, SettingsIcon } from "lucide-react";
-=======
 import { QuickRepliesSettings } from "./QuickRepliesSettings";
-import { ArchiveIcon, ArchiveX, ChevronRightIcon, SettingsIcon } from "lucide-react";
->>>>>>> d6a73e49e2 (feat(web): send a saved reply from the composer)
+import { ArchiveIcon, ArchiveX, CheckIcon, ChevronRightIcon, SettingsIcon } from "lucide-react";
 import { Link, useNavigate } from "@tanstack/react-router";
 import type { CSSProperties, ReactNode } from "react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";

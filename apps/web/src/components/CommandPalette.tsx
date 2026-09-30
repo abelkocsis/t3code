@@ -42,15 +42,9 @@ import { useLocation, useNavigate, useParams } from "@tanstack/react-router";
 import * as Option from "effect/Option";
 import {
   ArrowLeftIcon,
-<<<<<<< HEAD
-<<<<<<< HEAD
-  ChartNoAxesColumnIcon,
-=======
-=======
   CalendarDaysIcon,
->>>>>>> db7f976374 (feat: keep an ordered to-do list in the panel)
+  ChartNoAxesColumnIcon,
   ListChecksIcon,
->>>>>>> b95dad0112 (feat: summarise a day's work for standup)
   CornerLeftUpIcon,
   FileSearchIcon,
   FolderIcon,
