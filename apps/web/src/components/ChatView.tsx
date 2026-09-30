@@ -350,6 +350,7 @@ import {
   serverEnvironment,
 } from "../state/server";
 import { terminalEnvironment } from "../state/terminal";
+import { onPasteIntoThreadTerminal } from "../terminalPasteBus";
 import { threadEnvironment, useEnvironmentThread } from "../state/threads";
 import {
   requestOlderThreadTurns,
@@ -4225,6 +4226,132 @@ export default function ChatView(props: ChatViewProps) {
       writeTerminal,
     ],
   );
+  /** Opens `terminalId` for the active thread, then writes `data` to it verbatim. */
+  const openAndWriteTerminal = useCallback(
+    async (options: {
+      terminalId: string;
+      data: string;
+      failureMessage: string;
+      cwd: string;
+      worktreePath: string | null;
+      env: Record<string, string>;
+      size?: { cols: number; rows: number };
+    }) => {
+      if (!activeThreadId) return;
+      const openTerminalInput: TerminalOpenInput = {
+        threadId: activeThreadId,
+        terminalId: options.terminalId,
+        cwd: options.cwd,
+        ...(options.worktreePath !== null ? { worktreePath: options.worktreePath } : {}),
+        env: options.env,
+        ...(options.size ? { cols: options.size.cols, rows: options.size.rows } : {}),
+      };
+      const openResult = await openTerminal({ environmentId, input: openTerminalInput });
+      if (openResult._tag === "Failure") {
+        if (!isAtomCommandInterrupted(openResult)) {
+          const error = squashAtomCommandFailure(openResult);
+          setThreadError(
+            activeThreadId,
+            error instanceof Error ? error.message : options.failureMessage,
+          );
+        }
+        return;
+      }
+
+      const writeResult = await writeTerminal({
+        environmentId,
+        input: {
+          threadId: activeThreadId,
+          terminalId: options.terminalId,
+          data: options.data,
+        },
+      });
+      if (writeResult._tag === "Failure" && !isAtomCommandInterrupted(writeResult)) {
+        const error = squashAtomCommandFailure(writeResult);
+        setThreadError(
+          activeThreadId,
+          error instanceof Error ? error.message : options.failureMessage,
+        );
+      }
+    },
+    [activeThreadId, environmentId, openTerminal, setThreadError, writeTerminal],
+  );
+
+  /** Writes `data` to the terminal drawer, opening or creating a terminal as needed. */
+  const writeToThreadTerminal = useCallback(
+    async (options: {
+      data: string;
+      failureMessage: string;
+      cwd?: string;
+      env?: Record<string, string>;
+      worktreePath?: string | null;
+      preferNewTerminal?: boolean;
+    }) => {
+      if (!activeThreadId || !activeProject || !activeThread) return;
+      const targetCwd = options.cwd ?? gitCwd ?? activeProject.workspaceRoot;
+      const baseTerminalId =
+        terminalUiState.activeTerminalId || activeKnownTerminalIds[0] || DEFAULT_THREAD_TERMINAL_ID;
+      const isBaseTerminalBusy = runningTerminalIds.includes(baseTerminalId);
+      const shouldCreateNewTerminal = Boolean(options.preferNewTerminal) || isBaseTerminalBusy;
+      const targetWorktreePath = options.worktreePath ?? activeThread.worktreePath ?? null;
+
+      setTerminalUiLaunchContext({
+        threadId: activeThreadId,
+        cwd: targetCwd,
+        worktreePath: targetWorktreePath,
+      });
+      setTerminalOpen(true);
+      if (!activeThreadRef) {
+        return;
+      }
+      setTerminalFocusRequestId((value) => value + 1);
+
+      const runtimeEnv = projectScriptRuntimeEnv({
+        project: {
+          cwd: activeProject.workspaceRoot,
+        },
+        worktreePath: targetWorktreePath,
+        ...(options.env ? { extraEnv: options.env } : {}),
+      });
+      const targetTerminalId = shouldCreateNewTerminal
+        ? nextTerminalId(allocatableActiveTerminalIds)
+        : baseTerminalId;
+
+      if (shouldCreateNewTerminal) {
+        storeNewTerminal(activeThreadRef, targetTerminalId);
+      } else {
+        storeSetActiveTerminal(activeThreadRef, targetTerminalId);
+      }
+
+      await openAndWriteTerminal({
+        terminalId: targetTerminalId,
+        data: options.data,
+        failureMessage: options.failureMessage,
+        cwd: targetCwd,
+        worktreePath: targetWorktreePath,
+        env: runtimeEnv,
+        ...(shouldCreateNewTerminal
+          ? { size: { cols: SCRIPT_TERMINAL_COLS, rows: SCRIPT_TERMINAL_ROWS } }
+          : {}),
+      });
+    },
+    [
+      activeProject,
+      activeThread,
+      activeThreadId,
+      activeThreadRef,
+      gitCwd,
+      openAndWriteTerminal,
+      setTerminalOpen,
+      storeNewTerminal,
+      storeSetActiveTerminal,
+      activeKnownTerminalIds,
+      allocatableActiveTerminalIds,
+      runningTerminalIds,
+      terminalUiState.activeTerminalId,
+    ],
+  );
+
   const runProjectScript = useCallback(
     async (
       script: ProjectScript,
@@ -4243,124 +4370,25 @@ export default function ChatView(props: ChatViewProps) {
           return { ...current, [activeProject.id]: script.id };
         });
       }
-      const targetCwd = options?.cwd ?? gitCwd ?? activeProject.workspaceRoot;
-      const baseTerminalId =
-        terminalUiState.activeTerminalId || activeKnownTerminalIds[0] || DEFAULT_THREAD_TERMINAL_ID;
-      const isBaseTerminalBusy = runningTerminalIds.includes(baseTerminalId);
-      const wantsNewTerminal = Boolean(options?.preferNewTerminal) || isBaseTerminalBusy;
-      const shouldCreateNewTerminal = wantsNewTerminal;
-      const targetWorktreePath = options?.worktreePath ?? activeThread.worktreePath ?? null;
-
-      setTerminalUiLaunchContext({
-        threadId: activeThreadId,
-        cwd: targetCwd,
-        worktreePath: targetWorktreePath,
+      await writeToThreadTerminal({
+        data: `${script.command}\r`,
+        failureMessage: `Failed to run script "${script.name}".`,
+        ...(options?.cwd !== undefined ? { cwd: options.cwd } : {}),
+        ...(options?.env !== undefined ? { env: options.env } : {}),
+        ...(options?.worktreePath !== undefined ? { worktreePath: options.worktreePath } : {}),
+        ...(options?.preferNewTerminal !== undefined
+          ? { preferNewTerminal: options.preferNewTerminal }
+          : {}),
       });
-      setTerminalOpen(true);
-      if (!activeThreadRef) {
-        return;
-      }
-      setTerminalFocusRequestId((value) => value + 1);
-
-      const runtimeEnv = projectScriptRuntimeEnv({
-        project: {
-          cwd: activeProject.workspaceRoot,
-        },
-        worktreePath: targetWorktreePath,
-        ...(options?.env ? { extraEnv: options.env } : {}),
-      });
-      const targetTerminalId = shouldCreateNewTerminal
-        ? nextTerminalId(allocatableActiveTerminalIds)
-        : baseTerminalId;
-      const openTerminalInput: TerminalOpenInput = shouldCreateNewTerminal
-        ? {
-            threadId: activeThreadId,
-            terminalId: targetTerminalId,
-            cwd: targetCwd,
-            ...(targetWorktreePath !== null ? { worktreePath: targetWorktreePath } : {}),
-            env: runtimeEnv,
-            cols: SCRIPT_TERMINAL_COLS,
-            rows: SCRIPT_TERMINAL_ROWS,
-          }
-        : {
-            threadId: activeThreadId,
-            terminalId: targetTerminalId,
-            cwd: targetCwd,
-            ...(targetWorktreePath !== null ? { worktreePath: targetWorktreePath } : {}),
-            env: runtimeEnv,
-          };
-
-      if (shouldCreateNewTerminal) {
-        storeNewTerminal(activeThreadRef, targetTerminalId);
-      } else {
-        storeSetActiveTerminal(activeThreadRef, targetTerminalId);
-      }
-
-      const openResult = await openTerminal({ environmentId, input: openTerminalInput });
-      if (openResult._tag === "Failure") {
-        if (!isAtomCommandInterrupted(openResult)) {
-          const error = squashAtomCommandFailure(openResult);
-          setThreadError(
-            activeThreadId,
-            error instanceof Error ? error.message : `Failed to run script "${script.name}".`,
-          );
-        }
-        return;
-      }
-
-      const writeResult = await writeTerminal({
-        environmentId,
-        input: {
-          threadId: activeThreadId,
-          terminalId: targetTerminalId,
-          data: `${script.command}\r`,
-        },
-      });
-      if (writeResult._tag === "Failure" && !isAtomCommandInterrupted(writeResult)) {
-        const error = squashAtomCommandFailure(writeResult);
-        setThreadError(
-          activeThreadId,
-          error instanceof Error ? error.message : `Failed to run script "${script.name}".`,
-        );
-      }
     },
     [
       activeProject,
       activeThread,
       activeThreadId,
-      activeThreadRef,
-      gitCwd,
-      setTerminalOpen,
-      setThreadError,
-      storeNewTerminal,
-      storeSetActiveTerminal,
       setLastInvokedScriptByProjectId,
-      environmentId,
-      openTerminal,
-      activeKnownTerminalIds,
-      allocatableActiveTerminalIds,
-      runningTerminalIds,
-      terminalUiState.activeTerminalId,
-      writeTerminal,
+      writeToThreadTerminal,
     ],
   );
-
-  const runProjectScriptRef = useRef(runProjectScript);
-  useLayoutEffect(() => {
-    runProjectScriptRef.current = runProjectScript;
-  }, [runProjectScript]);
-  const runShellCommand = useCallback((command: string) => {
-    void runProjectScriptRef.current(
-      {
-        id: "chat-code-block",
-        name: "Chat code block",
-        command,
-        icon: "play",
-        runOnWorktreeCreate: false,
-      },
-      { rememberAsLastInvoked: false },
-    );
-  }, []);
 
   const supportsProjectSettingsOverrides =
     environmentById.get(environmentId)?.serverConfig?.environment.capabilities
@@ -4970,6 +4998,76 @@ export default function ChatView(props: ChatViewProps) {
     gitCwd,
     openTerminal,
   ]);
+
+  /**
+   * Pastes a shell code block into a right panel terminal. A busy terminal runs
+   * a subprocess that would eat the text, so the paste opens a new terminal.
+   */
+  const pasteIntoPanelTerminal = useCallback(
+    async (data: string, target: "active" | "new") => {
+      if (!activeThreadRef || !activeThreadId || !activeProject) return;
+      const panelState = selectThreadRightPanelState(
+        useRightPanelStore.getState().byThreadKey,
+        activeThreadRef,
+      );
+      const selectedSurface = panelState.surfaces.find(
+        (surface) => surface.id === panelState.activeSurfaceId,
+      );
+      const reusableSurface =
+        target === "new"
+          ? undefined
+          : selectedSurface?.kind === "terminal"
+            ? selectedSurface
+            : panelState.surfaces.findLast((surface) => surface.kind === "terminal");
+      const reusableTerminalId =
+        reusableSurface && !runningTerminalIds.includes(reusableSurface.activeTerminalId)
+          ? reusableSurface.activeTerminalId
+          : null;
+      const terminalId = reusableTerminalId ?? nextTerminalId(allocatableActiveTerminalIds);
+
+      if (reusableTerminalId !== null && reusableSurface) {
+        useRightPanelStore.getState().activateSurface(activeThreadRef, reusableSurface.id);
+      } else {
+        useRightPanelStore.getState().openTerminal(activeThreadRef, terminalId);
+      }
+      setTerminalFocusRequestId((value) => value + 1);
+
+      await openAndWriteTerminal({
+        terminalId,
+        data,
+        failureMessage: "Failed to paste into the terminal.",
+        cwd: gitCwd ?? activeProject.workspaceRoot,
+        worktreePath: activeThreadWorktreePath,
+        env: projectScriptRuntimeEnv({
+          project: { cwd: activeProject.workspaceRoot },
+          worktreePath: activeThreadWorktreePath,
+        }),
+      });
+    },
+    [
+      activeProject,
+      activeThreadId,
+      activeThreadRef,
+      activeThreadWorktreePath,
+      allocatableActiveTerminalIds,
+      gitCwd,
+      openAndWriteTerminal,
+      runningTerminalIds,
+    ],
+  );
+
+  // A shell code block in the visible chat pastes itself into this thread's panel terminal.
+  useEffect(
+    () =>
+      onPasteIntoThreadTerminal((request) => {
+        if (activeThreadKey === null || scopedThreadKey(request.threadRef) !== activeThreadKey) {
+          return;
+        }
+        void pasteIntoPanelTerminal(request.data, request.target);
+      }),
+    [activeThreadKey, pasteIntoPanelTerminal],
+  );
+
   const splitPanelTerminal = useCallback(
     (direction: "horizontal" | "vertical" = "horizontal") => {
       if (
@@ -10078,7 +10176,6 @@ export default function ChatView(props: ChatViewProps) {
                       agentPanelModel,
                       onOpenAgents: addAgentsSurface,
                       onUseArtifactTemplate: useArtifactTemplate,
-                      ...(activeProject ? { onRunShellCommand: runShellCommand } : {}),
                     }
                   : {})}
                 isWorking={!paintOnlyDisplayedTimeline && isWorking}

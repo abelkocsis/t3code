@@ -6,6 +6,7 @@ import {
 } from "@t3tools/shared/composerContextClipboard";
 import {
   CheckIcon,
+  ChevronDownIcon,
   ChevronRightIcon,
   CopyIcon,
   FileSpreadsheetIcon,
@@ -20,9 +21,9 @@ import {
   MessageSquareWarningIcon,
   Minimize2Icon,
   OctagonAlertIcon,
-  PlayIcon,
   PresentationIcon,
   SparklesIcon,
+  TerminalIcon,
   TriangleAlertIcon,
   WrapTextIcon,
   type LucideIcon,
@@ -150,6 +151,12 @@ import {
 } from "../markdown-clipboard";
 import { remarkNormalizeListItemIndentation } from "../markdown-list-indentation";
 import {
+  extractShellCommand,
+  isShellFenceLanguage,
+  shellCommandPasteData,
+} from "../markdown-shell-commands";
+import { pasteIntoThreadTerminal } from "../terminalPasteBus";
+import {
   extractMarkdownLinkHrefs,
   isWindowsDrivePathHref,
   normalizeMarkdownLinkDestination,
@@ -164,7 +171,7 @@ import { readLocalApi } from "../localApi";
 import { useAssetUrlRefresh, useAssetUrlState } from "../assets/assetUrls";
 import { cn } from "../lib/utils";
 import { useRemoteOpenResolution, type RemoteOpenMode } from "../remoteOpen";
-import { useRightPanelStore } from "../rightPanelStore";
+import { selectThreadRightPanelState, useRightPanelStore } from "../rightPanelStore";
 import { readThreadShell, useProjects } from "../state/entities";
 import { serverEnvironment } from "../state/server";
 import { shellEnvironment } from "../state/shell";
@@ -218,7 +225,8 @@ interface ChatMarkdownProps {
   parseRawHtml?: boolean;
   /** Append a prompt that invokes a newly created artifact-template skill. */
   onUseArtifactTemplate?: ((template: CodexArtifactTemplate) => void) | undefined;
-  onRunShellCommand?: ((command: string) => void) | undefined;
+  /** Offer a shell fence the action that pastes it into the thread's terminal. */
+  enableTerminalPaste?: boolean;
   /** Directory that anchors relative links and images; defaults to `cwd`. Set
       to the file's own directory when rendering a markdown file. */
   imageBaseDir?: string | undefined;
@@ -968,21 +976,92 @@ function MarkdownCodeBlockTitleContent({
   );
 }
 
+const PASTE_IN_TERMINAL_LABEL = "Paste in terminal";
+const TERMINAL_ACTIONS_LABEL = "More terminal actions";
+
+/**
+ * Sends a shell fence to the thread's terminal. The terminal receives the text
+ * only, so the command waits at the prompt until the user presses Enter.
+ */
+function MarkdownCodeBlockTerminalActions({ command }: { command: string }) {
+  const { threadRef } = use(ChatMarkdownRendererContext);
+  const hasTerminal = useRightPanelStore((state) =>
+    selectThreadRightPanelState(state.byThreadKey, threadRef).surfaces.some(
+      (surface) => surface.kind === "terminal",
+    ),
+  );
+  if (!threadRef) {
+    return null;
+  }
+
+  const paste = (target: "active" | "new") => {
+    pasteIntoThreadTerminal({ threadRef, data: shellCommandPasteData(command), target });
+  };
+
+  return (
+    <>
+      <Tooltip>
+        <TooltipTrigger
+          render={
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon-xs"
+              className="chat-markdown-chrome-action"
+              onClick={() => paste("active")}
+              aria-label={PASTE_IN_TERMINAL_LABEL}
+            />
+          }
+        >
+          <TerminalIcon className="size-3" />
+        </TooltipTrigger>
+        <TooltipPopup side="top">{PASTE_IN_TERMINAL_LABEL}</TooltipPopup>
+      </Tooltip>
+      {hasTerminal ? (
+        <Menu>
+          <Tooltip>
+            <TooltipTrigger
+              render={
+                <MenuTrigger
+                  render={
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon-xs"
+                      className="chat-markdown-chrome-action"
+                      aria-label={TERMINAL_ACTIONS_LABEL}
+                    />
+                  }
+                />
+              }
+            >
+              <ChevronDownIcon className="size-3" />
+            </TooltipTrigger>
+            <TooltipPopup side="top">{TERMINAL_ACTIONS_LABEL}</TooltipPopup>
+          </Tooltip>
+          <MenuPopup align="end">
+            <MenuItem onClick={() => paste("active")}>{PASTE_IN_TERMINAL_LABEL}</MenuItem>
+            <MenuItem onClick={() => paste("new")}>Paste in a new terminal</MenuItem>
+          </MenuPopup>
+        </Menu>
+      ) : null}
+    </>
+  );
+}
+
 function MarkdownCodeBlock({
   code,
   language,
   fenceTitle,
   theme,
-  onRunShellCommand,
-  isStreaming,
+  canPasteShellCommand,
   children,
 }: {
   code: string;
   language: string;
   fenceTitle: string | null;
   theme: "light" | "dark";
-  onRunShellCommand?: ((command: string) => void) | undefined;
-  isStreaming: boolean;
+  canPasteShellCommand: boolean;
   children: ReactNode;
 }) {
   const [copied, setCopied] = useState(false);
@@ -990,17 +1069,11 @@ function MarkdownCodeBlock({
   const copiedTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const wrapLabel = wrapped ? "Disable line wrap" : "Wrap lines";
   const copyLabel = copied ? "Copied" : "Copy code";
-  const command = code.trim();
-  const canRun =
-    onRunShellCommand !== undefined &&
-    !isStreaming &&
-    /^(?:sh|bash|zsh|fish|shell|powershell|pwsh)$/.test(language) &&
-    code.endsWith("\n") &&
-    command.length > 0 &&
-    !command.endsWith("\\") &&
-    // Control and invisible format characters (bidi overrides, zero-width) can
-    // make the rendered command differ from what the terminal would receive.
-    !/[\p{Cc}\p{Cf}]/u.test(code.slice(0, -1));
+  const shellCommand = useMemo(
+    () =>
+      canPasteShellCommand && isShellFenceLanguage(language) ? extractShellCommand(code) : null,
+    [canPasteShellCommand, code, language],
+  );
 
   const handleCopy = useCallback(() => {
     if (typeof navigator === "undefined" || navigator.clipboard == null) {
@@ -1055,6 +1128,7 @@ function MarkdownCodeBlock({
           />
         </span>
         <span className="flex items-center gap-0.5" role="toolbar" aria-label="Code block actions">
+          {shellCommand ? <MarkdownCodeBlockTerminalActions command={shellCommand} /> : null}
           <Tooltip>
             <TooltipTrigger
               render={
@@ -1072,24 +1146,6 @@ function MarkdownCodeBlock({
             </TooltipTrigger>
             <TooltipPopup side="top">{wrapLabel}</TooltipPopup>
           </Tooltip>
-          {canRun ? (
-            <Tooltip>
-              <TooltipTrigger
-                render={
-                  <Button
-                    type="button"
-                    variant="ghost-muted"
-                    size="icon-xs"
-                    onClick={() => onRunShellCommand(command)}
-                    aria-label="Run in terminal"
-                  />
-                }
-              >
-                <PlayIcon className="size-3" />
-              </TooltipTrigger>
-              <TooltipPopup side="top">Run in terminal</TooltipPopup>
-            </Tooltip>
-          ) : null}
           <Tooltip>
             <TooltipTrigger
               render={
@@ -2330,7 +2386,7 @@ function useChatMarkdownState({
   isStreaming = false,
   skills = EMPTY_MARKDOWN_SKILLS,
   onUseArtifactTemplate,
-  onRunShellCommand,
+  enableTerminalPaste = false,
   imageBaseDir,
   onImageExpand,
   renderContextReference,
@@ -2724,6 +2780,7 @@ function useChatMarkdownState({
     () => ({
       cwd,
       diffThemeName,
+      enableTerminalPaste,
       environmentId,
       expandMedia,
       fileLinkChip,
@@ -2737,7 +2794,6 @@ function useChatMarkdownState({
       markdownFileLinkMetaByHref,
       onTaskListChange,
       onUseArtifactTemplate,
-      onRunShellCommand,
       openChangeRequestLink,
       openDeferredMarkdownLink,
       openExternalLinkInPreview,
@@ -2755,6 +2811,7 @@ function useChatMarkdownState({
     [
       cwd,
       diffThemeName,
+      enableTerminalPaste,
       environmentId,
       expandMedia,
       fileLinkChip,
@@ -2768,7 +2825,6 @@ function useChatMarkdownState({
       markdownFileLinkMetaByHref,
       onTaskListChange,
       onUseArtifactTemplate,
-      onRunShellCommand,
       openChangeRequestLink,
       openDeferredMarkdownLink,
       openExternalLinkInPreview,
@@ -3300,7 +3356,7 @@ const CHAT_MARKDOWN_COMPONENTS = {
     return <MarkdownDetails open={detailsOpen}>{children}</MarkdownDetails>;
   },
   pre: function MarkdownPre({ node, children, ...props }) {
-    const { resolvedTheme, diffThemeName, isStreaming, onRunShellCommand, text } = use(
+    const { resolvedTheme, diffThemeName, isStreaming, enableTerminalPaste, text } = use(
       ChatMarkdownRendererContext,
     );
     const codeBlock = extractCodeBlock(children);
@@ -3316,12 +3372,9 @@ const CHAT_MARKDOWN_COMPONENTS = {
         language={language}
         fenceTitle={fenceTitle}
         theme={resolvedTheme}
-        onRunShellCommand={
-          onRunShellCommand && !isStreaming && isClosedCodeFence(node, text)
-            ? onRunShellCommand
-            : undefined
+        canPasteShellCommand={
+          enableTerminalPaste && !isStreaming && isClosedCodeFence(node, text)
         }
-        isStreaming={isStreaming}
       >
         <RenderErrorBoundary
           resetKeys={[codeBlock.code, language, diffThemeName, isStreaming]}

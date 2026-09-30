@@ -285,7 +285,6 @@ interface TimelineRowSharedState {
   supportsConversationFork: boolean;
   onForkFromTurnCount: (targetTurnCount: number) => void;
   onUseArtifactTemplate: (template: CodexArtifactTemplate) => void;
-  onRunShellCommand: ((command: string) => void) | undefined;
   onImageExpand: (preview: ExpandedImagePreview) => void;
   onFileOpen: (attachment: ChatFileAttachment) => void;
   onFileDownload: (attachment: ChatFileAttachment) => void;
@@ -436,7 +435,6 @@ interface MessagesTimelineProps {
   supportsConversationFork?: boolean;
   onForkFromTurnCount?: (targetTurnCount: number) => void;
   onUseArtifactTemplate?: (template: CodexArtifactTemplate) => void;
-  onRunShellCommand?: (command: string) => void;
   isRevertingCheckpoint: boolean;
   onImageExpand: (preview: ExpandedImagePreview) => void;
   onFileOpen?: (attachment: ChatFileAttachment) => void;
@@ -508,7 +506,6 @@ export const MessagesTimeline = memo(function MessagesTimeline({
   supportsConversationFork = false,
   onForkFromTurnCount = NOOP_FORK_FROM_TURN_COUNT,
   onUseArtifactTemplate = NOOP_USE_ARTIFACT_TEMPLATE,
-  onRunShellCommand,
   isRevertingCheckpoint,
   onImageExpand,
   onFileOpen = NOOP_OPEN_ATTACHMENT,
@@ -1165,8 +1162,7 @@ export const MessagesTimeline = memo(function MessagesTimeline({
       supportsConversationFork,
       onForkFromTurnCount,
       onUseArtifactTemplate,
-      onRunShellCommand,
-      onImageExpand,
+          onImageExpand,
       onFileOpen,
       onFileDownload,
       openPullRequest,
@@ -1203,8 +1199,7 @@ export const MessagesTimeline = memo(function MessagesTimeline({
       supportsConversationFork,
       onForkFromTurnCount,
       onUseArtifactTemplate,
-      onRunShellCommand,
-      onImageExpand,
+          onImageExpand,
       onFileOpen,
       onFileDownload,
       openPullRequest,
@@ -2446,12 +2441,12 @@ function AssistantTimelineRow({ row }: { row: Extract<TimelineRow, { kind: "mess
             text={messageText}
             cwd={ctx.markdownCwd}
             threadRef={ctx.threadRef ?? undefined}
+            enableTerminalPaste
             isStreaming={Boolean(row.message.streaming)}
             lineBreaks={shouldPreserveAssistantLineBreaks(messageText)}
             skills={ctx.skills}
             headingLevelOffset={MESSAGE_HEADING_LEVEL}
             onUseArtifactTemplate={ctx.onUseArtifactTemplate}
-            onRunShellCommand={ctx.onRunShellCommand}
             onImageExpand={ctx.onImageExpand}
           />
         </AssistantCitationSource>
