@@ -604,6 +604,9 @@ export function useSettingsRestore(onRestored?: () => void) {
       ...(settings.contextWindowMeterEnabled !== DEFAULT_UNIFIED_SETTINGS.contextWindowMeterEnabled
         ? ["Context window indicator"]
         : []),
+      ...(settings.usagePaceIncludesWeekends !== DEFAULT_UNIFIED_SETTINGS.usagePaceIncludesWeekends
+        ? ["Count weekends in usage pace"]
+        : []),
       ...(settings.responseStreamingMode !== DEFAULT_UNIFIED_SETTINGS.responseStreamingMode
         ? ["Response streaming"]
         : []),
@@ -685,6 +688,7 @@ export function useSettingsRestore(onRestored?: () => void) {
       settings.glassOpacity,
       settings.panelAnimationDurationMs,
       settings.responseStreamingMode,
+      settings.usagePaceIncludesWeekends,
       settings.enableProviderUpdateChecks,
       settings.continueThreadsAfterServerUpdate,
       settings.sidebarAutoSettleAfterDays,
@@ -792,6 +796,7 @@ export function useSettingsRestore(onRestored?: () => void) {
       sidebarAutoSettleAfterDays: DEFAULT_UNIFIED_SETTINGS.sidebarAutoSettleAfterDays,
       sidebarAutoSettleOnMerge: DEFAULT_UNIFIED_SETTINGS.sidebarAutoSettleOnMerge,
       responseStreamingMode: DEFAULT_UNIFIED_SETTINGS.responseStreamingMode,
+      usagePaceIncludesWeekends: DEFAULT_UNIFIED_SETTINGS.usagePaceIncludesWeekends,
       enableProviderUpdateChecks: DEFAULT_UNIFIED_SETTINGS.enableProviderUpdateChecks,
       continueThreadsAfterServerUpdate: DEFAULT_UNIFIED_SETTINGS.continueThreadsAfterServerUpdate,
       backgroundActivity: DEFAULT_UNIFIED_SETTINGS.backgroundActivity,
@@ -2439,6 +2444,19 @@ export function GeneralSettingsPanel() {
                 </SelectItem>
               </SelectPopup>
             </Select>
+          }
+        />
+        <SettingsRow
+          {...searchableSetting("usage-pace-weekends")}
+          description="The even-spending mark on a weekly limit follows the whole week. Off, it only advances Monday to Friday."
+          control={
+            <Switch
+              checked={settings.usagePaceIncludesWeekends}
+              onCheckedChange={(checked) =>
+                updateSettings({ usagePaceIncludesWeekends: Boolean(checked) })
+              }
+              aria-label="Count weekends in usage pace"
+            />
           }
         />
         <SettingsRow

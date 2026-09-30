@@ -7,6 +7,7 @@ import {
   type OrchestrationThreadActivity,
   UsageLimitSourceId,
 } from "@t3tools/contracts";
+import * as DateTime from "effect/DateTime";
 import { describe, expect, it } from "vite-plus/test";
 
 import {
@@ -81,6 +82,46 @@ describe("pace", () => {
     expect(formatResetsIn({ ...window, resetsAt: "2026-09-03T11:00:00.000Z" }, now)).toBe(
       "resets now",
     );
+  });
+});
+
+describe("weekday-only pace", () => {
+  // A week with no clock change, so local days are all 24 hours long.
+  const localIso = (day: number, hour: number) =>
+    DateTime.formatIso(
+      DateTime.makeZonedUnsafe(
+        `2026-09-${String(day).padStart(2, "0")}T${String(hour).padStart(2, "0")}:00:00Z`,
+        { timeZone: DateTime.zoneMakeLocal(), adjustForTimeZone: true },
+      ),
+    );
+  const weekly = {
+    id: "weekly",
+    kind: "weekly",
+    label: "Weekly",
+    usedPercent: 40,
+    windowDurationMins: 7 * 24 * 60,
+    resetsAt: localIso(14, 0),
+  } as const;
+  const wednesdayNoon = Date.parse(localIso(9, 12));
+  const saturdayNoon = Date.parse(localIso(12, 12));
+
+  it("spreads the window over five days instead of seven", () => {
+    expect(elapsedShare(weekly, wednesdayNoon)).toBeCloseTo(2.5 / 7);
+    expect(elapsedShare(weekly, wednesdayNoon, { includeWeekends: false })).toBeCloseTo(0.5);
+  });
+
+  it("stops the clock over the weekend", () => {
+    expect(elapsedShare(weekly, saturdayNoon)).toBeCloseTo(5.5 / 7);
+    expect(elapsedShare(weekly, saturdayNoon, { includeWeekends: false })).toBe(1);
+  });
+
+  it("judges the same spend against the working week", () => {
+    expect(paceOf(weekly, wednesdayNoon)).toBe("on");
+    expect(paceOf(weekly, wednesdayNoon, { includeWeekends: false })).toBe("under");
+  });
+
+  it("leaves shorter windows on the plain clock", () => {
+    expect(elapsedShare(window, now, { includeWeekends: false })).toBeCloseTo(0.6);
   });
 });
 

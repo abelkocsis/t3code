@@ -32,6 +32,7 @@ import {
   ResetCreditDialog,
   barColor,
   resetCreditsSummary,
+  useLimitPaceOptions,
   useResetCredit,
 } from "./UsageLimits";
 
@@ -575,7 +576,8 @@ export function UsageLimitsPooled({
   readonly now: number;
   readonly cursorPrompt?: ReactNode;
 }) {
-  const pools = collectLimitPools(collectLimitAccounts(presentations), now);
+  const paceOptions = useLimitPaceOptions();
+  const pools = collectLimitPools(collectLimitAccounts(presentations), now, paceOptions);
   const notices = collectLimitNotices(presentations);
   const externalLinks = collectExternalUsageLinks(presentations);
   const cursorPromptAt =
