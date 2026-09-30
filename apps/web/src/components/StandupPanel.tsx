@@ -150,7 +150,11 @@ export function StandupPanel({ environmentId }: { environmentId: EnvironmentId |
           <ChevronLeft className="size-4" />
         </Button>
         <span className="min-w-0 flex-1 truncate text-center font-medium text-sm">
-          {day === null ? "No work recorded yet" : formatDayLabel(day)}
+          {day !== null
+            ? formatDayLabel(day)
+            : isLoading
+              ? "Finding the last day with work..."
+              : "No work recorded yet"}
         </span>
         <Button
           variant="ghost"
@@ -170,7 +174,7 @@ export function StandupPanel({ environmentId }: { environmentId: EnvironmentId |
               disabled={day === null || isGenerating || !hasWork}
               onClick={() => void generate()}
             >
-              <RefreshCw className={cn("size-4", isGenerating && "animate-spin")} />
+              <RefreshCw className={cn("size-4", (isLoading || isGenerating) && "animate-spin")} />
             </Button>
           </TooltipTrigger>
           <TooltipPopup side="bottom">Regenerate the summary</TooltipPopup>
