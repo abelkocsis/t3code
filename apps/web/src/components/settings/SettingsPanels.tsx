@@ -569,6 +569,9 @@ export function useSettingsRestore(onRestored?: () => void) {
       DEFAULT_UNIFIED_SETTINGS.sidebarWorkingShelfEnabled
         ? ["Working section"]
         : []),
+      ...(settings.sidebarCompactThreadRows !== DEFAULT_UNIFIED_SETTINGS.sidebarCompactThreadRows
+        ? ["Compact thread rows"]
+        : []),
       ...(settings.sidebarAutoSettleAfterDays !==
       DEFAULT_UNIFIED_SETTINGS.sidebarAutoSettleAfterDays
         ? ["Auto-settle inactive threads"]
@@ -695,6 +698,7 @@ export function useSettingsRestore(onRestored?: () => void) {
       settings.sidebarAutoSettleOnMerge,
       settings.sidebarProjectGroupingMode,
       settings.sidebarWorkingShelfEnabled,
+      settings.sidebarCompactThreadRows,
       settings.sidebarThreadPreviewCount,
       settings.showSkillsInSlashMenu,
       settings.timestampFormat,
@@ -793,6 +797,7 @@ export function useSettingsRestore(onRestored?: () => void) {
       sidebarThreadPreviewCount: DEFAULT_UNIFIED_SETTINGS.sidebarThreadPreviewCount,
       sidebarProjectGroupingMode: DEFAULT_UNIFIED_SETTINGS.sidebarProjectGroupingMode,
       sidebarWorkingShelfEnabled: DEFAULT_UNIFIED_SETTINGS.sidebarWorkingShelfEnabled,
+      sidebarCompactThreadRows: DEFAULT_UNIFIED_SETTINGS.sidebarCompactThreadRows,
       sidebarAutoSettleAfterDays: DEFAULT_UNIFIED_SETTINGS.sidebarAutoSettleAfterDays,
       sidebarAutoSettleOnMerge: DEFAULT_UNIFIED_SETTINGS.sidebarAutoSettleOnMerge,
       responseStreamingMode: DEFAULT_UNIFIED_SETTINGS.responseStreamingMode,
@@ -2305,6 +2310,20 @@ export function GeneralSettingsPanel() {
                 updateSettings({ sidebarWorkingShelfEnabled: Boolean(checked) })
               }
               aria-label="Working section (beta)"
+            />
+          }
+        />
+
+        <SettingsRow
+          {...searchableSetting("compact-thread-rows")}
+          description="Show every thread as a one-line row. Off, only settled and snoozed threads collapse."
+          control={
+            <Switch
+              checked={settings.sidebarCompactThreadRows}
+              onCheckedChange={(checked) =>
+                updateSettings({ sidebarCompactThreadRows: Boolean(checked) })
+              }
+              aria-label="Compact thread rows"
             />
           }
         />

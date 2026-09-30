@@ -370,6 +370,12 @@ export const SETTINGS_SEARCH_ITEMS = [
     scope: "project-defaults",
   },
   {
+    id: "compact-thread-rows",
+    title: "Compact thread rows",
+    to: "/settings/general",
+    searchTerms: ["sidebar density slim card list one line small rows threads"],
+  },
+  {
     id: "thread-notifications",
     title: "Thread notifications",
     to: "/settings/general",

@@ -121,6 +121,14 @@ answer. Pinned threads stay in the pinned section.
 While this is on, the active list is ordered by when each thread last came back to you, so you
 cannot drag to reorder it. Your saved order returns when you turn it off.
 
+## Choose the row size
+
+The sidebar shows each live thread as a card with its project, title, branch, and status.
+Settled and snoozed threads always collapse to one line. To collapse every thread to one
+line and fit more of them on screen, turn on **Compact thread rows** in
+**Settings → General**. A compact row keeps the project icon, the title, and the status,
+and it drops the branch and the change counts. This setting applies to web and desktop.
+
 ## Settle finished work
 
 Choose **Settle thread** from its menu to move finished work out of the active list
