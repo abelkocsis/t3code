@@ -6,7 +6,7 @@ import * as SqlClient from "effect/unstable/sql/SqlClient";
 import { runMigrations } from "../Migrations.ts";
 import * as NodeSqliteClient from "@t3tools/shared/nodeSqliteClient";
 
-const layer = it.layer(Layer.mergeAll(NodeSqliteClient.layerMemory()));
+const layer = it.layer(Layer.mergeAll(NodeSqliteClient.layer({ filename: ":memory:" })));
 
 const messageEvent = (input: {
   readonly sequence: number;
@@ -19,12 +19,12 @@ const messageEvent = (input: {
   payload: JSON.stringify({ threadId: input.threadId, messageId: input.messageId }),
 });
 
-layer("055_RepairForkedThreadMessages", (it) => {
+layer("902_RepairForkedThreadMessages", (it) => {
   it.effect("gives a forked message back to the thread that wrote it", () =>
     Effect.gen(function* () {
       const sql = yield* SqlClient.SqlClient;
 
-      yield* runMigrations({ toMigrationInclusive: 54 });
+      yield* runMigrations({ toMigrationInclusive: 901 });
 
       const events = [
         messageEvent({
@@ -62,7 +62,7 @@ layer("055_RepairForkedThreadMessages", (it) => {
         )
       `;
 
-      yield* runMigrations({ toMigrationInclusive: 55 });
+      yield* runMigrations({ toMigrationInclusive: 902 });
 
       const rows = yield* sql<{
         readonly message_id: string;
@@ -88,7 +88,7 @@ layer("055_RepairForkedThreadMessages", (it) => {
     Effect.gen(function* () {
       const sql = yield* SqlClient.SqlClient;
 
-      yield* runMigrations({ toMigrationInclusive: 54 });
+      yield* runMigrations({ toMigrationInclusive: 901 });
       yield* sql`
         INSERT INTO projection_thread_messages (
           message_id, thread_id, turn_id, role, text, is_streaming, created_at, updated_at
@@ -98,7 +98,7 @@ layer("055_RepairForkedThreadMessages", (it) => {
         )
       `;
 
-      yield* runMigrations({ toMigrationInclusive: 55 });
+      yield* runMigrations({ toMigrationInclusive: 902 });
 
       const rows = yield* sql<{ readonly message_id: string; readonly thread_id: string }>`
         SELECT message_id, thread_id
