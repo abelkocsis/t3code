@@ -13,6 +13,7 @@ import {
   formatDuration,
   formatResetsIn,
   type LimitPace,
+  type LimitPaceOptions,
   paceOf,
   spentPercent,
 } from "@t3tools/shared/usageLimits";
@@ -43,6 +44,16 @@ const PACE: Record<LimitPace, { readonly label: string; readonly icon: typeof Ga
   on: { label: "On pace with the window", icon: GaugeIcon },
   under: { label: "Under pace: headroom left for the rest of the window", icon: TrendingDownIcon },
 };
+
+/**
+ * How every limits view reads the clock, from the user's weekend preference.
+ * A weekday-only week moves the even-spending mark and the pace verdict
+ * together, so the bar and the glyph never disagree.
+ */
+export function useLimitPaceOptions(): LimitPaceOptions {
+  const includeWeekends = usePrimarySettings((settings) => settings.usagePaceIncludesWeekends);
+  return { includeWeekends };
+}
 
 /** The series colour the cost chart uses for this driver, so the two views read as one. */
 export function barColor(driver: ServerProvider["driver"]): string {
@@ -88,8 +99,9 @@ export function WindowBar({
   readonly now: number;
 }) {
   const timestampFormat = usePrimarySettings((settings) => settings.timestampFormat);
+  const paceOptions = useLimitPaceOptions();
   const spent = spentPercent(window);
-  const elapsed = elapsedShare(window, now);
+  const elapsed = elapsedShare(window, now, paceOptions);
   // The fill is quota spent, so the even-spending mark is the elapsed time.
   const timeElapsed = elapsed === null ? null : Math.round(elapsed * 100);
   const resetsIn = formatResetsIn(window, now);
@@ -164,6 +176,7 @@ export function LimitWindows({
   readonly compact?: boolean;
 }) {
   const color = barColor(driver);
+  const paceOptions = useLimitPaceOptions();
   return (
     <div
       className={
@@ -173,7 +186,7 @@ export function LimitWindows({
       }
     >
       {windows.map((window) => {
-        const pace = paceOf(window, now);
+        const pace = paceOf(window, now, paceOptions);
         const resetsIn = formatResetsIn(window, now);
         return (
           <Fragment key={window.id}>
@@ -210,10 +223,11 @@ export function LimitWindowsStacked({
   readonly now: number;
 }) {
   const color = barColor(driver);
+  const paceOptions = useLimitPaceOptions();
   return (
     <div className="flex flex-col gap-1.5">
       {windows.map((window) => {
-        const pace = paceOf(window, now);
+        const pace = paceOf(window, now, paceOptions);
         const resetsIn = formatResetsIn(window, now);
         return (
           <div key={window.id} className="flex flex-col">

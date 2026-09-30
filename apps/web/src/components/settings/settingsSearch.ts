@@ -394,6 +394,12 @@ export const SETTINGS_SEARCH_ITEMS = [
     searchTerms: ["timestamp clock locale system browser os 12 hour 24 hour"],
   },
   {
+    id: "usage-pace-weekends",
+    title: "Count weekends in usage pace",
+    to: "/settings/general",
+    searchTerms: ["limits weekly window marker pace weekday weekend saturday sunday quota"],
+  },
+  {
     id: "response-streaming",
     title: "Response streaming",
     to: "/settings/general",

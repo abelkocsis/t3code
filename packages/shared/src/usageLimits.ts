@@ -400,6 +400,7 @@ const WINDOW_KIND_ORDER: Record<ServerProviderUsageWindow["kind"], number> = {
 export function collectLimitPools(
   accounts: readonly LimitAccount[],
   now: number,
+  options?: LimitPaceOptions,
 ): readonly LimitPool[] {
   const byDriver = new Map<ServerProvider["driver"], LimitAccount[]>();
   for (const account of accounts) {
@@ -423,7 +424,7 @@ export function collectLimitPools(
         accountSortName(left).localeCompare(accountSortName(right)) ||
         left.key.localeCompare(right.key),
     );
-    return { driver, accounts: sorted, windows: poolWindows(sorted, now) };
+    return { driver, accounts: sorted, windows: poolWindows(sorted, now, options) };
   });
 }
 
@@ -431,7 +432,11 @@ function accountSortName(account: LimitAccount): string {
   return (account.displayName ?? account.email ?? account.key).toLowerCase();
 }
 
-function poolWindows(accounts: readonly LimitAccount[], now: number): readonly LimitPoolWindow[] {
+function poolWindows(
+  accounts: readonly LimitAccount[],
+  now: number,
+  options?: LimitPaceOptions,
+): readonly LimitPoolWindow[] {
   const byKey = new Map<string, LimitPoolMember[]>();
   for (const account of accounts) {
     for (const window of account.limits.windows) {
@@ -449,7 +454,7 @@ function poolWindows(accounts: readonly LimitAccount[], now: number): readonly L
     // members that have a clock; a window with no reset would otherwise
     // count as spend with no time elapsed and skew the verdict.
     const timed = members.flatMap((m) => {
-      const share = elapsedShare(m.window, now);
+      const share = elapsedShare(m.window, now, options);
       return share === null ? [] : [{ used: m.window.usedPercent, elapsed: share }];
     });
     const timedUsed = timed.reduce((sum, t) => sum + t.used, 0) / timed.length;
@@ -517,12 +522,51 @@ function resetMillis(window: ServerProviderUsageWindow): number | null {
   return Number.isFinite(at) ? at : null;
 }
 
+/**
+ * How the even-spending mark reads the clock. With `includeWeekends` false a
+ * weekly window only advances Monday to Friday in local time, so a user who
+ * does not work weekends is not told they are behind on Monday morning.
+ */
+export interface LimitPaceOptions {
+  readonly includeWeekends?: boolean;
+}
+
+/** Local weekday milliseconds in `[from, to)`, counting Monday to Friday only. */
+function weekdayMillis(from: number, to: number): number {
+  const timeZone = DateTime.zoneMakeLocal();
+  let total = 0;
+  let cursor = from;
+  while (cursor < to) {
+    const day = DateTime.makeZonedUnsafe(cursor, { timeZone });
+    const nextDay = DateTime.startOf(day, "day").pipe(DateTime.add({ days: 1 }));
+    const end = Math.min(DateTime.toEpochMillis(nextDay), to);
+    const weekday = DateTime.toParts(day).weekDay;
+    if (weekday !== 0 && weekday !== 6) total += end - cursor;
+    cursor = end;
+  }
+  return total;
+}
+
 /** Elapsed share of the window, 0..1, or null when its length or reset is unknown. */
-export function elapsedShare(window: ServerProviderUsageWindow, now: number): number | null {
+export function elapsedShare(
+  window: ServerProviderUsageWindow,
+  now: number,
+  options?: LimitPaceOptions,
+): number | null {
   const resetsAt = resetMillis(window);
   if (resetsAt === null || window.windowDurationMins === undefined) return null;
   const length = window.windowDurationMins * MINUTE;
   if (length <= 0) return null;
+  if (options?.includeWeekends === false && window.kind === "weekly") {
+    const opened = resetsAt - length;
+    const workable = weekdayMillis(opened, resetsAt);
+    // A window with no weekday in it has no weekday pace to report, so it
+    // falls back to the plain clock rather than dividing by zero.
+    if (workable > 0) {
+      const worked = weekdayMillis(opened, Math.min(Math.max(now, opened), resetsAt));
+      return Math.max(0, Math.min(1, worked / workable));
+    }
+  }
   return Math.max(0, Math.min(1, (length - (resetsAt - now)) / length));
 }
 
@@ -533,8 +577,12 @@ export type LimitPace = "ahead" | "on" | "under";
  * there is time left in the window; within five points of that counts as on
  * pace, further ahead means the window may run dry first.
  */
-export function paceOf(window: ServerProviderUsageWindow, now: number): LimitPace | null {
-  const elapsed = elapsedShare(window, now);
+export function paceOf(
+  window: ServerProviderUsageWindow,
+  now: number,
+  options?: LimitPaceOptions,
+): LimitPace | null {
+  const elapsed = elapsedShare(window, now, options);
   return elapsed === null ? null : paceOfShares(window.usedPercent, elapsed);
 }
 
