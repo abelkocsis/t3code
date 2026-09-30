@@ -2315,22 +2315,6 @@ export const decideOrchestrationCommand = Effect.fn("decideOrchestrationCommand"
           },
         });
       }
-      const settledAt = command.createdAt;
-      events.push({
-        ...(yield* withEventBase({
-          aggregateKind: "thread",
-          aggregateId: command.threadId,
-          occurredAt: settledAt,
-          commandId: command.commandId,
-          metadata: { historyImport: true },
-        })),
-        type: "thread.settled",
-        payload: {
-          threadId: command.threadId,
-          settledAt,
-          updatedAt: settledAt,
-        },
-      });
       return events;
     }
 

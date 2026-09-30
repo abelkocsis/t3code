@@ -235,7 +235,6 @@ it.layer(NodeServices.layer)("thread fork", (it) => {
       expect(events.map((entry) => entry.type)).toEqual([
         "thread.message-sent",
         "thread.activity-appended",
-        "thread.settled",
       ]);
       expect(events[1]).toMatchObject({
         payload: { activity: { kind: "tool.completed", summary: "Read a file" } },
