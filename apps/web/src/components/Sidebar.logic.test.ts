@@ -24,6 +24,7 @@ import {
   orderItemsByPreferredIds,
   resolveProjectStatusIndicator,
   resolveSidebarRowAccessibility,
+  resolveSidebarRowVariant,
   resolveSidebarThreadStatus,
   resolveThreadStatusPill,
   resolveWorkingStartedAt,
@@ -69,6 +70,21 @@ import {
 } from "../types";
 
 const localEnvironmentId = EnvironmentId.make("environment-local");
+
+describe("resolveSidebarRowVariant", () => {
+  it("keeps live threads as cards and collapses parked ones", () => {
+    expect(resolveSidebarRowVariant({ section: "active", compact: false })).toBe("card");
+    expect(resolveSidebarRowVariant({ section: "pinned", compact: false })).toBe("card");
+    expect(resolveSidebarRowVariant({ section: "snoozed", compact: false })).toBe("slim");
+    expect(resolveSidebarRowVariant({ section: "settled", compact: false })).toBe("slim");
+  });
+
+  it("collapses every section when the user picks compact rows", () => {
+    for (const section of ["pinned", "active", "snoozed", "settled"] as const) {
+      expect(resolveSidebarRowVariant({ section, compact: true })).toBe("slim");
+    }
+  });
+});
 
 describe("resolveSidebarRowAccessibility", () => {
   it.each([

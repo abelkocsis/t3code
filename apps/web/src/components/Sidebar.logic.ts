@@ -135,6 +135,19 @@ export const animateSidebarLayoutChanges: AnimateLayoutChanges = (args) =>
 
 export type SidebarSection = "pinned" | "active" | "snoozed" | "settled";
 
+/**
+ * The row shape a thread gets. Settled and snoozed work is parked, so it
+ * always collapses to one line. Live work keeps the full card, unless the
+ * user asks for compact rows and trades the card's detail for a longer list.
+ */
+export function resolveSidebarRowVariant(input: {
+  readonly section: SidebarSection;
+  readonly compact: boolean;
+}): "card" | "slim" {
+  if (input.compact) return "slim";
+  return input.section === "active" || input.section === "pinned" ? "card" : "slim";
+}
+
 /** Sortable ids: thread rows use their scoped key; structural items use a
     colon-free prefix: scoped thread keys always contain a colon. */
 const SIDEBAR_MARKER_PREFIX = "sidebar-marker-";

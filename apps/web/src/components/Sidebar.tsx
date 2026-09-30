@@ -177,6 +177,7 @@ import {
   resolveSidebarDropTarget,
   resolveSidebarDropVerb,
   resolveSidebarRowAccessibility,
+  resolveSidebarRowVariant,
   type SidebarDropVerb,
   resolveSidebarThreadStatus,
   searchSidebarThreads,
@@ -308,6 +309,49 @@ function WorkingDuration(props: { startedAt: string | null }) {
   }, [startedMs]);
   if (Number.isNaN(startedMs)) return null;
   return <span className="tabular-nums">{formatWorkingDurationLabel(Date.now() - startedMs)}</span>;
+}
+
+interface ThreadTopStatus {
+  readonly label: string;
+  readonly icon: "working" | "monitoring" | "approval" | "input" | "failed" | "woke" | "done";
+  readonly className: string;
+}
+
+/**
+ * The status chip both row shapes show: hue, glyph, label, and the running
+ * duration while a turn works. Compact rows carry it too, so shrinking a row
+ * never costs the user the reason to look at it.
+ */
+function ThreadStatusLabel(props: {
+  readonly status: ThreadTopStatus;
+  readonly workingStartedAt: string | null;
+}) {
+  const { status } = props;
+  return (
+    <span className={cn("inline-flex items-center gap-1 font-medium", status.className)}>
+      {status.icon === "working" ? (
+        <CircleDashedIcon aria-hidden className="size-4 shrink-0" />
+      ) : status.icon === "input" ? (
+        <MessageCircleQuestionIcon aria-hidden className="size-4 shrink-0" />
+      ) : status.icon === "approval" ? (
+        <ShieldQuestionIcon aria-hidden className="size-4 shrink-0" />
+      ) : status.icon === "failed" ? (
+        <CircleAlertIcon aria-hidden className="size-4 shrink-0" />
+      ) : status.icon === "monitoring" ? (
+        <EyeIcon aria-hidden className="size-4 shrink-0" />
+      ) : status.icon === "done" ? (
+        <CircleCheckIcon aria-hidden className="size-4 shrink-0" />
+      ) : null}
+      {/* The label alone is the live region: a role="status" wrapper around
+        the ticking duration would make screen readers announce every second. */}
+      <span role="status">{status.label}</span>
+      {props.workingStartedAt !== null ? (
+        <span aria-hidden>
+          <WorkingDuration startedAt={props.workingStartedAt} />
+        </span>
+      ) : null}
+    </span>
+  );
 }
 
 const EMPTY_PROVIDER_ENTRIES: ReadonlyMap<string, ProviderInstanceEntry> = new Map();
@@ -1649,12 +1693,14 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: {
             }
           >
             {accessibleTitle}
-            {/* Settled history recedes: dimmed favicon at rest, restored on
-              hover so the tail stays scannable when you're hunting. */}
+            {/* Parked history recedes: dimmed favicon at rest, restored on
+              hover so the tail stays scannable when you're hunting. Live rows
+              in compact mode keep their colour; they are still the work. */}
             <span
               className={cn(
                 "shrink-0 transition-opacity",
-                (!props.isActive || variantAction === "unsettle") &&
+                variantAction !== "settle" &&
+                  (!props.isActive || variantAction === "unsettle") &&
                   "opacity-40 grayscale group-focus-within/sidebar-row:opacity-100 group-focus-within/sidebar-row:grayscale-0 group-hover/sidebar-row:opacity-100 group-hover/sidebar-row:grayscale-0",
               )}
             >
@@ -1708,6 +1754,17 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: {
                       />
                       <TooltipPopup side="top">Dismiss Woke notification</TooltipPopup>
                     </Tooltip>
+                  ) : variantAction === "settle" && topStatus ? (
+                    // A live compact row still says why it wants attention;
+                    // only a quiet row falls back to its timestamp.
+                    <span className="text-xs">
+                      <ThreadStatusLabel
+                        status={topStatus}
+                        workingStartedAt={
+                          status === "working" ? resolveWorkingStartedAt(thread) : null
+                        }
+                      />
+                    </span>
                   ) : (
                     <span className="text-xs">
                       {variantAction === "unsettle"
@@ -1866,35 +1923,12 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: {
                           <TooltipPopup side="top">Dismiss Woke notification</TooltipPopup>
                         </Tooltip>
                       ) : (
-                        <span
-                          className={cn(
-                            "inline-flex items-center gap-1 font-medium",
-                            topStatus.className,
-                          )}
-                        >
-                          {topStatus.icon === "working" ? (
-                            <CircleDashedIcon aria-hidden className="size-4 shrink-0" />
-                          ) : topStatus.icon === "input" ? (
-                            <MessageCircleQuestionIcon aria-hidden className="size-4 shrink-0" />
-                          ) : topStatus.icon === "approval" ? (
-                            <ShieldQuestionIcon aria-hidden className="size-4 shrink-0" />
-                          ) : topStatus.icon === "failed" ? (
-                            <CircleAlertIcon aria-hidden className="size-4 shrink-0" />
-                          ) : topStatus.icon === "monitoring" ? (
-                            <EyeIcon aria-hidden className="size-4 shrink-0" />
-                          ) : topStatus.icon === "done" ? (
-                            <CircleCheckIcon aria-hidden className="size-4 shrink-0" />
-                          ) : null}
-                          {/* The label alone is the live region: a role="status"
-                            wrapper around the ticking duration would make
-                            screen readers announce every second. */}
-                          <span role="status">{topStatus.label}</span>
-                          {status === "working" ? (
-                            <span aria-hidden>
-                              <WorkingDuration startedAt={resolveWorkingStartedAt(thread)} />
-                            </span>
-                          ) : null}
-                        </span>
+                        <ThreadStatusLabel
+                          status={topStatus}
+                          workingStartedAt={
+                            status === "working" ? resolveWorkingStartedAt(thread) : null
+                          }
+                        />
                       )
                     ) : (
                       threadTimeLabel(thread)
@@ -2204,6 +2238,7 @@ export default function Sidebar() {
   const confirmThreadDelete = useClientSettings((s) => s.confirmThreadDelete);
   const confirmThreadArchive = useClientSettings((s) => s.confirmThreadArchive);
   const sidebarProjectSortOrder = useClientSettings((s) => s.sidebarProjectSortOrder);
+  const sidebarCompactThreadRows = useClientSettings((s) => s.sidebarCompactThreadRows);
   const timestampFormat = useClientSettings((s) => s.timestampFormat);
   const projectGroupingSettings = useClientSettings(selectProjectGroupingSettings);
   const {
@@ -4811,12 +4846,14 @@ export default function Sidebar() {
                         const threadKey = scopedThreadKey(
                           scopeThreadRef(thread.environmentId, thread.id),
                         );
-                        // Settled and snoozed are the ONLY things that collapse a
-                        // row: every other thread is a full card. Density comes
-                        // from users (or the auto rules) actually parking work,
-                        // not from the sidebar second-guessing what still matters.
-                        const isCard = section === "active" || section === "pinned";
-                        const rowVariant = isCard ? "card" : "slim";
+                        // Settled and snoozed always collapse: parked work does
+                        // not need a card. Live work keeps its card unless the
+                        // user picked compact rows, so the sidebar never
+                        // second-guesses on its own what still matters.
+                        const rowVariant = resolveSidebarRowVariant({
+                          section,
+                          compact: sidebarCompactThreadRows,
+                        });
                         return (
                           <SidebarThreadRow
                             // Fade between card and compact rows while the outer

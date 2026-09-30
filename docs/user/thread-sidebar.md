@@ -95,6 +95,14 @@ If dragging is unavailable for one environment, update the T3 Code server runnin
 environment. Pinned and active reordering require server support. Threads from older servers keep
 their default order until the server is updated.
 
+## Choose the row size
+
+The sidebar shows each live thread as a card with its project, title, branch, and status.
+Settled and snoozed threads always collapse to one line. To collapse every thread to one
+line and fit more of them on screen, turn on **Compact thread rows** in
+**Settings → General**. A compact row keeps the project icon, the title, and the status,
+and it drops the branch and the change counts. This setting applies to web and desktop.
+
 ## Settle finished work
 
 Choose **Settle thread** from its menu to move finished work out of the active list
