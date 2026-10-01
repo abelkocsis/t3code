@@ -128,7 +128,7 @@ import {
   useThreadSelectionStore,
 } from "../threadSelectionStore";
 import { useThreadActions } from "../hooks/useThreadActions";
-import { useThreadFolders } from "../hooks/useThreadFolders";
+import { useThreadFolders, type ThreadFoldersApi } from "../hooks/useThreadFolders";
 import { useHandleNewThread } from "../hooks/useHandleNewThread";
 import { isCommandPaletteOpen, openCommandPalette } from "../commandPaletteBus";
 import { startNewThreadFromContext } from "../lib/chatThreadActions";
@@ -200,8 +200,11 @@ import {
   useThreadJumpHintVisibility,
   folderHeaderMarker,
   folderIdOfMarker,
+  folderIdOfDragId,
+  folderIdOfListId,
   folderIdOfSection,
   folderPlaceholderMarker,
+  planSidebarFolderDrop,
   sidebarFolderSection,
   type SidebarFolderSection,
   type SidebarListItem,
@@ -603,11 +606,13 @@ function SortableSidebarMarker(props: {
   marker: SidebarListMarker;
   className?: string;
   children?: ReactNode;
+  /** Folder headings are dragged to reorder the folders themselves. */
+  draggable?: boolean;
   "data-testid"?: string;
 }) {
-  const { setNodeRef, transform, transition } = useSortable({
+  const { setNodeRef, transform, transition, attributes, listeners, isDragging } = useSortable({
     id: sidebarMarkerId(props.marker),
-    disabled: { draggable: true },
+    disabled: { draggable: props.draggable !== true },
     animateLayoutChanges: animateSidebarLayoutChanges,
   });
   return (
@@ -615,13 +620,20 @@ function SortableSidebarMarker(props: {
       ref={setNodeRef}
       data-thread-selection-safe
       data-testid={props["data-testid"]}
-      className={cn("list-none", props.className)}
+      className={cn(
+        "list-none",
+        isDragging && "relative z-20 rounded-md bg-sidebar-row-hover",
+        props.draggable === true && "cursor-grab active:cursor-grabbing",
+        props.className,
+      )}
       style={{
         transform: CSS.Translate.toString(transform),
         // A newly revealed target must not slide from its hidden position.
         transition: props.marker.endsWith("-placeholder") ? "none" : transition,
         visibility: transform?.scaleY === 0 ? "hidden" : undefined,
       }}
+      {...(props.draggable === true ? attributes : {})}
+      {...(props.draggable === true ? listeners : {})}
     >
       {props.children}
     </li>
@@ -727,8 +739,9 @@ function SidebarSectionHeader(props: {
   marker: SidebarListMarker;
   label: string;
   className?: string;
-  /** Folder headings carry the folder icon and their own menu. */
+  /** Folder headings carry the folder icon, their own menu, and a drag. */
   icon?: "folder";
+  draggable?: boolean;
   onContextMenu?: (event: ReactMouseEvent) => void;
   // While dragging, the settled header reads at full strength and takes the
   // accent while the lifted row is over it.
@@ -768,6 +781,7 @@ function SidebarSectionHeader(props: {
   return (
     <SortableSidebarMarker
       marker={props.marker}
+      draggable={props.draggable === true}
       data-testid={`sidebar-${props.marker}`}
       className={cn("mx-0.5 h-8", props.className)}
     >
@@ -2680,6 +2694,16 @@ export default function Sidebar() {
     readonly assignedKeys: ReadonlyMap<string, string>;
   } | null>(null);
   const threadFolders = useThreadFolders();
+  // Menus and drops read the folder list when they run, not when they were
+  // built, so a change to the list never rebuilds their callbacks.
+  const threadFoldersRef = useRef<ThreadFoldersApi | null>(null);
+  useEffect(() => {
+    threadFoldersRef.current = threadFolders;
+  }, [threadFolders]);
+  const readThreadFolders = useCallback(
+    () => threadFoldersRef.current ?? threadFolders,
+    [threadFolders],
+  );
   const knownFolderIds = useMemo(
     () => new Set(threadFolders.folders.map((folder) => folder.id as string)),
     [threadFolders.folders],
@@ -2975,6 +2999,12 @@ export default function Sidebar() {
     return routeThread === undefined ? EMPTY_THREADS : [routeThread];
   }, [routeThreadKey, snoozedShelfExpanded, snoozedThreads]);
 
+  // The folder order the user just dragged, held until the servers report
+  // the same one: without it the folders snap back for a frame after the
+  // drop and then jump into place.
+  const [optimisticFolderOrder, setOptimisticFolderOrder] = useState<readonly string[] | null>(
+    null,
+  );
   const [collapsedFolders, setCollapsedFolders] =
     useState<ReadonlySet<string>>(readCollapsedFolders);
   const toggleFolder = useCallback((folderId: string) => {
@@ -2988,20 +3018,35 @@ export default function Sidebar() {
   // Every folder the servers know, empty ones included: a folder is a place
   // the user made, so it stays until they delete it. A closed folder hides
   // its rows and shows how many it holds.
-  const folderGroups = useMemo(
-    () =>
-      threadFolders.folders.map((folder) => {
-        const threads = threadsByFolderId.get(folder.id) ?? EMPTY_THREADS;
-        return {
-          id: folder.id as string,
-          name: folder.name,
-          count: threads.length,
-          expanded: !collapsedFolders.has(folder.id),
-          threads,
-        };
-      }),
-    [collapsedFolders, threadFolders.folders, threadsByFolderId],
-  );
+  const folderGroups = useMemo(() => {
+    const ordered =
+      optimisticFolderOrder === null
+        ? threadFolders.folders
+        : [...threadFolders.folders].sort((left, right) => {
+            const leftIndex = optimisticFolderOrder.indexOf(left.id);
+            const rightIndex = optimisticFolderOrder.indexOf(right.id);
+            return leftIndex < 0 || rightIndex < 0 ? 0 : leftIndex - rightIndex;
+          });
+    return ordered.map((folder) => {
+      const threads = threadsByFolderId.get(folder.id) ?? EMPTY_THREADS;
+      return {
+        id: folder.id as string,
+        name: folder.name,
+        count: threads.length,
+        expanded: !collapsedFolders.has(folder.id),
+        threads,
+      };
+    });
+  }, [collapsedFolders, optimisticFolderOrder, threadFolders.folders, threadsByFolderId]);
+  // Release the held order once the servers report the same one.
+  useEffect(() => {
+    if (optimisticFolderOrder === null) return;
+    const current = threadFolders.folders.map((folder) => folder.id as string);
+    const matches =
+      current.length === optimisticFolderOrder.length &&
+      current.every((id, index) => id === optimisticFolderOrder[index]);
+    if (matches) setOptimisticFolderOrder(null);
+  }, [optimisticFolderOrder, threadFolders.folders]);
   const renderedFolderThreads = useMemo(
     () => folderGroups.flatMap((group) => (group.expanded ? group.threads : EMPTY_THREADS)),
     [folderGroups],
@@ -3414,8 +3459,11 @@ export default function Sidebar() {
     readonly occurredAt: string;
     readonly activationY: number | null;
     readonly targetSection: SidebarSection | null;
+    /** Set while a folder heading is the thing being dragged. */
+    readonly folderId: string | null;
   } | null>(null);
   const dragTargetSection = dragState?.targetSection ?? null;
+  const draggingFolderId = dragState?.folderId ?? null;
   const dragSensorRef = useRef<SidebarPointerSensor | null>(null);
   const finishThreadDrag = useCallback((started: boolean) => {
     dragSensorRef.current = null;
@@ -3596,6 +3644,22 @@ export default function Sidebar() {
   const handleThreadDragStart = useCallback(
     (event: DragStartEvent) => {
       const activeKey = String(event.active.id);
+      // A folder heading drags the folder itself: it carries no thread, so
+      // the lifecycle sections play no part in the move.
+      const draggedFolderId = folderIdOfDragId(activeKey);
+      if (draggedFolderId !== null) {
+        listMotionRef.current?.suspend();
+        setDragState({
+          activeKey,
+          activeSection: "active",
+          targetSection: null,
+          folderId: draggedFolderId,
+          occurredAt: new Date().toISOString(),
+          activationY:
+            event.activatorEvent instanceof PointerEvent ? event.activatorEvent.clientY : null,
+        });
+        return;
+      }
       const activeSection = sectionByThreadKey.get(activeKey);
       if (activeSection === undefined) return;
       // Stop normal section motion before dnd-kit measures the picked-up row.
@@ -3614,6 +3678,7 @@ export default function Sidebar() {
         activeKey,
         activeSection,
         targetSection: activeSection,
+        folderId: null,
         occurredAt: new Date().toISOString(),
         activationY:
           event.activatorEvent instanceof PointerEvent ? event.activatorEvent.clientY : null,
@@ -3650,7 +3715,8 @@ export default function Sidebar() {
     // header and, while it is empty, the same stand-in row the inbox uses.
     for (const group of folderGroups) {
       items.push({ kind: "marker", marker: folderHeaderMarker(group.id) });
-      if (!group.expanded) continue;
+      // A folder being dragged folds shut, so the move reads as one block.
+      if (!group.expanded || group.id === draggingFolderId) continue;
       if (group.threads.length === 0) {
         items.push({ kind: "marker", marker: folderPlaceholderMarker(group.id) });
         continue;
@@ -3671,6 +3737,7 @@ export default function Sidebar() {
     return items;
   }, [
     activeThreads,
+    draggingFolderId,
     folderGroups,
     pinnedThreads,
     renderedSettledThreads,
@@ -3679,9 +3746,12 @@ export default function Sidebar() {
     visibleSnoozedThreads,
   ]);
   useEffect(() => {
+    // A drag ends when the thing being dragged leaves the list. A folder
+    // heading is a marker, not a thread, so it has to be looked up the same
+    // way, or every folder drag is cancelled the moment it starts.
     if (
       dragState !== null &&
-      !sidebarListItems.some((item) => item.kind === "thread" && item.key === dragState.activeKey)
+      !sidebarListItems.some((item) => sidebarListItemId(item) === dragState.activeKey)
     ) {
       cancelThreadDrag();
     }
@@ -3715,6 +3785,19 @@ export default function Sidebar() {
   ]);
   const handleThreadDragOver = useCallback(
     (event: DragOverEvent) => {
+      if (folderIdOfDragId(String(event.active.id)) !== null) {
+        const overFolderId =
+          event.over === null ? null : folderIdOfListId(sidebarListItems, String(event.over.id));
+        setDragState((current) =>
+          current === null
+            ? current
+            : {
+                ...current,
+                targetSection: overFolderId === null ? null : sidebarFolderSection(overFolderId),
+              },
+        );
+        return;
+      }
       const target = event.over
         ? resolveSidebarDropTarget(sidebarListItems, String(event.active.id), String(event.over.id))
         : null;
@@ -3782,6 +3865,18 @@ export default function Sidebar() {
   const dndCollisionDetection = useMemo(() => {
     if (draggedThreadKey === undefined || draggedFromSection === undefined)
       return createSidebarCollisionDetection(() => true);
+    // A folder heading is dragged to reorder the folders, so any slot that
+    // belongs to another folder is a place it can land.
+    const draggedFolderId = folderIdOfDragId(draggedThreadKey);
+    if (draggedFolderId !== null) {
+      return createSidebarCollisionDetection(
+        (id) => {
+          const folderId = folderIdOfListId(sidebarListItems, id);
+          return folderId !== null && folderId !== draggedFolderId;
+        },
+        { items: sidebarListItems, activationY: dragActivationY ?? null },
+      );
+    }
     const source = threadByKey.get(draggedThreadKey);
     if (source === undefined) return createSidebarCollisionDetection(() => false);
     return createSidebarCollisionDetection(
@@ -3829,6 +3924,28 @@ export default function Sidebar() {
   const handleThreadDragEnd = useCallback(
     (event: DragEndEvent) => {
       const activeKey = String(event.active.id);
+      const draggedFolderId = folderIdOfDragId(activeKey);
+      if (draggedFolderId !== null) {
+        const overFolderId =
+          event.over === null ? null : folderIdOfListId(sidebarListItems, String(event.over.id));
+        const index = planSidebarFolderDrop({
+          folderIds: readThreadFolders().folders.map((folder) => folder.id as string),
+          activeFolderId: draggedFolderId,
+          overFolderId,
+        });
+        if (index !== null) {
+          const order = readThreadFolders().folders.map((folder) => folder.id as string);
+          const from = order.indexOf(draggedFolderId);
+          if (from >= 0) {
+            const next = [...order];
+            next.splice(from, 1);
+            next.splice(index, 0, draggedFolderId);
+            setOptimisticFolderOrder(next);
+          }
+          void readThreadFolders().moveFolder(ThreadFolderId.make(draggedFolderId), index);
+        }
+        return;
+      }
       const activeSection = sectionByThreadKey.get(activeKey);
       const target =
         event.over === null
@@ -4007,6 +4124,7 @@ export default function Sidebar() {
       planForwardNavigation,
       reorderPinnedThread,
       reorderActiveThread,
+      readThreadFolders,
       sectionByThreadKey,
       setThreadFolder,
       settleThread,
@@ -4313,9 +4431,6 @@ export default function Sidebar() {
     ],
   );
 
-  const threadFoldersRef = useRef(threadFolders);
-  threadFoldersRef.current = threadFolders;
-
   /** One move, with the failure surfaced: folders are otherwise silent. */
   const moveThreadToFolder = useCallback(
     async (target: ScopedThreadRef, folderId: ThreadFolderId | null) => {
@@ -4337,7 +4452,7 @@ export default function Sidebar() {
 
   /** Asks for a name and makes the folder, which starts out empty. */
   const createFolder = useCallback(async (): Promise<ThreadFolderId | null> => {
-    const folders = threadFoldersRef.current;
+    const folders = readThreadFolders();
     if (!folders.supported) {
       toastManager.add(
         stackedThreadToast({
@@ -4355,7 +4470,7 @@ export default function Sidebar() {
       takenNames: folders.folders.map((folder) => folder.name),
     });
     return name === null ? null : folders.createFolder(name);
-  }, []);
+  }, [readThreadFolders]);
 
   /**
    * A folder's own menu. The name lives in the registry, so a rename is one
@@ -4368,7 +4483,7 @@ export default function Sidebar() {
       void (async () => {
         const api = readLocalApi();
         if (!api) return;
-        const registry = threadFoldersRef.current;
+        const registry = readThreadFolders();
         const folder = registry.folders.find((candidate) => candidate.id === folderId);
         if (!folder) return;
         const clicked = await settlePromise(() =>
@@ -4421,7 +4536,7 @@ export default function Sidebar() {
         });
       })();
     },
-    [moveThreadToFolder],
+    [moveThreadToFolder, readThreadFolders],
   );
 
   const handleThreadContextMenu = useCallback(
@@ -4485,7 +4600,7 @@ export default function Sidebar() {
                 : null,
               isPinned,
               folderId: thread.folderId ?? null,
-              folders: threadFoldersRef.current.folders,
+              folders: readThreadFolders().folders,
               isSettled,
               autoSettleEnabled: thread.autoSettleDisabledAt == null,
               isSnoozed,
@@ -4723,6 +4838,7 @@ export default function Sidebar() {
       deleteThread,
       handleMultiSelectContextMenu,
       moveThreadToFolder,
+      readThreadFolders,
       markThreadUnread,
       openProjectSettings,
       projectScopeKey,
@@ -5349,7 +5465,11 @@ export default function Sidebar() {
                           </SortableThreadRow>
                         );
                       };
-                      const from = dragState?.activeSection ?? null;
+                      // A folder drag is not a thread drag: the section labels
+                      // and stand-in rows belong to moving a thread between
+                      // sections, so they stay out of it.
+                      const from =
+                        draggingFolderId === null ? (dragState?.activeSection ?? null) : null;
                       const items: ReactNode[] = [
                         <SidebarDraftBlock
                           key="draft-sessions"
@@ -5385,6 +5505,7 @@ export default function Sidebar() {
                                 key={`folder-header:${group.id}`}
                                 marker={item.marker}
                                 icon="folder"
+                                draggable
                                 label={
                                   group.expanded ? group.name : `${group.name} (${group.count})`
                                 }

@@ -25,7 +25,9 @@ import {
   resolveProjectStatusIndicator,
   resolveSidebarRowAccessibility,
   folderHeaderMarker,
+  folderIdOfDragId,
   folderPlaceholderMarker,
+  planSidebarFolderDrop,
   resolveSidebarRowVariant,
   sidebarFolderSection,
   resolveSidebarThreadStatus,
@@ -1320,6 +1322,35 @@ describe("resolveSidebarDropTarget", () => {
     expect(resolve("a1", "nope")).toBeNull();
     expect(resolve("nope", "a1")).toBeNull();
     expect(resolve(sidebarMarkerId("pinned-divider"), "a1")).toBeNull();
+  });
+});
+
+describe("planSidebarFolderDrop", () => {
+  const folderIds = ["f1", "f2", "f3"];
+
+  it("gives the index of the folder the heading landed on", () => {
+    expect(planSidebarFolderDrop({ folderIds, activeFolderId: "f3", overFolderId: "f1" })).toBe(0);
+    expect(planSidebarFolderDrop({ folderIds, activeFolderId: "f1", overFolderId: "f3" })).toBe(2);
+  });
+
+  it("does nothing without a move", () => {
+    expect(
+      planSidebarFolderDrop({ folderIds, activeFolderId: "f2", overFolderId: "f2" }),
+    ).toBeNull();
+    expect(
+      planSidebarFolderDrop({ folderIds, activeFolderId: "f2", overFolderId: null }),
+    ).toBeNull();
+    expect(
+      planSidebarFolderDrop({ folderIds, activeFolderId: "gone", overFolderId: "f1" }),
+    ).toBeNull();
+  });
+});
+
+describe("folderIdOfDragId", () => {
+  it("names a folder only for a heading id", () => {
+    expect(folderIdOfDragId(sidebarMarkerId(folderHeaderMarker("f1")))).toBe("f1");
+    expect(folderIdOfDragId(sidebarMarkerId(folderPlaceholderMarker("f1")))).toBeNull();
+    expect(folderIdOfDragId("env:thread")).toBeNull();
   });
 });
 
