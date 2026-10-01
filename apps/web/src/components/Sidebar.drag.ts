@@ -2,6 +2,8 @@ import { closestCenter, type CollisionDetection, type Modifier } from "@dnd-kit/
 import { verticalListSortingStrategy, type SortingStrategy } from "@dnd-kit/sortable";
 import {
   folderHeaderMarker,
+  folderIdOfDragId,
+  folderIdOfListId,
   folderIdOfMarker,
   folderIdOfSection,
   folderPlaceholderMarker,
@@ -116,6 +118,18 @@ export function createSidebarCollisionDetection(
     let collisions = closestCenter(args);
     const pointer = args.pointerCoordinates;
     const items = options.items;
+    // A folder heading can only land among folders, so the nearest slot is
+    // chosen from those alone rather than rejected after the fact.
+    const draggedFolderId = items ? folderIdOfDragId(String(args.active.id)) : null;
+    if (items && draggedFolderId !== null) {
+      const folderCollisions = collisions.filter((collision) => {
+        const folderId = folderIdOfListId(items, String(collision.id));
+        return folderId !== null && folderId !== draggedFolderId;
+      });
+      return folderCollisions.length > 0
+        ? folderCollisions
+        : collisions.filter((collision) => collision.id === args.active.id);
+    }
     // Folder slots are claimed by the pointer, not by the nearest centre: a
     // folder sits between rows, so a card's centre is usually over a
     // neighbour while the pointer is plainly on the folder.
@@ -250,9 +264,86 @@ export function createSidebarSortingStrategy(input: {
   let previous: Pick<Layout, "rects" | "activeIndex" | "overIndex"> | undefined;
   let transforms: ReturnType<SortingStrategy>[] | null = [];
 
-  function project({ rects, activeIndex, overIndex }: Layout) {
+  /**
+   * A folder drag moves a whole block: its heading and the rows under it.
+   * The other folders slide to show where it lands, which is the feedback a
+   * heading drag can give; the heading itself follows the pointer.
+   */
+  function projectFolderMove({ rects, activeIndex, overIndex }: Layout) {
+    const first = rects[0];
+    const active = items[activeIndex];
+    const over = items[overIndex];
+    if (!first || active?.kind !== "marker") return [];
+    const activeFolderId = folderIdOfMarker(active.marker);
+    if (activeFolderId === null) return [];
+    // Blocks: a folder heading and everything that belongs to it, and every
+    // other slot on its own.
+    const blocks: Array<{ readonly folderId: string | null; readonly entries: SidebarListItem[] }> =
+      [];
+    for (const item of items) {
+      const headerFolderId =
+        item.kind === "marker" && item.marker.startsWith("folder-header:")
+          ? folderIdOfMarker(item.marker)
+          : null;
+      if (headerFolderId !== null) {
+        blocks.push({ folderId: headerFolderId, entries: [item] });
+        continue;
+      }
+      const owner =
+        item.kind === "marker" ? folderIdOfMarker(item.marker) : folderIdOfSection(item.section);
+      const last = blocks.at(-1);
+      if (owner !== null && last?.folderId === owner) last.entries.push(item);
+      else blocks.push({ folderId: null, entries: [item] });
+    }
+    const from = blocks.findIndex((block) => block.folderId === activeFolderId);
+    const overFolderId =
+      over === undefined
+        ? null
+        : over.kind === "marker"
+          ? folderIdOfMarker(over.marker)
+          : folderIdOfSection(over.section);
+    const to = blocks.findIndex((block) => block.folderId === overFolderId);
+    if (from < 0 || to < 0 || from === to) return [];
+    const moved = [...blocks];
+    const [block] = moved.splice(from, 1);
+    if (block === undefined) return [];
+    moved.splice(to, 0, block);
+    // Only the folders move: reordering them leaves the region's height
+    // unchanged, so the pins, the inbox and the shelves stay where they are.
+    const folderItems = moved
+      .filter((entry) => entry.folderId !== null)
+      .flatMap((entry) => entry.entries);
+    const regionTop = Math.min(
+      ...blocks
+        .filter((entry) => entry.folderId !== null)
+        .flatMap((entry) => entry.entries)
+        .flatMap((item) => {
+          const index = indices.get(sidebarListItemId(item));
+          const rect = index === undefined ? undefined : rects[index];
+          return rect === undefined ? [] : [rect.top];
+        }),
+    );
+    if (!Number.isFinite(regionTop)) return [];
+    const result = items.map(() => stationary);
+    let top = regionTop;
+    for (const item of folderItems) {
+      const index = indices.get(sidebarListItemId(item));
+      const rect = index === undefined ? undefined : rects[index];
+      if (rect === undefined || index === undefined) continue;
+      result[index] = { ...stationary, y: top - rect.top };
+      top += rect.height + 1;
+    }
+    result[activeIndex] = stationary;
+    return result;
+  }
+
+  function project(layout: Layout) {
+    const { rects, activeIndex, overIndex } = layout;
     const active = items[activeIndex];
     const over = items[overIndex] ?? active;
+    if (active?.kind === "marker" && active.marker.startsWith("folder-header:")) {
+      return projectFolderMove(layout);
+    }
     if (active?.kind !== "thread" || !over || !rects[0]) return [];
     const target = resolveSidebarDropTarget(items, active.key, sidebarListItemId(over));
     if (!target) return [];

@@ -291,6 +291,39 @@ export function resolveSidebarDropTarget(
   return { section, pinnedOrder, activeOrder };
 }
 
+/** The folder a list id belongs to: its heading, its stand-in row, or a row. */
+export function folderIdOfListId(items: readonly SidebarListItem[], id: string): string | null {
+  const item = items.find((candidate) => sidebarListItemId(candidate) === id);
+  if (item === undefined) return null;
+  if (item.kind === "marker") return folderIdOfMarker(item.marker);
+  return item.kind === "thread" ? folderIdOfSection(item.section) : null;
+}
+
+/** The folder a drag id names, when the id is a folder heading. */
+export function folderIdOfDragId(id: string): string | null {
+  const marker = id.startsWith(SIDEBAR_MARKER_PREFIX)
+    ? (id.slice(SIDEBAR_MARKER_PREFIX.length) as SidebarListMarker)
+    : null;
+  if (marker === null || !marker.startsWith("folder-header:")) return null;
+  return folderIdOfMarker(marker);
+}
+
+/**
+ * Where a dragged folder heading lands: the index it takes in the folder
+ * order, or null when the drop changes nothing. Folders are reordered on
+ * their own, so this never touches a thread.
+ */
+export function planSidebarFolderDrop(input: {
+  readonly folderIds: readonly string[];
+  readonly activeFolderId: string;
+  readonly overFolderId: string | null;
+}): number | null {
+  const from = input.folderIds.indexOf(input.activeFolderId);
+  const to = input.overFolderId === null ? -1 : input.folderIds.indexOf(input.overFolderId);
+  if (from < 0 || to < 0 || from === to) return null;
+  return to;
+}
+
 export type SidebarThreadDropPlan =
   | { readonly kind: "none" }
   /** Within the pinned block: the existing key writes. */

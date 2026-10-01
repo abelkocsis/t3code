@@ -26,6 +26,8 @@ export interface ThreadFoldersApi {
   readonly supported: boolean;
   readonly createFolder: (name: string) => Promise<ThreadFolderId | null>;
   readonly renameFolder: (id: ThreadFolderId, name: string) => Promise<void>;
+  /** Puts `id` at `index` in the sidebar's folder order. */
+  readonly moveFolder: (id: ThreadFolderId, index: number) => Promise<void>;
   readonly deleteFolder: (id: ThreadFolderId) => Promise<void>;
 }
 
@@ -97,6 +99,21 @@ export function useThreadFolders(): ThreadFoldersApi {
     [writeFolders],
   );
 
+  const moveFolder = useCallback(
+    async (id: ThreadFolderId, index: number) => {
+      await writeFolders((current) => {
+        const from = current.findIndex((folder) => folder.id === id);
+        if (from < 0) return current;
+        const next = [...current];
+        const [moved] = next.splice(from, 1);
+        if (moved === undefined) return current;
+        next.splice(Math.max(0, Math.min(index, next.length)), 0, moved);
+        return next;
+      });
+    },
+    [writeFolders],
+  );
+
   const deleteFolder = useCallback(
     async (id: ThreadFolderId) => {
       await writeFolders((current) => current.filter((folder) => folder.id !== id));
@@ -105,7 +122,14 @@ export function useThreadFolders(): ThreadFoldersApi {
   );
 
   return useMemo(
-    () => ({ folders, supported: targets.length > 0, createFolder, renameFolder, deleteFolder }),
-    [createFolder, deleteFolder, folders, renameFolder, targets.length],
+    () => ({
+      folders,
+      supported: targets.length > 0,
+      createFolder,
+      renameFolder,
+      moveFolder,
+      deleteFolder,
+    }),
+    [createFolder, deleteFolder, folders, moveFolder, renameFolder, targets.length],
   );
 }
