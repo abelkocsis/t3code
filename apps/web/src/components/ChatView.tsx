@@ -277,6 +277,7 @@ import { useNewThreadHandler } from "../hooks/useHandleNewThread";
 import { useRemoveClonedProject } from "../hooks/useRemoveClonedProject";
 import { useOpenPanelPullRequestUrl } from "../hooks/useOpenPanelPullRequestUrl";
 import { useThreadActions } from "../hooks/useThreadActions";
+import { useTitlebarControlsInset } from "../hooks/useTitlebarControlsInset";
 import { resolveAppModelSelectionForInstance } from "../modelSelection";
 import {
   getComposerPromptInjectionState,
@@ -9811,6 +9812,9 @@ export default function ChatView(props: ChatViewProps) {
     pendingSidebarFileDrops,
   ]);
 
+  // The tab strip reserves exactly as much room as this cluster occupies.
+  const titlebarControlsRef = useTitlebarControlsInset();
+
   // Empty state: no active thread
   if (!activeThread) {
     return <NoActiveThreadState />;
@@ -9839,6 +9843,7 @@ export default function ChatView(props: ChatViewProps) {
   );
   const panelLayoutControls = (
     <div
+      ref={titlebarControlsRef}
       className={cn(
         // Keep one viewport anchor inside the header's no-drag region. The
         // header can shrink behind the right panel without moving the controls.

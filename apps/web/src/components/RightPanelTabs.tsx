@@ -1122,7 +1122,9 @@ export function RightPanelTabs(props: RightPanelTabsProps) {
           // The sheet overlays from the viewport top, so its tab bar keeps
           // the titlebar's height: a compact row re-centers the layout
           // controls a few pixels higher and the cluster jumps on open.
-          props.mode === "inline" && !props.layoutControls ? "pr-28" : "pr-3",
+          props.mode === "inline" && !props.layoutControls
+            ? "pr-(--workspace-controls-inset)"
+            : "pr-3",
           ownsDesktopTitleBar && "drag-region",
           ownsDesktopTitleBar && "wco:pr-(--workspace-native-controls-inset)",
           props.mode === "inline" && props.maximized && COLLAPSED_SIDEBAR_TITLEBAR_INSET_CLASS,
