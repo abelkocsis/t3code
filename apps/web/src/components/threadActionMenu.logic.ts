@@ -12,6 +12,10 @@ export type ThreadActionMenuId =
   | "project-settings"
   | "pin"
   | "unpin"
+  | "folder"
+  | "folder:new"
+  | "folder:clear"
+  | `folder:set:${string}`
   | "settle"
   | "unsettle"
   | "auto-settle"
@@ -42,6 +46,10 @@ export interface ThreadActionMenuState {
     readonly isActive: boolean;
   } | null;
   readonly isPinned: boolean;
+  /** The folder this thread sits in, or null when it is ungrouped. */
+  readonly folderId: string | null;
+  /** Every folder in the sidebar, so the submenu can offer them. */
+  readonly folders: ReadonlyArray<{ readonly id: string; readonly name: string }>;
   readonly isSettled: boolean;
   /** False while the user has turned automatic settlement off for this thread. */
   readonly autoSettleEnabled: boolean;
@@ -56,6 +64,8 @@ export interface ThreadActionMenuState {
     readonly autoSettleOptOut: boolean;
     readonly snooze: boolean;
     readonly pinning: boolean;
+    /** Server understands thread.folder.set. */
+    readonly folders: boolean;
     readonly titleRegeneration: boolean;
   };
   readonly snoozePresets: ReadonlyArray<SnoozePreset>;
@@ -84,6 +94,33 @@ export function buildThreadActionMenuItems(
           state.isPinned
             ? { id: "unpin" as const, label: "Unpin thread", icon: "pin-off" }
             : { id: "pin" as const, label: "Pin thread", icon: "pin" },
+        ]
+      : []),
+    // Folders group live threads in the sidebar. The submenu lists what
+    // exists, so the common move is one click and a name is only needed for
+    // a new group.
+    ...(state.supports.folders
+      ? [
+          {
+            id: "folder" as const,
+            label: "Folder",
+            icon: "folder",
+            children: [
+              ...state.folders.map((folder) => ({
+                id: `folder:set:${folder.id}` as const,
+                label: folder.name,
+                checked: folder.id === state.folderId,
+              })),
+              {
+                id: "folder:new" as const,
+                label: "New folder…",
+                separatorBefore: state.folders.length > 0,
+              },
+              ...(state.folderId === null
+                ? []
+                : [{ id: "folder:clear" as const, label: "Remove from folder" }]),
+            ],
+          },
         ]
       : []),
     // Both lifecycle actions stay available on pinned threads: settling

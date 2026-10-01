@@ -236,6 +236,16 @@ export function applyThreadDetailEvent(
         },
       };
 
+    case "thread.folder-set":
+      return {
+        kind: "updated",
+        thread: {
+          ...thread,
+          folderId: event.payload.folderId,
+          updatedAt: event.payload.updatedAt,
+        },
+      };
+
     case "thread.pinned":
       return {
         kind: "updated",

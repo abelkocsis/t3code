@@ -1,4 +1,6 @@
 import { requestCustomSnooze } from "./CustomSnoozeDialog";
+import { requestFolderName } from "./FolderNameDialog";
+import { readCollapsedFolders, saveCollapsedFolders } from "./sidebarFolders";
 import { useSupportsMultiplePullRequests } from "~/hooks/useSupportsMultiplePullRequests";
 import { resolveThreadCurrentPullRequestLink } from "@t3tools/shared/threadPullRequests";
 import { useAtomValue } from "@effect/atom-react";
@@ -38,6 +40,7 @@ import {
 } from "@t3tools/client-runtime/environment";
 import {
   resolveEnvironmentMachineKind,
+  ThreadFolderId,
   type EnvironmentMachineKind,
   type ProjectIconOverride,
   type ScopedThreadRef,
@@ -55,6 +58,7 @@ import {
   ClockIcon,
   EyeIcon,
   FolderIcon,
+  FolderPlusIcon,
   GitBranchIcon,
   MessageCircleQuestionIcon,
   PinIcon,
@@ -124,6 +128,7 @@ import {
   useThreadSelectionStore,
 } from "../threadSelectionStore";
 import { useThreadActions } from "../hooks/useThreadActions";
+import { useThreadFolders } from "../hooks/useThreadFolders";
 import { useHandleNewThread } from "../hooks/useHandleNewThread";
 import { isCommandPaletteOpen, openCommandPalette } from "../commandPaletteBus";
 import { startNewThreadFromContext } from "../lib/chatThreadActions";
@@ -195,6 +200,12 @@ import {
   useRetainedValue,
   useSidebarRowSubscriptionLease,
   useThreadJumpHintVisibility,
+  folderHeaderMarker,
+  folderIdOfMarker,
+  folderIdOfSection,
+  folderPlaceholderMarker,
+  sidebarFolderSection,
+  type SidebarFolderSection,
   type SidebarListItem,
   type SidebarListMarker,
   type SidebarSection,
@@ -655,7 +666,7 @@ function SortableSidebarMarker(props: {
 // Empty targets stay measurable without reserving space at rest. The sorting
 // strategy opens their hint space during a drag.
 function SidebarSectionPlaceholder(props: {
-  marker: "active-placeholder" | "settled-placeholder";
+  marker: SidebarListMarker;
   label: string;
   showHint: boolean;
   isDropTarget: boolean;
@@ -676,6 +687,33 @@ function SidebarSectionPlaceholder(props: {
           {props.label}
         </div>
       ) : null}
+    </SortableSidebarMarker>
+  );
+}
+
+/**
+ * An empty folder's stand-in row. Unlike the shelf placeholders, which sit at
+ * the end of their block and are the only candidate there, this one sits
+ * between other rows: it keeps a real height so the drop layer measures it
+ * where the dashed line is drawn, and the folder can be hit at all.
+ */
+function SidebarFolderPlaceholder(props: {
+  readonly marker: SidebarListMarker;
+  readonly label: string;
+  readonly isDropTarget: boolean;
+}) {
+  return (
+    <SortableSidebarMarker marker={props.marker} className="mx-0.5 h-9 pb-0.5">
+      <div
+        className={cn(
+          "flex h-full items-center justify-center rounded-md border border-dashed text-xs",
+          props.isDropTarget
+            ? "border-primary/40 bg-primary/5 text-primary"
+            : "border-sidebar-border/60 text-sidebar-muted-foreground/60",
+        )}
+      >
+        {props.label}
+      </div>
     </SortableSidebarMarker>
   );
 }
@@ -721,9 +759,12 @@ function SidebarDragBoundary(props: {
 
 // Shelf headers stay visible and keep their measured height while dragging.
 function SidebarSectionHeader(props: {
-  marker: "working-header" | "snoozed-header" | "settled-header";
+  marker: SidebarListMarker;
   label: string;
   className?: string;
+  /** Folder headings carry the folder icon and their own menu. */
+  icon?: "folder";
+  onContextMenu?: (event: ReactMouseEvent) => void;
   // While dragging, the settled header reads at full strength and takes the
   // accent while the lifted row is over it.
   dragging?: boolean;
@@ -745,7 +786,8 @@ function SidebarSectionHeader(props: {
   );
   const content = (
     <>
-      <span className="shrink-0">{props.label}</span>
+      {props.icon === "folder" ? <FolderIcon aria-hidden className="size-3 shrink-0" /> : null}
+      <span className="shrink-0 truncate">{props.label}</span>
       <span
         aria-hidden
         className={cn(
@@ -773,8 +815,11 @@ function SidebarSectionHeader(props: {
       <button
         type="button"
         onClick={props.toggle.onToggle}
+        onContextMenu={props.onContextMenu}
         aria-expanded={props.toggle.expanded}
-        data-testid={`sidebar-${shelf}-shelf-toggle`}
+        data-testid={
+          props.icon === "folder" ? "sidebar-folder-header" : `sidebar-${shelf}-shelf-toggle`
+        }
         className={cn(className, "cursor-pointer")}
       >
         {content}
@@ -1024,6 +1069,12 @@ const SidebarDraftBlock = memo(function SidebarDraftBlock(props: {
 // the same icons as the row actions and context menu so the drop reads as the
 // action it performs.
 const dropVerbBadge: Record<SidebarDropVerb, ReactNode> = {
+  file: (
+    <>
+      <FolderIcon aria-hidden className="size-3" />
+      Move
+    </>
+  ),
   pin: (
     <>
       <PinIcon aria-hidden className="size-3" />
@@ -1056,7 +1107,16 @@ const dropVerbBadge: Record<SidebarDropVerb, ReactNode> = {
   ),
 };
 
+/**
+ * Rows in a folder are inset and share a guide line up to the heading, so
+ * the first row below the folder cannot read as one of its members.
+ */
+const FOLDER_ROW_INSET =
+  "relative ps-3 before:absolute before:inset-y-0 before:start-1 before:w-px before:bg-sidebar-border/60";
+
 const SidebarThreadRow = memo(function SidebarThreadRow(props: {
+  /** Inset and guide line for a row inside a folder. */
+  inFolder?: boolean;
   thread: SidebarThreadSummary;
   variant: "card" | "slim";
   // Slim rows are either settled (action: un-settle) or merely quiet
@@ -1712,6 +1772,7 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: {
         className={cn(
           // Matches the h-9 row so unrendered rows never shift the list when they paint.
           "list-none [content-visibility:auto] [contain-intrinsic-size:auto_36px]",
+          props.inFolder && FOLDER_ROW_INSET,
           sortable?.isDragging && "relative z-20",
         )}
       >
@@ -1881,6 +1942,7 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: {
       className={cn(
         // Matches the h-[4.875rem] content box; the py-0.5 padding is added on top.
         "list-none py-0.5 [content-visibility:auto] [contain-intrinsic-size:auto_78px]",
+        props.inFolder && FOLDER_ROW_INSET,
         sortable?.isDragging && "relative z-20",
       )}
     >
@@ -2295,6 +2357,7 @@ export default function Sidebar() {
     reorderPinnedThread,
     reorderActiveThread,
     setThreadAutoSettle,
+    setThreadFolder,
     archiveThread,
     deleteThread,
   } = useThreadActions();
@@ -2644,9 +2707,11 @@ export default function Sidebar() {
   const [optimisticDrop, setOptimisticDrop] = useState<{
     readonly key: string;
     readonly sourceSection: SidebarSection;
-    readonly section: "pinned" | "active" | "settled";
+    readonly section: "pinned" | "active" | "settled" | SidebarFolderSection;
     readonly occurredAt: string;
     readonly clearsSnooze: boolean;
+    /** The folder the row lands in; undefined leaves its membership alone. */
+    readonly folderId?: string | null | undefined;
     /** Full destination order for pinned and active drops. */
     readonly order: readonly string[] | null;
     /** Destination order keys before the drop, to recognize concurrent writes. */
@@ -2655,12 +2720,18 @@ export default function Sidebar() {
         override holds until all of them appear in canonical state. */
     readonly assignedKeys: ReadonlyMap<string, string>;
   } | null>(null);
+  const threadFolders = useThreadFolders();
+  const knownFolderIds = useMemo(
+    () => new Set(threadFolders.folders.map((folder) => folder.id as string)),
+    [threadFolders.folders],
+  );
   const {
     pinnedThreads,
     draggableThreadKeys,
     activeReorderableThreadKeys,
     activeThreads,
     workingThreads,
+    threadsByFolderId,
     snoozedThreads,
     settledThreads,
     snoozeNow,
@@ -2685,6 +2756,9 @@ export default function Sidebar() {
     // put them, and snoozed or settled threads keep their shelves.
     const inbox = (thread: EnvironmentThreadShell) =>
       workingShelfEnabled && isSidebarThreadWorking(thread) ? working : active;
+    // Folders hold live threads only: a parked thread keeps its folder but
+    // waits in its shelf, so a shelf never hides behind a closed folder.
+    const foldered = new Map<string, EnvironmentThreadShell[]>();
     const snoozed: EnvironmentThreadShell[] = [];
     const settled: EnvironmentThreadShell[] = [];
     const draggable = new Set<string>();
@@ -2704,23 +2778,44 @@ export default function Sidebar() {
       if (capabilities?.threadPinning === true && capabilities.threadPinReorder === true) {
         draggable.add(threadKey);
       }
+      // Folders are their own reason to drag: a server that stores them lets
+      // a row move between groups even when it cannot be pinned or reordered.
+      if (capabilities?.threadFolders === true) draggable.add(threadKey);
+      // Folders are their own sections, but a row in one lives the active
+      // lifecycle, so the projection treats a folder drop as an active drop.
+      const dropFolderId =
+        optimisticDrop?.key === threadKey ? folderIdOfSection(optimisticDrop.section) : null;
+      const folderId =
+        (optimisticDrop?.key === threadKey && optimisticDrop.folderId !== undefined
+          ? optimisticDrop.folderId
+          : (dropFolderId ?? thread.folderId ?? null)) ?? null;
+      const groupId = folderId !== null && knownFolderIds.has(folderId) ? folderId : null;
+      const addToFolder = (value: EnvironmentThreadShell) => {
+        if (groupId === null) return false;
+        const members = foldered.get(groupId);
+        if (members) members.push(value);
+        else foldered.set(groupId, [value]);
+        return true;
+      };
       if (optimisticDrop?.key === threadKey) {
         const projected = applySidebarThreadDrop(
           thread,
-          optimisticDrop.section,
+          dropFolderId === null && optimisticDrop.section !== "pinned"
+            ? optimisticDrop.section === "settled"
+              ? "settled"
+              : "active"
+            : dropFolderId === null
+              ? "pinned"
+              : "active",
           optimisticDrop.occurredAt,
           optimisticDrop.assignedKeys.get(threadKey),
         );
-        (optimisticDrop.section === "pinned"
-          ? pinned
-          : optimisticDrop.section === "settled"
-            ? settled
-            : inbox(projected)
-        ).push(
-          optimisticDrop.clearsSnooze
-            ? projected
-            : { ...projected, snoozedAt: thread.snoozedAt, snoozedUntil: thread.snoozedUntil },
-        );
+        const placed = optimisticDrop.clearsSnooze
+          ? projected
+          : { ...projected, snoozedAt: thread.snoozedAt, snoozedUntil: thread.snoozedUntil };
+        if (optimisticDrop.section === "pinned") pinned.push(placed);
+        else if (optimisticDrop.section === "settled") settled.push(placed);
+        else if (!addToFolder(placed)) inbox(placed).push(placed);
       } else if (supportsSnooze && effectiveSnoozed(thread, { now: preciseNow })) {
         // Snooze outranks settlement and pinning until the thread wakes.
         snoozed.push(thread);
@@ -2728,7 +2823,7 @@ export default function Sidebar() {
         settled.push(thread);
       } else if (thread.pinnedAt != null) {
         pinned.push(thread);
-      } else {
+      } else if (!addToFolder(thread)) {
         inbox(thread).push(thread);
       }
     }
@@ -2746,6 +2841,9 @@ export default function Sidebar() {
         )
       : sortThreadsForSidebar(active);
     return {
+      threadsByFolderId: new Map(
+        [...foldered].map(([id, members]) => [id, sortThreadsForSidebar(members)]),
+      ),
       pinnedThreads:
         optimisticDrop?.section !== "pinned" || optimisticDrop.order === null
           ? sortedPinned
@@ -2776,6 +2874,7 @@ export default function Sidebar() {
       snoozeNow: preciseNow,
     };
   }, [
+    knownFolderIds,
     nowMinute,
     optimisticDrop,
     scopedProjectKeys,
@@ -2793,11 +2892,12 @@ export default function Sidebar() {
     () => [
       ...pinnedThreads,
       ...activeThreads,
+      ...[...threadsByFolderId.values()].flat(),
       ...workingThreads,
       ...snoozedThreads,
       ...settledThreads,
     ],
-    [activeThreads, pinnedThreads, settledThreads, snoozedThreads, workingThreads],
+    [activeThreads, pinnedThreads, settledThreads, snoozedThreads, threadsByFolderId, workingThreads],
   );
   const searchEnvironmentIds = useMemo(
     () =>
@@ -2955,9 +3055,41 @@ export default function Sidebar() {
     return routeThread === undefined ? EMPTY_THREADS : [routeThread];
   }, [routeThreadKey, workingShelfExpanded, workingThreads]);
 
+  const [collapsedFolders, setCollapsedFolders] =
+    useState<ReadonlySet<string>>(readCollapsedFolders);
+  const toggleFolder = useCallback((folderId: string) => {
+    setCollapsedFolders((current) => {
+      const next = new Set(current);
+      if (!next.delete(folderId)) next.add(folderId);
+      saveCollapsedFolders(next);
+      return next;
+    });
+  }, []);
+  // Every folder the servers know, empty ones included: a folder is a place
+  // the user made, so it stays until they delete it. A closed folder hides
+  // its rows and shows how many it holds.
+  const folderGroups = useMemo(
+    () =>
+      threadFolders.folders.map((folder) => {
+        const threads = threadsByFolderId.get(folder.id) ?? EMPTY_THREADS;
+        return {
+          id: folder.id as string,
+          name: folder.name,
+          count: threads.length,
+          expanded: !collapsedFolders.has(folder.id),
+          threads,
+        };
+      }),
+    [collapsedFolders, threadFolders.folders, threadsByFolderId],
+  );
+  const renderedFolderThreads = useMemo(
+    () => folderGroups.flatMap((group) => (group.expanded ? group.threads : EMPTY_THREADS)),
+    [folderGroups],
+  );
   const orderedThreads = useMemo(
     () => [
       ...pinnedThreads,
+      ...renderedFolderThreads,
       ...activeThreads,
       ...visibleWorkingThreads,
       ...visibleSnoozedThreads,
@@ -2965,6 +3097,7 @@ export default function Sidebar() {
     ],
     [
       pinnedThreads,
+      renderedFolderThreads,
       activeThreads,
       visibleWorkingThreads,
       visibleSnoozedThreads,
@@ -2999,6 +3132,9 @@ export default function Sidebar() {
   // event and defeat row memoization during streaming.
   const threadByKeyRef = useRef(threadByKey);
   threadByKeyRef.current = threadByKey;
+  // Folder-wide actions reach parked members too, so they read the whole list.
+  const threadsRef = useRef(threads);
+  threadsRef.current = threads;
   // handleNewThread is inherently unstable (depends on the projects list);
   // a ref keeps it out of attemptSettle's dependency array.
   const handleNewThreadRef = useRef(newThreadContext.handleNewThread);
@@ -3392,11 +3528,14 @@ export default function Sidebar() {
     };
     add(pinnedThreads, "pinned");
     add(activeThreads, "active");
+    for (const [folderId, members] of threadsByFolderId) {
+      add(members, sidebarFolderSection(folderId));
+    }
     add(workingThreads, "working");
     add(snoozedThreads, "snoozed");
     add(settledThreads, "settled");
     return map;
-  }, [activeThreads, pinnedThreads, settledThreads, snoozedThreads, workingThreads]);
+  }, [activeThreads, pinnedThreads, settledThreads, snoozedThreads, threadsByFolderId, workingThreads]);
   const pinnedKeys = useMemo(
     () =>
       pinnedThreads.map((thread) =>
@@ -3431,9 +3570,16 @@ export default function Sidebar() {
         : thread.pinnedAt != null
           ? "pinned"
           : "active";
+    // A folder is a section in the sidebar, but a thread in one lives the
+    // active lifecycle: the hold waits for "active plus this folder", or it
+    // would never release and every row would stay undraggable.
+    const dropLifecycleSection =
+      folderIdOfSection(optimisticDrop.section) === null ? optimisticDrop.section : "active";
+    const dropFolderId = optimisticDrop.folderId;
+    const folderLanded = dropFolderId === undefined || (thread.folderId ?? null) === dropFolderId;
     if (
       canonicalSection !== optimisticDrop.sourceSection &&
-      canonicalSection !== optimisticDrop.section
+      canonicalSection !== dropLifecycleSection
     ) {
       setOptimisticDrop(null);
       return;
@@ -3442,17 +3588,18 @@ export default function Sidebar() {
       // Settle also emits unpin/unsnooze events. Wait for the entire move
       // before releasing the projected fields and sort timestamps.
       if (
-        canonicalSection === optimisticDrop.section &&
-        thread.pinnedAt == null &&
+        canonicalSection === dropLifecycleSection &&
+        folderLanded &&
+        (dropLifecycleSection === "pinned" || thread.pinnedAt == null) &&
         (!optimisticDrop.clearsSnooze || thread.snoozedUntil == null)
       ) {
         setOptimisticDrop(null);
       }
       return;
     }
-    if (canonicalSection !== optimisticDrop.section) return;
+    if (canonicalSection !== dropLifecycleSection || !folderLanded) return;
     if (optimisticDrop.clearsSnooze && thread.snoozedUntil != null) return;
-    const destinationKeys = optimisticDrop.section === "pinned" ? pinnedKeys : activeKeys;
+    const destinationKeys = dropLifecycleSection === "pinned" ? pinnedKeys : activeKeys;
     const canonicalDestination = destinationKeys.flatMap((key) => {
       const canonical = canonicalByKey.get(key);
       return canonical === undefined ? [] : [canonical];
@@ -3460,7 +3607,7 @@ export default function Sidebar() {
     const keyByThread = new Map(
       canonicalDestination.map((thread) => [
         scopedThreadKey(scopeThreadRef(thread.environmentId, thread.id)),
-        (optimisticDrop.section === "pinned" ? thread.pinOrderKey : thread.activeOrderKey) ?? null,
+        (dropLifecycleSection === "pinned" ? thread.pinOrderKey : thread.activeOrderKey) ?? null,
       ]),
     );
     const heldOrder = optimisticDrop.order;
@@ -3480,6 +3627,14 @@ export default function Sidebar() {
       setOptimisticDrop(null);
     }
   }, [activeKeys, optimisticDrop, pinnedKeys, threads]);
+  // A hold that never resolves disables dragging on every row, so it cannot
+  // outlive the writes it waits for. Events land in well under a second; a
+  // few seconds of grace keeps a slow server from flickering the preview.
+  useEffect(() => {
+    if (optimisticDrop === null) return;
+    const timer = window.setTimeout(() => setOptimisticDrop(null), 4_000);
+    return () => window.clearTimeout(timer);
+  }, [optimisticDrop]);
   const attemptPin = useCallback(
     (threadRef: ScopedThreadRef) => {
       void (async () => {
@@ -3564,6 +3719,7 @@ export default function Sidebar() {
       pinnedThreads.length +
         activeThreads.length +
         workingThreads.length +
+        folderGroups.length +
         snoozedThreads.length +
         settledThreads.length ===
       0
@@ -3574,6 +3730,17 @@ export default function Sidebar() {
     const pinnedRows = rowsOf(pinnedThreads, "pinned");
     items.push(...pinnedRows);
     items.push({ kind: "marker", marker: "pinned-divider" });
+    // Folders sit between the pins and the inbox, each one a section with a
+    // header and, while it is empty, the same stand-in row the inbox uses.
+    for (const group of folderGroups) {
+      items.push({ kind: "marker", marker: folderHeaderMarker(group.id) });
+      if (!group.expanded) continue;
+      if (group.threads.length === 0) {
+        items.push({ kind: "marker", marker: folderPlaceholderMarker(group.id) });
+        continue;
+      }
+      items.push(...rowsOf(group.threads, sidebarFolderSection(group.id)));
+    }
     const activeRows = rowsOf(activeThreads, "active");
     items.push({ kind: "marker", marker: "active-placeholder" });
     items.push(...activeRows);
@@ -3592,6 +3759,7 @@ export default function Sidebar() {
     return items;
   }, [
     activeThreads,
+    folderGroups,
     pinnedThreads,
     renderedSettledThreads,
     settledThreads.length,
@@ -3814,8 +3982,19 @@ export default function Sidebar() {
         clearsSnooze:
           plan.kind === "pin" ||
           plan.kind === "settle" ||
+          plan.kind === "move-to-folder" ||
           (plan.kind === "move-active" && plan.unsnooze),
-        order: plan.kind === "settle" ? null : plan.order,
+        // A folder move carries membership instead of an arranged order.
+        // Pinning and settling leave membership alone — a pinned thread keeps
+        // its folder and returns to it — so they wait on nothing here. Saying
+        // otherwise left the hold open for good, which froze every drag.
+        folderId:
+          plan.kind === "move-to-folder"
+            ? plan.folderId
+            : plan.kind === "move-active" && plan.clearFolder
+              ? null
+              : undefined,
+        order: plan.kind === "settle" || plan.kind === "move-to-folder" ? null : plan.order,
         keysAtDrop: target.section === "active" ? activeKeysById : pinnedKeysById,
         assignedKeys: new Map(assignments.map(({ id, orderKey }) => [id, orderKey])),
       };
@@ -3861,6 +4040,7 @@ export default function Sidebar() {
               navigateAfterSettle?.();
             return;
           }
+          case "move-to-folder":
           case "move-active":
             // The drag expresses unpin intent; button/menu confirmation is unchanged.
             if (plan.unpin && !(await run(unpinThread(threadRef), "Failed to unpin thread")))
@@ -3871,6 +4051,18 @@ export default function Sidebar() {
             )
               return;
             if (plan.unsnooze && !(await run(unsnoozeThread(threadRef), "Failed to wake thread")))
+              return;
+            if (plan.kind === "move-to-folder") {
+              await run(
+                setThreadFolder(threadRef, ThreadFolderId.make(plan.folderId)),
+                "Failed to move to folder",
+              );
+              return;
+            }
+            if (
+              plan.clearFolder &&
+              !(await run(setThreadFolder(threadRef, null), "Failed to remove from folder"))
+            )
               return;
             break;
           case "pin":
@@ -3889,7 +4081,12 @@ export default function Sidebar() {
             break;
         }
         // Stop on failure; each successful key write remains a valid placement.
-        const keyWrites = plan.kind === "pin" ? plan.extraAssignments : plan.assignments;
+        const keyWrites =
+          plan.kind === "pin"
+            ? plan.extraAssignments
+            : plan.kind === "move-active" || plan.kind === "reorder-pinned"
+              ? plan.assignments
+              : [];
         for (const assignment of keyWrites) {
           const thread = threadByKey.get(assignment.id);
           if (thread === undefined) continue;
@@ -3921,6 +4118,7 @@ export default function Sidebar() {
       reorderPinnedThread,
       reorderActiveThread,
       sectionByThreadKey,
+      setThreadFolder,
       settleThread,
       sidebarListItems,
       threadByKey,
@@ -4226,6 +4424,117 @@ export default function Sidebar() {
     ],
   );
 
+  const threadFoldersRef = useRef(threadFolders);
+  threadFoldersRef.current = threadFolders;
+
+  /** One move, with the failure surfaced: folders are otherwise silent. */
+  const moveThreadToFolder = useCallback(
+    async (target: ScopedThreadRef, folderId: ThreadFolderId | null) => {
+      const result = await setThreadFolder(target, folderId);
+      if (result._tag === "Failure" && !isAtomCommandInterrupted(result)) {
+        const error = squashAtomCommandFailure(result);
+        toastManager.add(
+          stackedThreadToast({
+            type: "error",
+            title: folderId === null ? "Failed to remove from folder" : "Failed to move to folder",
+            description: error instanceof Error ? error.message : "An error occurred.",
+          }),
+        );
+      }
+      return result;
+    },
+    [setThreadFolder],
+  );
+
+  /** Asks for a name and makes the folder, which starts out empty. */
+  const createFolder = useCallback(async (): Promise<ThreadFolderId | null> => {
+    const folders = threadFoldersRef.current;
+    if (!folders.supported) {
+      toastManager.add(
+        stackedThreadToast({
+          type: "error",
+          title: "Folders unavailable",
+          description: "Update this environment's server to use folders.",
+        }),
+      );
+      return null;
+    }
+    const name = await requestFolderName({
+      title: "New folder",
+      description: "Group threads in the sidebar under one heading.",
+      confirmLabel: "Create",
+      takenNames: folders.folders.map((folder) => folder.name),
+    });
+    return name === null ? null : folders.createFolder(name);
+  }, []);
+
+  /**
+   * A folder's own menu. The name lives in the registry, so a rename is one
+   * write; a delete drops the entry and takes every member out of it, parked
+   * ones included, rather than leaving them pointing at nothing.
+   */
+  const handleFolderContextMenu = useCallback(
+    (folderId: string, event: ReactMouseEvent) => {
+      event.preventDefault();
+      void (async () => {
+        const api = readLocalApi();
+        if (!api) return;
+        const registry = threadFoldersRef.current;
+        const folder = registry.folders.find((candidate) => candidate.id === folderId);
+        if (!folder) return;
+        const clicked = await settlePromise(() =>
+          api.contextMenu.show(
+            [
+              { id: "rename", label: "Rename folder", icon: "pencil" },
+              { id: "delete", label: "Delete folder", icon: "trash", destructive: true },
+            ],
+            { x: event.clientX, y: event.clientY },
+          ),
+        );
+        if (clicked._tag === "Failure" || clicked.value === null) return;
+        const members = threadsRef.current.filter((thread) => thread.folderId === folder.id);
+        if (clicked.value === "rename") {
+          const name = await requestFolderName({
+            title: "Rename folder",
+            description: "The threads in it stay where they are.",
+            confirmLabel: "Rename",
+            initialValue: folder.name,
+            takenNames: registry.folders.map((candidate) => candidate.name),
+          });
+          if (name !== null && name !== folder.name) await registry.renameFolder(folder.id, name);
+          return;
+        }
+        const confirmed = await settlePromise(() =>
+          api.dialogs.confirm(
+            members.length === 0
+              ? `Delete folder "${folder.name}"?`
+              : [
+                  `Delete folder "${folder.name}"?`,
+                  `Its ${members.length} thread${members.length === 1 ? "" : "s"} return to the list. Nothing is deleted.`,
+                ].join("\n"),
+          ),
+        );
+        if (confirmed._tag === "Failure" || !confirmed.value) return;
+        for (const thread of members) {
+          const result = await moveThreadToFolder(
+            scopeThreadRef(thread.environmentId, thread.id),
+            null,
+          );
+          if (result._tag === "Failure") return;
+        }
+        await registry.deleteFolder(folder.id);
+        setCollapsedFolders((current) => {
+          if (!current.has(folder.id)) return current;
+          const next = new Set(current);
+          next.delete(folder.id);
+          saveCollapsedFolders(next);
+          return next;
+        });
+      })();
+    },
+    [moveThreadToFolder],
+  );
+
   const handleThreadContextMenu = useCallback(
     (threadRef: ScopedThreadRef, position: { x: number; y: number }) => {
       void (async () => {
@@ -4253,6 +4562,8 @@ export default function Sidebar() {
           serverConfigs.get(thread.environmentId)?.environment.capabilities.threadSnooze === true;
         const supportsPinning =
           serverConfigs.get(thread.environmentId)?.environment.capabilities.threadPinning === true;
+        const supportsFolders =
+          serverConfigs.get(thread.environmentId)?.environment.capabilities.threadFolders === true;
         const supportsAutoSettleOptOut =
           serverConfigs.get(thread.environmentId)?.environment.capabilities
             .threadAutoSettleOptOut === true;
@@ -4284,6 +4595,8 @@ export default function Sidebar() {
                   }
                 : null,
               isPinned,
+              folderId: thread.folderId ?? null,
+              folders: threadFoldersRef.current.folders,
               isSettled,
               autoSettleEnabled: thread.autoSettleDisabledAt == null,
               isSnoozed,
@@ -4296,6 +4609,7 @@ export default function Sidebar() {
                 autoSettleOptOut: supportsAutoSettleOptOut,
                 snooze: supportsSnooze,
                 pinning: supportsPinning,
+                folders: supportsFolders,
                 titleRegeneration: supportsTitleRegeneration,
               },
               snoozePresets,
@@ -4304,6 +4618,13 @@ export default function Sidebar() {
           ),
         );
         if (clicked._tag === "Failure") return;
+        if (clicked.value?.startsWith("folder:set:")) {
+          await moveThreadToFolder(
+            threadRef,
+            ThreadFolderId.make(clicked.value.slice("folder:set:".length)),
+          );
+          return;
+        }
         if (clicked.value?.startsWith("snooze:")) {
           const preset =
             clicked.value === "snooze:custom"
@@ -4358,6 +4679,14 @@ export default function Sidebar() {
             return;
           case "unsnooze":
             attemptUnsnooze(threadRef);
+            return;
+          case "folder:new": {
+            const folderId = await createFolder();
+            if (folderId !== null) await moveThreadToFolder(threadRef, folderId);
+            return;
+          }
+          case "folder:clear":
+            await moveThreadToFolder(threadRef, null);
             return;
           case "pin":
             attemptPin(threadRef);
@@ -4501,8 +4830,10 @@ export default function Sidebar() {
       copyBranchToClipboard,
       copyPathToClipboard,
       copyThreadIdToClipboard,
+      createFolder,
       deleteThread,
       handleMultiSelectContextMenu,
+      moveThreadToFolder,
       markThreadUnread,
       openProjectSettings,
       projectScopeKey,
@@ -4860,6 +5191,30 @@ export default function Sidebar() {
                   Start a thread from one or more GitHub issues
                 </TooltipPopup>
               </Tooltip>
+              {/* A folder is made here, empty: it is a place to put work in,
+                  not something a thread creates on its way past. */}
+              <Tooltip>
+                <TooltipTrigger
+                  render={
+                    <Button
+                      type="button"
+                      size="icon"
+                      variant="outline"
+                      aria-label="New folder"
+                      className="shrink-0"
+                      onClick={() => void createFolder()}
+                      disabled={!threadFolders.supported}
+                    />
+                  }
+                >
+                  <FolderPlusIcon />
+                </TooltipTrigger>
+                <TooltipPopup side="right">
+                  {threadFolders.supported
+                    ? "New folder"
+                    : "Update this environment's server to use folders"}
+                </TooltipPopup>
+              </Tooltip>
             </div>
             {issuePickerEnvironmentId !== null ? (
               <IssuePickerDialog
@@ -4994,6 +5349,7 @@ export default function Sidebar() {
                             // Fade between card and compact rows while the outer
                             // sortable wrapper keeps its identity during a drag.
                             key={`${threadKey}:${rowVariant}`}
+                            inFolder={folderIdOfSection(section) !== null}
                             thread={thread}
                             variant={rowVariant}
                             // Snoozed rows wake, settled rows un-settle, and cards settle.
@@ -5119,6 +5475,41 @@ export default function Sidebar() {
                       for (const item of sidebarListItems) {
                         if (item.kind === "thread") {
                           items.push(renderThreadRow(threadByKey.get(item.key)!, item.section));
+                          continue;
+                        }
+                        const markerFolderId = folderIdOfMarker(item.marker);
+                        if (markerFolderId !== null) {
+                          const group = folderGroups.find(
+                            (candidate) => candidate.id === markerFolderId,
+                          );
+                          if (!group) continue;
+                          const isDropTarget = dragTargetSection === sidebarFolderSection(group.id);
+                          items.push(
+                            item.marker.startsWith("folder-placeholder:") ? (
+                              <SidebarFolderPlaceholder
+                                key={`folder-placeholder:${group.id}`}
+                                marker={item.marker}
+                                label={`Drop in ${group.name}`}
+                                isDropTarget={isDropTarget}
+                              />
+                            ) : (
+                              <SidebarSectionHeader
+                                key={`folder-header:${group.id}`}
+                                marker={item.marker}
+                                icon="folder"
+                                label={
+                                  group.expanded ? group.name : `${group.name} (${group.count})`
+                                }
+                                dragging={from !== null}
+                                isDropTarget={isDropTarget}
+                                onContextMenu={(event) => handleFolderContextMenu(group.id, event)}
+                                toggle={{
+                                  expanded: group.expanded,
+                                  onToggle: () => toggleFolder(group.id),
+                                }}
+                              />
+                            ),
+                          );
                           continue;
                         }
                         switch (item.marker) {

@@ -73,6 +73,7 @@ import Migration0901 from "./Migrations/901_RepairThreadPullRequests.ts";
 import Migration0902 from "./Migrations/902_RepairForkedThreadMessages.ts";
 import Migration0903 from "./Migrations/903_RepairPullRequestFilesViewed.ts";
 import Migration0904 from "./Migrations/904_RepairProjectionThreadsAutoSettleDisabledAt.ts";
+import Migration0908 from "./Migrations/908_ProjectionThreadsFolderId.ts";
 
 /**
  * Migration loader with all migrations defined inline.
@@ -144,6 +145,7 @@ const migrationEntries = [
   [902, "RepairForkedThreadMessages", Migration0902],
   [903, "RepairPullRequestFilesViewed", Migration0903],
   [904, "RepairProjectionThreadsAutoSettleDisabledAt", Migration0904],
+  [908, "ProjectionThreadsFolderId", Migration0908],
 ] as const;
 
 export const migrationManifest = migrationEntries.map(([id, name]) => [id, name] as const);

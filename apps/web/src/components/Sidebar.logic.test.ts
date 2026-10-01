@@ -25,7 +25,10 @@ import {
   orderItemsByPreferredIds,
   resolveProjectStatusIndicator,
   resolveSidebarRowAccessibility,
+  folderHeaderMarker,
+  folderPlaceholderMarker,
   resolveSidebarRowVariant,
+  sidebarFolderSection,
   resolveSidebarThreadStatus,
   resolveThreadStatusPill,
   resolveWorkingStartedAt,
@@ -1175,6 +1178,46 @@ describe("resolveSidebarDropTarget", () => {
     });
   });
 
+  it("reads a folder section off its header, like the shelves", () => {
+    // Pinned p1 | Folder f1: g1 | Active a1 | empty folder f2
+    const withFolders: readonly SidebarListItem[] = [
+      marker("pinned-header"),
+      thread("p1", "pinned"),
+      marker("pinned-divider"),
+      marker(folderHeaderMarker("f1")),
+      thread("g1", sidebarFolderSection("f1")),
+      marker(folderHeaderMarker("f2")),
+      marker(folderPlaceholderMarker("f2")),
+      marker("active-placeholder"),
+      thread("a1", "active"),
+    ];
+    // Onto a folder's row: into that folder, and its rows stay out of the
+    // inbox's arranged order.
+    expect(resolveSidebarDropTarget(withFolders, "a1", "g1")).toEqual({
+      section: sidebarFolderSection("f1"),
+      pinnedOrder: ["p1"],
+      activeOrder: [],
+    });
+    // Onto an empty folder's stand-in row: into that folder.
+    expect(
+      resolveSidebarDropTarget(withFolders, "a1", sidebarMarkerId(folderPlaceholderMarker("f2")))
+        ?.section,
+    ).toBe(sidebarFolderSection("f2"));
+    // The inbox's own stand-in row stays the inbox, either way the row came.
+    expect(
+      resolveSidebarDropTarget(withFolders, "g1", sidebarMarkerId("active-placeholder"))?.section,
+    ).toBe("active");
+    expect(
+      resolveSidebarDropTarget(withFolders, "a1", sidebarMarkerId("active-placeholder"))?.section,
+    ).toBe("active");
+    // Below the folders: back to the inbox.
+    expect(resolveSidebarDropTarget(withFolders, "g1", "a1")).toEqual({
+      section: "active",
+      pinnedOrder: ["p1"],
+      activeOrder: ["a1", "g1"],
+    });
+  });
+
   it("rejects ids that are not in the list", () => {
     expect(resolve("a1", "nope")).toBeNull();
     expect(resolve("nope", "a1")).toBeNull();
@@ -1196,7 +1239,7 @@ describe("planSidebarThreadDrop", () => {
   const plan = (
     overrides: Partial<Omit<Parameters<typeof planSidebarThreadDrop>[0], "target">> & {
       activeKey: string;
-      activeSection: "pinned" | "active" | "snoozed" | "settled";
+      activeSection: SidebarSection;
       target: Omit<Parameters<typeof planSidebarThreadDrop>[0]["target"], "activeOrder"> & {
         activeOrder?: readonly string[];
       };
@@ -1228,6 +1271,56 @@ describe("planSidebarThreadDrop", () => {
         target: { section: "settled", pinnedOrder: ["p2", "p3"] },
       }),
     ).toEqual({ kind: "none" });
+  });
+
+  it("moves into a folder without writing inbox order keys", () => {
+    expect(
+      plan({
+        activeKey: "a1",
+        activeSection: "active",
+        target: {
+          section: sidebarFolderSection("f1"),
+          pinnedOrder: [],
+          activeOrder: ["a2", "a3"],
+        },
+      }),
+    ).toEqual({
+      kind: "move-to-folder",
+      folderId: "f1",
+      unpin: false,
+      unsettle: false,
+      unsnooze: false,
+    });
+  });
+
+  it("unpins and wakes a row dragged into a folder", () => {
+    expect(
+      plan({
+        activeKey: "p1",
+        activeSection: "snoozed",
+        activePinned: true,
+        target: { section: sidebarFolderSection("f1"), pinnedOrder: [], activeOrder: [] },
+      }),
+    ).toMatchObject({ kind: "move-to-folder", unpin: true, unsnooze: true });
+  });
+
+  it("does nothing when a row lands back in its own folder", () => {
+    expect(
+      plan({
+        activeKey: "a1",
+        activeSection: sidebarFolderSection("f1"),
+        target: { section: sidebarFolderSection("f1"), pinnedOrder: [], activeOrder: [] },
+      }),
+    ).toEqual({ kind: "none" });
+  });
+
+  it("clears the folder when a folder row lands in the inbox", () => {
+    const moved = plan({
+      activeKey: "a1",
+      activeSection: sidebarFolderSection("f1"),
+      target: { section: "active", pinnedOrder: [], activeOrder: ["a1", "a2", "a3"] },
+    });
+    expect(moved).toMatchObject({ kind: "move-active", clearFolder: true });
   });
 
   it.each(["pinned", "active"] as const)("reserves hidden %s slots during a drop", (section) => {
@@ -1266,6 +1359,7 @@ describe("planSidebarThreadDrop", () => {
     });
     expect(result).toEqual({
       kind: "move-active",
+      clearFolder: false,
       order,
       assignments: [{ id: source.key, orderKey: expect.any(String) }],
       unpin: source.unpin,
@@ -1296,6 +1390,7 @@ describe("planSidebarThreadDrop", () => {
       }),
     ).toEqual({
       kind: "move-active",
+      clearFolder: false,
       order: ["a1", "z1", "a2", "a3"],
       assignments: [{ id: "z1", orderKey: expect.any(String) }],
       unpin: hiddenState.activePinned,

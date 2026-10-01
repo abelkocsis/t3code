@@ -780,6 +780,21 @@ const makeOrchestrationProjectionPipeline = Effect.fn("makeOrchestrationProjecti
           return;
         }
 
+        case "thread.folder-set": {
+          const existingRow = yield* projectionThreadRepository.getById({
+            threadId: event.payload.threadId,
+          });
+          if (Option.isNone(existingRow)) {
+            return;
+          }
+          yield* projectionThreadRepository.upsert({
+            ...existingRow.value,
+            folderId: event.payload.folderId,
+            updatedAt: event.payload.updatedAt,
+          });
+          return;
+        }
+
         case "thread.pinned": {
           const existingRow = yield* projectionThreadRepository.getById({
             threadId: event.payload.threadId,

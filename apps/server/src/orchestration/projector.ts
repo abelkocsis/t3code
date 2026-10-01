@@ -42,6 +42,7 @@ import {
   ThreadSettledPayload,
   ThreadMessageScheduledPayload,
   ThreadMessageUnscheduledPayload,
+  ThreadFolderSetPayload,
   ThreadPinnedPayload,
   ThreadPinReorderedPayload,
   ThreadAutoSettleSetPayload,
@@ -600,6 +601,17 @@ export function projectEvent(
           ...nextBase,
           threads: updateThread(nextBase.threads, payload.threadId, {
             scheduledMessage: null,
+            updatedAt: payload.updatedAt,
+          }),
+        })),
+      );
+
+    case "thread.folder-set":
+      return decodeForEvent(ThreadFolderSetPayload, event.payload, event.type, "payload").pipe(
+        Effect.map((payload) => ({
+          ...nextBase,
+          threads: updateThread(nextBase.threads, payload.threadId, {
+            folderId: payload.folderId,
             updatedAt: payload.updatedAt,
           }),
         })),

@@ -41,6 +41,7 @@ export type SnoozeThreadInput = CommandInput<"thread.snooze">;
 export type UnsnoozeThreadInput = CommandInput<"thread.unsnooze">;
 export type ScheduleThreadMessageInput = CommandInput<"thread.message.schedule">;
 export type UnscheduleThreadMessageInput = CommandInput<"thread.message.unschedule">;
+export type SetThreadFolderInput = CommandInput<"thread.folder.set">;
 export type PinThreadInput = CommandInput<"thread.pin">;
 export type UnpinThreadInput = CommandInput<"thread.unpin">;
 export type ReorderPinnedThreadInput = CommandInput<"thread.pin.reorder">;
@@ -229,6 +230,16 @@ export const unscheduleThreadMessage: (input: UnscheduleThreadMessageInput) => C
       commandId: yield* commandId(input),
     });
   });
+
+export const setThreadFolder: (input: SetThreadFolderInput) => CommandEffect = Effect.fn(
+  "EnvironmentCommands.setThreadFolder",
+)(function* (input) {
+  return yield* dispatch({
+    ...input,
+    type: "thread.folder.set",
+    commandId: yield* commandId(input),
+  });
+});
 
 export const pinThread: (input: PinThreadInput) => CommandEffect = Effect.fn(
   "EnvironmentCommands.pinThread",

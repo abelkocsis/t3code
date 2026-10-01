@@ -15,6 +15,7 @@ import {
   ThreadUnsnoozedPayload as ContractsThreadUnsnoozedPayloadSchema,
   ThreadMessageScheduledPayload as ContractsThreadMessageScheduledPayloadSchema,
   ThreadMessageUnscheduledPayload as ContractsThreadMessageUnscheduledPayloadSchema,
+  ThreadFolderSetPayload as ContractsThreadFolderSetPayloadSchema,
   ThreadPinnedPayload as ContractsThreadPinnedPayloadSchema,
   ThreadUnpinnedPayload as ContractsThreadUnpinnedPayloadSchema,
   ThreadPinReorderedPayload as ContractsThreadPinReorderedPayloadSchema,
@@ -53,6 +54,7 @@ export const ThreadSnoozedPayload = ContractsThreadSnoozedPayloadSchema;
 export const ThreadUnsnoozedPayload = ContractsThreadUnsnoozedPayloadSchema;
 export const ThreadMessageScheduledPayload = ContractsThreadMessageScheduledPayloadSchema;
 export const ThreadMessageUnscheduledPayload = ContractsThreadMessageUnscheduledPayloadSchema;
+export const ThreadFolderSetPayload = ContractsThreadFolderSetPayloadSchema;
 export const ThreadPinnedPayload = ContractsThreadPinnedPayloadSchema;
 export const ThreadUnpinnedPayload = ContractsThreadUnpinnedPayloadSchema;
 export const ThreadPinReorderedPayload = ContractsThreadPinReorderedPayloadSchema;

@@ -4,10 +4,14 @@ import { verticalListSortingStrategy, type SortingStrategy } from "@dnd-kit/sort
 import {
   createSidebarCollisionDetection,
   createSidebarSortingStrategy,
+  folderSlotAtY,
   restrictBelowSidebarLabel,
 } from "./Sidebar.drag";
 import {
+  folderHeaderMarker,
+  folderPlaceholderMarker,
   resolveSidebarDropTarget,
+  sidebarFolderSection,
   sidebarListItemId,
   sidebarMarkerId,
   type SidebarListItem,
@@ -210,6 +214,149 @@ describe("sidebar collision detection", () => {
       expect(at(316)).toBe("pinned");
     },
   );
+
+  it("lets a folder keep the drop while the divider gesture is active", () => {
+    // Pinned p | Folder f1 (empty) | inbox source
+    const items: SidebarListItem[] = [
+      pinnedHeader,
+      thread("p", "pinned"),
+      divider,
+      marker(folderHeaderMarker("f1")),
+      marker(folderPlaceholderMarker("f1")),
+      marker("active-placeholder"),
+      thread("source", "active"),
+      settledHeader,
+    ];
+    const { rects, activeIndex } = layout(
+      items,
+      "source",
+      sidebarMarkerId(folderPlaceholderMarker("f1")),
+    );
+    const sourceRect = rects[activeIndex]!;
+    const boundaryNode = {
+      querySelector: () => ({
+        getBoundingClientRect: () => ({ top: 150, bottom: 166, left: 0, right: 260 }),
+      }),
+    } as unknown as HTMLElement;
+    const detector = createSidebarCollisionDetection(() => true, { items, activationY: 600 });
+    const placeholderRect = rects[4]!;
+    const center = placeholderRect.top;
+    const collisionRect = {
+      ...sourceRect,
+      top: center - sourceRect.height / 2,
+      bottom: center + sourceRect.height / 2,
+    };
+    const call = (pointerY: number) =>
+      detector({
+        ...collisionArgs(),
+        active: {
+          id: "source",
+          data: { current: {} },
+          rect: { current: { initial: sourceRect, translated: collisionRect } },
+        },
+        collisionRect,
+        pointerCoordinates: { x: 130, y: pointerY },
+        droppableRects: new Map(
+          items.map((item, index) => [sidebarListItemId(item), rects[index]!]),
+        ),
+        droppableContainers: items.map((item, index) => ({
+          id: sidebarListItemId(item),
+          key: sidebarListItemId(item),
+          disabled: false,
+          data: { current: {} },
+          node: { current: item === divider ? boundaryNode : null },
+          rect: { current: rects[index]! },
+        })),
+      })[0];
+    // Move down past the divider first: that is what arms the gesture.
+    call(center - 20);
+    const over = call(center);
+    expect(resolveSidebarDropTarget(items, "source", String(over?.id))?.section).toBe(
+      sidebarFolderSection("f1"),
+    );
+  });
+
+  it("gives a folder slot the drop when the lifted card is over it", () => {
+    const items: SidebarListItem[] = [
+      pinnedHeader,
+      divider,
+      marker(folderHeaderMarker("f1")),
+      marker(folderPlaceholderMarker("f1")),
+      marker("active-placeholder"),
+      thread("source", "active"),
+    ];
+    const rect = (top: number, height: number) => ({
+      top,
+      height,
+      bottom: top + height,
+      left: 0,
+      right: 260,
+      width: 260,
+    });
+    const rects = [
+      rect(100, 0),
+      rect(101, 0),
+      rect(102, 32),
+      rect(135, 36),
+      rect(172, 0),
+      rect(173, 82),
+    ];
+    const detector = createSidebarCollisionDetection(() => true, { items });
+    // The card sits over the folder's stand-in row, while the cursor, which
+    // grabbed the card near its top, is still above the folder.
+    const collisionRect = { ...rects[5]!, top: 112, bottom: 194, height: 82 };
+    const over = detector({
+      ...collisionArgs(),
+      active: {
+        id: "source",
+        data: { current: {} },
+        rect: { current: { initial: rects[5]!, translated: collisionRect } },
+      },
+      collisionRect,
+      pointerCoordinates: { x: 130, y: 118 },
+      droppableRects: new Map(items.map((item, index) => [sidebarListItemId(item), rects[index]!])),
+      droppableContainers: items.map((item, index) => ({
+        id: sidebarListItemId(item),
+        key: sidebarListItemId(item),
+        disabled: false,
+        data: { current: {} },
+        node: { current: null },
+        rect: { current: rects[index]! },
+      })),
+    })[0];
+    expect(resolveSidebarDropTarget(items, "source", String(over?.id))?.section).toBe(
+      sidebarFolderSection("f1"),
+    );
+  });
+
+  it("tiles each folder's band, so a few pixels cannot fall into a seam", () => {
+    const items: SidebarListItem[] = [
+      pinnedHeader,
+      divider,
+      marker(folderHeaderMarker("f1")),
+      marker(folderPlaceholderMarker("f1")),
+      marker("active-placeholder"),
+      thread("a1", "active"),
+    ];
+    const rects = new Map([
+      [sidebarMarkerId("pinned-header"), { top: 90, bottom: 90 }],
+      [sidebarMarkerId("pinned-divider"), { top: 95, bottom: 95 }],
+      [sidebarMarkerId(folderHeaderMarker("f1")), { top: 100, bottom: 132 }],
+      [sidebarMarkerId(folderPlaceholderMarker("f1")), { top: 133, bottom: 169 }],
+      [sidebarMarkerId("active-placeholder"), { top: 180, bottom: 180 }],
+      ["a1", { top: 181, bottom: 263 }],
+    ]);
+    // On the heading and on the stand-in row.
+    const slot = sidebarMarkerId(folderPlaceholderMarker("f1"));
+    expect(folderSlotAtY(items, rects, 110)?.slotId).toBe(slot);
+    expect(folderSlotAtY(items, rects, 150)?.slotId).toBe(slot);
+    // In the gaps on either side: still the folder, up to the midpoints.
+    expect(folderSlotAtY(items, rects, 98)?.slotId).toBe(slot);
+    expect(folderSlotAtY(items, rects, 174)?.slotId).toBe(slot);
+    // Past the midpoints the neighbours own the space.
+    expect(folderSlotAtY(items, rects, 96)).toBeNull();
+    expect(folderSlotAtY(items, rects, 176)).toBeNull();
+  });
 
   it("returns no collision if an unsupported target has no source fallback", () => {
     const args = collisionArgs();
