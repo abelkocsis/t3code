@@ -1,4 +1,5 @@
 import { requestCustomSnooze } from "../components/CustomSnoozeDialog";
+import { requestFolderName } from "../components/FolderNameDialog";
 import { scopeProjectRef, scopedThreadKey } from "@t3tools/client-runtime/environment";
 import {
   type AtomCommandResult,
@@ -7,9 +8,9 @@ import {
   squashAtomCommandFailure,
 } from "@t3tools/client-runtime/state/runtime";
 import { canSnooze, effectiveSnoozed } from "@t3tools/client-runtime/state/thread-settled";
-import type { ScopedThreadRef, ThreadId } from "@t3tools/contracts";
+import { ThreadFolderId, type ScopedThreadRef, type ThreadId } from "@t3tools/contracts";
 import { useRouter } from "@tanstack/react-router";
-import { useCallback, useMemo } from "react";
+import { useCallback, useMemo, useRef } from "react";
 
 import { resolveSnoozePresets } from "../components/Sidebar.snooze";
 import {
@@ -21,6 +22,7 @@ import { threadEnvironment } from "../state/threads";
 import { useAtomCommand } from "../state/use-atom-command";
 import {
   readEnvironmentSupportsAutoSettleOptOut,
+  readEnvironmentSupportsFolders,
   readEnvironmentSupportsPinning,
   readEnvironmentSupportsSettlement,
   readEnvironmentSupportsSnooze,
@@ -41,6 +43,7 @@ import { useCopyToClipboard } from "./useCopyToClipboard";
 import { useNewThreadHandler } from "./useHandleNewThread";
 import { useClientSettings } from "./useSettings";
 import { useThreadActions } from "./useThreadActions";
+import { useThreadFolders } from "./useThreadFolders";
 
 function failureToast(title: string, error: unknown) {
   toastManager.add(
@@ -90,9 +93,15 @@ export function useThreadActionMenu(input: {
     pinThread,
     confirmAndUnpinThread,
     setThreadAutoSettle,
+    setThreadFolder,
     archiveThread,
     deleteThread,
   } = useThreadActions();
+  // The menu reads the folder list when it opens, so a change to the list
+  // never rebuilds the callback.
+  const threadFolders = useThreadFolders();
+  const threadFoldersRef = useRef(threadFolders);
+  threadFoldersRef.current = threadFolders;
   const updateThreadMetadata = useAtomCommand(threadEnvironment.updateMetadata, {
     reportFailure: false,
   });
@@ -137,6 +146,7 @@ export function useThreadActionMenu(input: {
           autoSettleOptOut: readEnvironmentSupportsAutoSettleOptOut(threadRef.environmentId),
           snooze: readEnvironmentSupportsSnooze(threadRef.environmentId),
           pinning: readEnvironmentSupportsPinning(threadRef.environmentId),
+          folders: readEnvironmentSupportsFolders(threadRef.environmentId),
           titleRegeneration: readEnvironmentSupportsTitleRegeneration(threadRef.environmentId),
         };
         const isRegeneratingTitle = thread.titleRegeneration != null;
@@ -147,6 +157,8 @@ export function useThreadActionMenu(input: {
           // menu, so the "Filter by project" affordance is sidebar-only.
           projectFilter: null,
           isPinned: thread.pinnedAt != null,
+          folderId: thread.folderId ?? null,
+          folders: threadFoldersRef.current.folders,
           isSettled: supports.settlement && thread.settledOverride === "settled",
           autoSettleEnabled: thread.autoSettleDisabledAt == null,
           isSnoozed: supports.snooze && effectiveSnoozed(thread, { now: now.toISOString() }),
@@ -158,7 +170,22 @@ export function useThreadActionMenu(input: {
         });
         const clicked = await settlePromise(() => api.contextMenu.show(items, position));
         if (clicked._tag === "Failure" || clicked.value === null) return;
+        const reportFailureLater = async (
+          title: string,
+          run: () => Promise<AtomCommandResult<unknown, unknown>>,
+        ) => {
+          const result = await run();
+          if (result._tag === "Failure" && !isAtomCommandInterrupted(result)) {
+            failureToast(title, squashAtomCommandFailure(result));
+          }
+        };
         const action: ThreadActionMenuId = clicked.value;
+        if (action.startsWith("folder:set:")) {
+          await reportFailureLater("Failed to move to folder", () =>
+            setThreadFolder(threadRef, ThreadFolderId.make(action.slice("folder:set:".length))),
+          );
+          return;
+        }
         if (action.startsWith("snooze:")) {
           const preset =
             action === "snooze:custom"
@@ -221,6 +248,34 @@ export function useThreadActionMenu(input: {
             return;
           case "unsnooze":
             await reportFailure("Failed to wake thread", () => unsnoozeThread(threadRef));
+            return;
+          case "folder:new": {
+            const folders = threadFoldersRef.current;
+            if (!folders.supported) {
+              failureToast(
+                "Folders unavailable",
+                new Error("Update this environment's server to use folders."),
+              );
+              return;
+            }
+            const name = await requestFolderName({
+              title: "New folder",
+              description: "Group threads in the sidebar under one heading.",
+              confirmLabel: "Create",
+              takenNames: folders.folders.map((folder) => folder.name),
+            });
+            if (name === null) return;
+            const folderId = await folders.createFolder(name);
+            if (folderId === null) return;
+            await reportFailure("Failed to move to folder", () =>
+              setThreadFolder(threadRef, folderId),
+            );
+            return;
+          }
+          case "folder:clear":
+            await reportFailure("Failed to remove from folder", () =>
+              setThreadFolder(threadRef, null),
+            );
             return;
           case "pin":
             await reportFailure("Failed to pin thread", () => pinThread(threadRef));
@@ -344,6 +399,7 @@ export function useThreadActionMenu(input: {
       projects,
       router,
       setThreadAutoSettle,
+      setThreadFolder,
       settleThread,
       snoozeThread,
       threadRef,

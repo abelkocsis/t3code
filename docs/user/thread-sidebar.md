@@ -103,6 +103,32 @@ line and fit more of them on screen, turn on **Compact thread rows** in
 **Settings → General**. A compact row keeps the project icon, the title, and the status,
 and it drops the branch and the change counts. This setting applies to web and desktop.
 
+## Group threads in folders
+
+Press the folder button beside **New thread** to make a folder. It starts empty and stays
+until you delete it. Drag threads into it, or open a thread's menu, choose **Folder**, and
+pick one. The same menu holds **New folder…** and **Remove from folder**, and the chat
+header menu offers the same actions.
+
+A folder behaves like the Snoozed and Settled shelves: it is a section of the sidebar,
+between the pinned threads and the rest of your active work. Click its header to open or
+close it. A closed folder shows how many threads it holds. Which folders are closed is a
+per-device choice.
+
+Drag a thread into a folder's rows, or onto the **Drop in …** line an empty folder shows
+while you drag, to move it in. Drag it below the folders to take it out. A thread dragged
+into a folder is unpinned, un-settled, or woken first, exactly as a drop in the active list
+does.
+
+Right-click a folder header for **Rename folder** and **Delete folder**. A rename changes
+only the name. Deleting asks first, then returns its threads to the list. Neither action
+deletes a thread.
+
+Folders group live threads. A thread you pin moves to the pinned block, and a settled or
+snoozed thread waits in its shelf. Each keeps its folder and returns to it. Folders live on
+your servers, so every client that connects sees them, and they need a server that supports
+them. Mobile shows the threads, but not the folders.
+
 ## Settle finished work
 
 Choose **Settle thread** from its menu to move finished work out of the active list

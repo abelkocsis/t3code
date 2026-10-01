@@ -18,6 +18,7 @@ import {
   PositiveInt,
   ProjectId,
   ProviderItemId,
+  ThreadFolderId,
   ThreadId,
   TrimmedNonEmptyString,
   TrimmedString,
@@ -839,6 +840,11 @@ export const OrchestrationThread = Schema.Struct({
   // Optional so payloads from pre-snooze servers still decode.
   snoozedUntil: Schema.optional(Schema.NullOr(IsoDateTime)),
   snoozedAt: Schema.optional(Schema.NullOr(IsoDateTime)),
+  // The sidebar folder holding this thread, or null. The folder's name lives
+  // in server settings (`sidebarFolders`), so a rename touches no thread and
+  // an empty folder outlives its last member.
+  // Optional so payloads from pre-folder servers still decode.
+  folderId: Schema.optional(Schema.NullOr(ThreadFolderId)),
   // Active pinned threads render in the pinned block. Settled and snoozed
   // threads remain in their respective shelves even when pinned.
   // Optional so payloads from pre-pinning servers still decode.
@@ -925,6 +931,8 @@ export const OrchestrationThreadShell = Schema.Struct({
   unsettledAt: Schema.optional(Schema.NullOr(IsoDateTime)),
   snoozedUntil: Schema.optional(Schema.NullOr(IsoDateTime)),
   snoozedAt: Schema.optional(Schema.NullOr(IsoDateTime)),
+  // See OrchestrationThread.folderId.
+  folderId: Schema.optional(Schema.NullOr(ThreadFolderId)),
   pinnedAt: Schema.optional(Schema.NullOr(IsoDateTime)),
   pinOrderKey: Schema.optional(Schema.NullOr(TrimmedNonEmptyString)),
   activeOrderKey: Schema.optional(Schema.NullOr(TrimmedNonEmptyString)),
@@ -1235,6 +1243,14 @@ const ThreadMessageUnscheduleCommand = Schema.Struct({
   threadId: ThreadId,
 });
 
+const ThreadFolderSetCommand = Schema.Struct({
+  type: Schema.Literal("thread.folder.set"),
+  commandId: CommandId,
+  threadId: ThreadId,
+  /** Null takes the thread out of its folder. */
+  folderId: Schema.NullOr(ThreadFolderId),
+});
+
 const ThreadPinCommand = Schema.Struct({
   type: Schema.Literal("thread.pin"),
   commandId: CommandId,
@@ -1492,6 +1508,7 @@ const DispatchableClientOrchestrationCommand = Schema.Union([
   ThreadUnsnoozeCommand,
   ThreadMessageScheduleCommand,
   ThreadMessageUnscheduleCommand,
+  ThreadFolderSetCommand,
   ThreadPinCommand,
   ThreadUnpinCommand,
   ThreadPinReorderCommand,
@@ -1529,6 +1546,7 @@ export const ClientOrchestrationCommand = Schema.Union([
   ThreadUnsnoozeCommand,
   ThreadMessageScheduleCommand,
   ThreadMessageUnscheduleCommand,
+  ThreadFolderSetCommand,
   ThreadPinCommand,
   ThreadUnpinCommand,
   ThreadPinReorderCommand,
@@ -1786,6 +1804,7 @@ export const OrchestrationEventType = Schema.Literals([
   "thread.unsnoozed",
   "thread.message-scheduled",
   "thread.message-unscheduled",
+  "thread.folder-set",
   "thread.pinned",
   "thread.unpinned",
   "thread.pin-reordered",
@@ -1921,6 +1940,12 @@ export const ThreadMessageUnscheduledPayload = Schema.Struct({
   // and the server started the turn, so the same event clears the schedule
   // the turn consumed.
   reason: Schema.Literals(["user", "sent"]),
+  updatedAt: IsoDateTime,
+});
+
+export const ThreadFolderSetPayload = Schema.Struct({
+  threadId: ThreadId,
+  folderId: Schema.NullOr(ThreadFolderId),
   updatedAt: IsoDateTime,
 });
 
@@ -2217,6 +2242,11 @@ export const OrchestrationEvent = Schema.Union([
     ...EventBaseFields,
     type: Schema.Literal("thread.message-unscheduled"),
     payload: ThreadMessageUnscheduledPayload,
+  }),
+  Schema.Struct({
+    ...EventBaseFields,
+    type: Schema.Literal("thread.folder-set"),
+    payload: ThreadFolderSetPayload,
   }),
   Schema.Struct({
     ...EventBaseFields,

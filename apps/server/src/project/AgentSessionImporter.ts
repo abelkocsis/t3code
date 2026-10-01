@@ -87,6 +87,7 @@ function hasImportBlockingActivity(
     thread.snoozedAt != null ||
     thread.pinnedAt != null ||
     thread.pinOrderKey != null ||
+    thread.folderId != null ||
     thread.autoSettleDisabledAt != null ||
     thread.titleRegeneration != null ||
     thread.linkedPullRequest != null ||

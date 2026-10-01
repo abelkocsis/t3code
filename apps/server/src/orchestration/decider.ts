@@ -834,6 +834,32 @@ export const decideOrchestrationCommand = Effect.fn("decideOrchestrationCommand"
       };
     }
 
+    case "thread.folder.set": {
+      const thread = yield* requireThreadNotArchived({
+        readModel,
+        command,
+        threadId: command.threadId,
+      });
+      // Idempotent by re-emission (see thread.settle): setting the folder a
+      // thread already sits in keeps updatedAt, so the row does not resort.
+      const unchanged = (thread.folderId ?? null) === command.folderId;
+      const occurredAt = yield* nowIso;
+      return {
+        ...(yield* withEventBase({
+          aggregateKind: "thread",
+          aggregateId: command.threadId,
+          occurredAt,
+          commandId: command.commandId,
+        })),
+        type: "thread.folder-set" as const,
+        payload: {
+          threadId: command.threadId,
+          folderId: command.folderId,
+          updatedAt: unchanged ? thread.updatedAt : occurredAt,
+        },
+      };
+    }
+
     case "thread.pin": {
       const thread = yield* requireThreadNotArchived({
         readModel,

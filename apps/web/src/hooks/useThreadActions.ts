@@ -10,6 +10,7 @@ import {
   EnvironmentId,
   type MessageId,
   type ScopedThreadRef,
+  ThreadFolderId,
   ThreadId,
 } from "@t3tools/contracts";
 import { resolveWorktreeCleanup } from "@t3tools/shared/projectSettings";
@@ -32,6 +33,7 @@ import { releaseComposerDraftUploads } from "../lib/composerDraftUploads";
 import { readLocalApi } from "../localApi";
 import {
   readEnvironmentSupportsAutoSettleOptOut,
+  readEnvironmentSupportsFolders,
   readEnvironmentSupportsPinning,
   readEnvironmentSupportsPinReorder,
   readEnvironmentSupportsActiveReorder,
@@ -137,6 +139,18 @@ export class ThreadAutoSettleOptOutUnsupportedError extends Schema.TaggedError<T
   }
 }
 
+export class ThreadFoldersUnsupportedError extends Schema.TaggedError<ThreadFoldersUnsupportedError>()(
+  "ThreadFoldersUnsupportedError",
+  {
+    environmentId: EnvironmentId,
+    threadId: ThreadId,
+  },
+) {
+  override get message(): string {
+    return "This environment's server does not support folders yet. Update the server to use them.";
+  }
+}
+
 export class ThreadPinningUnsupportedError extends Schema.TaggedError<ThreadPinningUnsupportedError>()(
   "ThreadPinningUnsupportedError",
   {
@@ -223,6 +237,9 @@ export function useThreadActions() {
     reportFailure: false,
   });
   const unsettleThreadMutation = useAtomCommand(threadEnvironment.unsettle, {
+    reportFailure: false,
+  });
+  const setThreadFolderMutation = useAtomCommand(threadEnvironment.setFolder, {
     reportFailure: false,
   });
   const pinThreadMutation = useAtomCommand(threadEnvironment.pin, {
@@ -617,6 +634,27 @@ export function useThreadActions() {
     [setThreadAutoSettleMutation],
   );
 
+  /** Moves a thread into `folderId`, or out of every folder when it is null. */
+  const setThreadFolder = useCallback(
+    async (target: ScopedThreadRef, folderId: ThreadFolderId | null) => {
+      if (!readEnvironmentSupportsFolders(target.environmentId)) {
+        return AsyncResult.failure(
+          Cause.fail(
+            new ThreadFoldersUnsupportedError({
+              environmentId: target.environmentId,
+              threadId: target.threadId,
+            }),
+          ),
+        );
+      }
+      return setThreadFolderMutation({
+        environmentId: target.environmentId,
+        input: { threadId: target.threadId, folderId },
+      });
+    },
+    [setThreadFolderMutation],
+  );
+
   const pinThread = useCallback(
     async (target: ScopedThreadRef, opts: { orderKey?: string } = {}) => {
       // Version skew: never send the command to a server that predates it.
@@ -981,6 +1019,7 @@ export function useThreadActions() {
       pinThread,
       unpinThread,
       confirmAndUnpinThread,
+      setThreadFolder,
       reorderPinnedThread,
       reorderActiveThread,
       setThreadAutoSettle,
@@ -994,6 +1033,7 @@ export function useThreadActions() {
       reorderPinnedThread,
       reorderActiveThread,
       setThreadAutoSettle,
+      setThreadFolder,
       scheduleThreadMessage,
       settleThread,
       snoozeThread,
