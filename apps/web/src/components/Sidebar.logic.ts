@@ -247,6 +247,8 @@ export type SidebarDropTarget = {
   readonly section: "pinned" | "active" | "settled" | SidebarFolderSection;
   readonly pinnedOrder: readonly string[];
   readonly activeOrder: readonly string[];
+  /** The rows of the target folder after the move. Empty outside folders. */
+  readonly folderOrder?: readonly string[];
 };
 
 export function resolveSidebarDropTarget(
@@ -271,6 +273,7 @@ export function resolveSidebarDropTarget(
   if (section === "working" || section === "snoozed") return null;
   const pinnedOrder: string[] = [];
   const activeOrder: string[] = [];
+  const folderOrder: string[] = [];
   let currentSection: SidebarSection = "pinned";
   for (const item of moved) {
     if (item.kind === "marker") {
@@ -285,10 +288,13 @@ export function resolveSidebarDropTarget(
       )
         break;
     } else if (currentSection === "pinned") pinnedOrder.push(item.key);
-    // A folder keeps no arranged order, so its rows stay out of the inbox's.
+    // A folder arranges its own rows, so they stay out of the inbox's order.
     else if (currentSection === "active") activeOrder.push(item.key);
+    else if (currentSection === section) folderOrder.push(item.key);
   }
-  return { section, pinnedOrder, activeOrder };
+  return folderIdOfSection(section) === null
+    ? { section, pinnedOrder, activeOrder }
+    : { section, pinnedOrder, activeOrder, folderOrder };
 }
 
 /** The folder a list id belongs to: its heading, its stand-in row, or a row. */
@@ -352,10 +358,21 @@ export type SidebarThreadDropPlan =
       /** The row came out of a folder, so the move clears its membership. */
       readonly clearFolder: boolean;
     }
-  /** Into a folder. Folders keep no arranged order, so no keys are written. */
+  /** Within one folder. Folder rows share the inbox's key space, so the
+      active key writes. */
+  | {
+      readonly kind: "reorder-folder";
+      readonly folderId: string;
+      readonly order: readonly string[];
+      readonly assignments: ReadonlyArray<{ readonly id: string; readonly orderKey: string }>;
+    }
+  /** Into another folder, at the dropped spot. `assignments` is empty when
+      the server cannot store the key; the row then joins by membership alone. */
   | {
       readonly kind: "move-to-folder";
       readonly folderId: string;
+      readonly order: readonly string[];
+      readonly assignments: ReadonlyArray<{ readonly id: string; readonly orderKey: string }>;
       readonly unpin: boolean;
       readonly unsettle: boolean;
       readonly unsnooze: boolean;
@@ -397,6 +414,8 @@ export function planSidebarThreadDrop(input: {
   readonly activeReorderableKeys?: ReadonlySet<string>;
   /** Working beta: the inbox sorts by time, so drops only change lifecycle. */
   readonly activeTimeOrdered?: boolean;
+  /** The rows of the lifted row's folder in displayed order before the drop. */
+  readonly folderOrder?: readonly string[];
 }): SidebarThreadDropPlan {
   const {
     activeKey,
@@ -410,21 +429,52 @@ export function planSidebarThreadDrop(input: {
     activeOrder,
     activeKeysById,
     activeReorderableKeys,
+    folderOrder = [],
   } = input;
   if (input.supportsSettlement === false && (target.section === "settled" || activeSettled)) {
     return { kind: "none" };
   }
   const targetFolderId = folderIdOfSection(target.section);
   if (targetFolderId !== null) {
-    return targetFolderId === folderIdOfSection(activeSection)
-      ? { kind: "none" }
-      : {
-          kind: "move-to-folder",
-          folderId: targetFolderId,
-          unpin: activePinned,
-          unsettle: activeSettled,
-          unsnooze: activeSection === "snoozed",
-        };
+    const order = target.folderOrder ?? [];
+    if (targetFolderId !== folderIdOfSection(activeSection)) {
+      const planned = planPinnedReorder({
+        orderedIds: order,
+        keysById: activeKeysById,
+        movedId: activeKey,
+      });
+      const storable =
+        activeReorderableKeys === undefined ||
+        planned.every(({ id }) => activeReorderableKeys.has(id));
+      return {
+        kind: "move-to-folder",
+        folderId: targetFolderId,
+        order,
+        assignments: storable ? planned : [],
+        unpin: activePinned,
+        unsettle: activeSettled,
+        unsnooze: activeSection === "snoozed",
+      };
+    }
+    if (
+      order.length === 0 ||
+      (order.length === folderOrder.length &&
+        order.every((key, index) => key === folderOrder[index]))
+    ) {
+      return { kind: "none" };
+    }
+    const assignments = planPinnedReorder({
+      orderedIds: order,
+      keysById: activeKeysById,
+      movedId: activeKey,
+    });
+    if (
+      assignments.length === 0 ||
+      (activeReorderableKeys && assignments.some(({ id }) => !activeReorderableKeys.has(id)))
+    ) {
+      return { kind: "none" };
+    }
+    return { kind: "reorder-folder", folderId: targetFolderId, order, assignments };
   }
   switch (target.section) {
     case "active": {

@@ -118,6 +118,11 @@ export function createSidebarCollisionDetection(
     let collisions = closestCenter(args);
     const pointer = args.pointerCoordinates;
     const items = options.items;
+    // True while the lifted card is over a folder's band. The divider
+    // gesture below must then stand aside: the list always ends in a Settled
+    // header, so the gesture is armed on every drag, and it would pull the
+    // nearest inbox slot in front of the folder's own rows.
+    let overFolder = false;
     // A folder heading can only land among folders, so the nearest slot is
     // chosen from those alone rather than rejected after the fact.
     const draggedFolderId = items ? folderIdOfDragId(String(args.active.id)) : null;
@@ -181,6 +186,7 @@ export function createSidebarCollisionDetection(
         hit === null
           ? null
           : { slotId: hit.slotId, top: hit.top - dividerTop, bottom: hit.bottom - dividerTop };
+      overFolder = hit !== null;
       const folderId = hit?.slotId ?? null;
       if (folderId !== null && folderId !== String(args.active.id)) {
         const valid = validity.get(folderId) ?? isValidTarget(folderId);
@@ -199,7 +205,7 @@ export function createSidebarCollisionDetection(
       .find((container) => container.id === sidebarMarkerId("pinned-divider"))
       ?.node.current?.querySelector(".sidebar-drag-boundary-label")
       ?.getBoundingClientRect();
-    if (items && boundary && source?.kind === "thread" && pointer) {
+    if (items && boundary && source?.kind === "thread" && pointer && !overFolder) {
       boundarySection ??= source.section === "pinned" ? "pinned" : "active";
       // Use the visible divider row, including its sortable translation.
       // Only pointer movement can change sections: opening the destination
@@ -399,8 +405,7 @@ export function createSidebarSortingStrategy(input: {
         : target.section === "settled"
           ? input.settledOrder
           : folderIdOfSection(target.section) !== null
-            ? // A folder keeps no arranged order: the row joins the end.
-              group.map((item) => item.key)
+            ? (target.folderOrder ?? [])
             : (input.activeOrder ?? target.activeOrder);
     const ranks = new Map(order.map((key, index) => [key, index]));
     const rank = ranks.get(active.key) ?? Number.POSITIVE_INFINITY;

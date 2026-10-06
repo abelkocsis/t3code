@@ -144,7 +144,7 @@ per-device choice.
 Drag a thread into a folder's rows, or onto the **Drop in …** line an empty folder shows
 while you drag, to move it in. Drag it below the folders to take it out. A thread dragged
 into a folder is unpinned, un-settled, or woken first, exactly as a drop in the active list
-does.
+does. Drag a thread up or down inside its folder to arrange the folder's rows.
 
 Right-click a folder header for **Rename folder** and **Delete folder**. A rename changes
 only the name. Deleting asks first, then returns its threads to the list. Neither action

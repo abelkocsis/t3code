@@ -276,6 +276,78 @@ describe("sidebar collision detection", () => {
     );
   });
 
+  it("keeps a row inside its folder while the divider gesture is armed", () => {
+    // Folder f1: a, b, c | inbox (empty) | Settled. Dragging a down over b.
+    const items: SidebarListItem[] = [
+      pinnedHeader,
+      divider,
+      marker(folderHeaderMarker("f1")),
+      thread("a", sidebarFolderSection("f1")),
+      thread("b", sidebarFolderSection("f1")),
+      thread("c", sidebarFolderSection("f1")),
+      marker("active-placeholder"),
+      settledHeader,
+    ];
+    const rect = (top: number, height: number) => ({
+      top,
+      height,
+      bottom: top + height,
+      left: 0,
+      right: 260,
+      width: 260,
+    });
+    const rects = [
+      rect(100, 0),
+      rect(101, 16),
+      rect(120, 30),
+      rect(152, 82),
+      rect(236, 82),
+      rect(320, 82),
+      rect(404, 40),
+      rect(446, 16),
+    ];
+    const node = (top: number, bottom: number) =>
+      ({
+        getBoundingClientRect: () => ({ top, bottom, left: 0, right: 260 }),
+        querySelector: () => ({
+          getBoundingClientRect: () => ({ top, bottom, left: 0, right: 260 }),
+        }),
+      }) as unknown as HTMLElement;
+    const detector = createSidebarCollisionDetection(() => true, { items, activationY: 190 });
+    const call = (cardTop: number, pointerY: number) => {
+      const collisionRect = { ...rects[3]!, top: cardTop, bottom: cardTop + 82 };
+      return detector({
+        ...collisionArgs(),
+        active: {
+          id: "a",
+          data: { current: {} },
+          rect: { current: { initial: rects[3]!, translated: collisionRect } },
+        },
+        collisionRect,
+        pointerCoordinates: { x: 130, y: pointerY },
+        droppableRects: new Map(
+          items.map((item, index) => [sidebarListItemId(item), rects[index]!]),
+        ),
+        droppableContainers: items.map((item, index) => ({
+          id: sidebarListItemId(item),
+          key: sidebarListItemId(item),
+          disabled: false,
+          data: { current: {} },
+          node: {
+            current:
+              item === divider ? node(101, 117) : item === settledHeader ? node(446, 462) : null,
+          },
+          rect: { current: rects[index]! },
+        })),
+      })[0];
+    };
+    call(152, 190);
+    const over = call(236, 274);
+    expect(resolveSidebarDropTarget(items, "a", String(over?.id))?.section).toBe(
+      sidebarFolderSection("f1"),
+    );
+  });
+
   it("gives a folder slot the drop when the lifted card is over it", () => {
     const items: SidebarListItem[] = [
       pinnedHeader,

@@ -407,6 +407,7 @@ const EMPTY_PROVIDER_ENTRIES: ReadonlyMap<string, ProviderInstanceEntry> = new M
 // Collapsed shelves share one empty list so a route change alone does not
 // give the sidebar list a new identity.
 const EMPTY_THREADS: readonly EnvironmentThreadShell[] = [];
+const EMPTY_KEYS: readonly string[] = [];
 
 function terminalProcessLabel(count: number): string {
   return `${count} terminal ${count === 1 ? "process" : "processes"} running`;
@@ -2866,7 +2867,21 @@ export default function Sidebar() {
       : sortThreadsForSidebar(active);
     return {
       threadsByFolderId: new Map(
-        [...foldered].map(([id, members]) => [id, sortThreadsForSidebar(members)]),
+        [...foldered].map(([id, members]) => {
+          const sorted = sortThreadsForSidebar(members);
+          return [
+            id,
+            folderIdOfSection(optimisticDrop?.section ?? "active") !== id ||
+            optimisticDrop?.order == null
+              ? sorted
+              : orderItemsByPreferredIds({
+                  items: sorted,
+                  preferredIds: optimisticDrop.order,
+                  getId: (thread) =>
+                    scopedThreadKey(scopeThreadRef(thread.environmentId, thread.id)),
+                }),
+          ];
+        }),
       ),
       pinnedThreads:
         optimisticDrop?.section !== "pinned" || optimisticDrop.order === null
@@ -3598,6 +3613,24 @@ export default function Sidebar() {
       ),
     [activeThreads],
   );
+  const folderKeysById = useMemo(
+    () =>
+      new Map(
+        [...threadsByFolderId].map(([folderId, members]) => [
+          folderId,
+          members.map((thread) => scopedThreadKey(scopeThreadRef(thread.environmentId, thread.id))),
+        ]),
+      ),
+    [threadsByFolderId],
+  );
+  /** The displayed keys of a folder section, empty for every other section. */
+  const folderKeysOfSection = useCallback(
+    (section: SidebarSection): readonly string[] => {
+      const folderId = folderIdOfSection(section);
+      return folderId === null ? EMPTY_KEYS : (folderKeysById.get(folderId) ?? EMPTY_KEYS);
+    },
+    [folderKeysById],
+  );
   useEffect(() => {
     if (optimisticDrop === null) return;
     const canonicalByKey = new Map(
@@ -3647,7 +3680,13 @@ export default function Sidebar() {
     }
     if (canonicalSection !== dropLifecycleSection || !folderLanded) return;
     if (optimisticDrop.clearsSnooze && thread.snoozedUntil != null) return;
-    const destinationKeys = dropLifecycleSection === "pinned" ? pinnedKeys : activeKeys;
+    const dropFolder = folderIdOfSection(optimisticDrop.section);
+    const destinationKeys =
+      dropLifecycleSection === "pinned"
+        ? pinnedKeys
+        : dropFolder !== null
+          ? (folderKeysById.get(dropFolder) ?? EMPTY_KEYS)
+          : activeKeys;
     const canonicalDestination = destinationKeys.flatMap((key) => {
       const canonical = canonicalByKey.get(key);
       return canonical === undefined ? [] : [canonical];
@@ -3674,7 +3713,7 @@ export default function Sidebar() {
     if (membershipChanged || foreignKeyLanded || allAssignmentsLanded) {
       setOptimisticDrop(null);
     }
-  }, [activeKeys, optimisticDrop, pinnedKeys, threads]);
+  }, [activeKeys, folderKeysById, optimisticDrop, pinnedKeys, threads]);
   // A hold that never resolves disables dragging on every row, so it cannot
   // outlive the writes it waits for. Events land in well under a second; a
   // few seconds of grace keeps a slow server from flickering the preview.
@@ -4007,6 +4046,7 @@ export default function Sidebar() {
             activeKeysById,
             activeReorderableKeys: activeReorderableThreadKeys,
             activeTimeOrdered: workingShelfEnabled,
+            folderOrder: folderKeysOfSection(draggedFromSection),
           }).kind !== "none"
         );
       },
@@ -4017,6 +4057,7 @@ export default function Sidebar() {
     );
   }, [
     activeKeysById,
+    folderKeysOfSection,
     pinnedKeysById,
     serverConfigs,
     activeKeys,
@@ -4079,6 +4120,7 @@ export default function Sidebar() {
         activeKeysById,
         activeReorderableKeys: activeReorderableThreadKeys,
         activeTimeOrdered: workingShelfEnabled,
+        folderOrder: folderKeysOfSection(activeSection),
       });
       if (plan.kind === "none") return;
       if (plan.kind === "settle" && settlingThreadKeysRef.current.has(activeKey)) return;
@@ -4088,7 +4130,10 @@ export default function Sidebar() {
               ...(plan.orderKey === undefined ? [] : [{ id: activeKey, orderKey: plan.orderKey }]),
               ...plan.extraAssignments,
             ]
-          : plan.kind === "reorder-pinned" || plan.kind === "move-active"
+          : plan.kind === "reorder-pinned" ||
+              plan.kind === "move-active" ||
+              plan.kind === "reorder-folder" ||
+              plan.kind === "move-to-folder"
             ? plan.assignments
             : [];
       const drop = {
@@ -4111,8 +4156,8 @@ export default function Sidebar() {
             : plan.kind === "move-active" && plan.clearFolder
               ? null
               : undefined,
-        order: plan.kind === "settle" || plan.kind === "move-to-folder" ? null : plan.order,
-        keysAtDrop: target.section === "active" ? activeKeysById : pinnedKeysById,
+        order: plan.kind === "settle" ? null : plan.order,
+        keysAtDrop: target.section === "pinned" ? pinnedKeysById : activeKeysById,
         assignedKeys: new Map(assignments.map(({ id, orderKey }) => [id, orderKey])),
       };
       setOptimisticDrop(drop);
@@ -4170,11 +4215,14 @@ export default function Sidebar() {
             if (plan.unsnooze && !(await run(unsnoozeThread(threadRef), "Failed to wake thread")))
               return;
             if (plan.kind === "move-to-folder") {
-              await run(
-                setThreadFolder(threadRef, ThreadFolderId.make(plan.folderId)),
-                "Failed to move to folder",
-              );
-              return;
+              if (
+                !(await run(
+                  setThreadFolder(threadRef, ThreadFolderId.make(plan.folderId)),
+                  "Failed to move to folder",
+                ))
+              )
+                return;
+              break;
             }
             if (
               plan.clearFolder &&
@@ -4195,25 +4243,31 @@ export default function Sidebar() {
               return;
             break;
           case "reorder-pinned":
+          case "reorder-folder":
             break;
         }
         // Stop on failure; each successful key write remains a valid placement.
         const keyWrites =
           plan.kind === "pin"
             ? plan.extraAssignments
-            : plan.kind === "move-active" || plan.kind === "reorder-pinned"
+            : plan.kind === "move-active" ||
+                plan.kind === "reorder-pinned" ||
+                plan.kind === "reorder-folder" ||
+                plan.kind === "move-to-folder"
               ? plan.assignments
               : [];
+        // Folder rows live the active lifecycle, so they share its key.
+        const writesActiveKey = plan.kind !== "pin" && plan.kind !== "reorder-pinned";
         for (const assignment of keyWrites) {
           const thread = threadByKey.get(assignment.id);
           if (thread === undefined) continue;
           if (
             !(await run(
-              (plan.kind === "move-active" ? reorderActiveThread : reorderPinnedThread)(
+              (writesActiveKey ? reorderActiveThread : reorderPinnedThread)(
                 scopeThreadRef(thread.environmentId, thread.id),
                 assignment.orderKey,
               ),
-              plan.kind === "move-active"
+              writesActiveKey
                 ? "Failed to reorder active threads"
                 : "Failed to reorder pinned threads",
             ))
@@ -4224,6 +4278,7 @@ export default function Sidebar() {
     },
     [
       activeKeysById,
+      folderKeysOfSection,
       pinnedKeysById,
       serverConfigs,
       activeKeys,
