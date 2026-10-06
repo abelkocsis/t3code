@@ -448,7 +448,7 @@ export function createSidebarSortingStrategy(input: {
     section("active");
     if (items.some((item) => item.kind === "marker" && item.marker === "working-header")) {
       marker("working-header");
-      projected.push(...groups.working);
+      projected.push(...(groups.working ?? []));
     }
     if (
       (groups.snoozed ?? []).length > 0 ||

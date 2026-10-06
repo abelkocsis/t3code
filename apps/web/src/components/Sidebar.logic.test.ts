@@ -2828,6 +2828,7 @@ describe("Working shelf (beta)", () => {
         unpin: true,
         unsettle: false,
         unsnooze: false,
+        clearFolder: false,
       });
     });
   });

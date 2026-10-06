@@ -6,7 +6,7 @@
  * a build says nothing here: upstream does not bump `package.json` per release
  * tag, and their tag v0.0.42 still carries version 0.0.40.
  */
-export const UPSTREAM_BASE_TAG = "v0.0.44";
+export const UPSTREAM_BASE_TAG = "v0.0.45";
 
 /** The repository the base tag comes from. */
 export const UPSTREAM_REPOSITORY = "pingdotgg/t3code";
