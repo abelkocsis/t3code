@@ -28,6 +28,7 @@ import {
   ChevronRight,
   Copy,
   GripVertical,
+  Pencil,
   ListChecks,
   Plus,
   RefreshCw,
@@ -40,7 +41,7 @@ import { Button } from "~/components/ui/button";
 import { ScrollArea } from "~/components/ui/scroll-area";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "~/components/ui/tooltip";
 import { cn } from "~/lib/utils";
-import { useStandup } from "~/state/standup";
+import { formatStandupHtml, useStandup } from "~/state/standup";
 
 const EMPTY_ITEMS: readonly StandupItem[] = [];
 
@@ -101,11 +102,23 @@ export function StandupPanel({ environmentId }: { environmentId: EnvironmentId |
     void generate();
   }, [day, generate, hasWork, isGenerating, isLoading, summary]);
 
+  // Both flavors go out together, so Slack reads the list from the HTML while
+  // a terminal or editor still gets the plain bullets.
   const copy = useCallback(async () => {
-    await navigator.clipboard.writeText(standup.text);
+    const html = formatStandupHtml(items);
+    if (navigator.clipboard.write && typeof ClipboardItem !== "undefined") {
+      await navigator.clipboard.write([
+        new ClipboardItem({
+          "text/plain": new Blob([standup.text], { type: "text/plain" }),
+          "text/html": new Blob([html], { type: "text/html" }),
+        }),
+      ]);
+    } else {
+      await navigator.clipboard.writeText(standup.text);
+    }
     await standup.save();
     setCopied(true);
-  }, [standup]);
+  }, [items, standup]);
 
   useEffect(() => {
     if (!copied) return;
@@ -221,6 +234,7 @@ export function StandupPanel({ environmentId }: { environmentId: EnvironmentId |
                   key={item.itemId}
                   item={item}
                   onToggle={() => void standup.setItemExcluded(item.itemId, !item.excluded)}
+                  onEdit={(text) => void standup.setItemText(item.itemId, text)}
                 />
               ))}
             </SortableContext>
@@ -263,14 +277,33 @@ export function StandupPanel({ environmentId }: { environmentId: EnvironmentId |
  * made six items fill the panel, and the model's own source attribution was not
  * reliable enough to earn a line of its own.
  *
- * The grip and the remove button stay hidden until the row is hovered, so the
- * resting state reads as the text the user is about to paste. An excluded row
- * keeps its control visible, because a hidden way back is no way back.
+ * The grip, the edit button and the remove button stay hidden until the row is
+ * hovered, so the resting state reads as the text the user is about to paste.
+ * An excluded row keeps its control visible, because a hidden way back is no
+ * way back.
+ *
+ * Editing swaps the text for a textarea in place. Enter or leaving the field
+ * saves, Escape drops the change.
  */
-function StandupItemRow({ item, onToggle }: { item: StandupItem; onToggle: () => void }) {
+function StandupItemRow({
+  item,
+  onToggle,
+  onEdit,
+}: {
+  item: StandupItem;
+  onToggle: () => void;
+  onEdit: (text: string) => void;
+}) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: item.itemId,
   });
+  const [editing, setEditing] = useState<string | null>(null);
+
+  const commit = () => {
+    if (editing === null) return;
+    onEdit(editing);
+    setEditing(null);
+  };
 
   return (
     <div
@@ -297,26 +330,66 @@ function StandupItemRow({ item, onToggle }: { item: StandupItem; onToggle: () =>
       <span aria-hidden className="mt-[0.2rem] shrink-0 text-muted-foreground text-sm">
         &bull;
       </span>
-      <p
+      {editing !== null ? (
+        <textarea
+          autoFocus
+          rows={1}
+          className="field-sizing-content min-w-0 flex-1 resize-none rounded-md border bg-transparent px-1 py-0.5 text-sm leading-relaxed outline-none focus-visible:ring-1"
+          aria-label="Edit this item"
+          value={editing}
+          onChange={(event) => setEditing(event.target.value)}
+          onBlur={commit}
+          onKeyDown={(event) => {
+            if (event.key === "Enter" && !event.shiftKey) {
+              event.preventDefault();
+              commit();
+            } else if (event.key === "Escape") {
+              event.preventDefault();
+              setEditing(null);
+            }
+          }}
+        />
+      ) : (
+        <p
+          className={cn(
+            "min-w-0 flex-1 text-sm leading-relaxed",
+            item.excluded && "text-muted-foreground line-through",
+          )}
+          onDoubleClick={() => setEditing(item.text)}
+        >
+          {item.text}
+        </p>
+      )}
+      <span
         className={cn(
-          "min-w-0 flex-1 text-sm leading-relaxed",
-          item.excluded && "text-muted-foreground line-through",
+          "flex shrink-0 opacity-0 transition-opacity group-hover:opacity-100 has-focus-visible:opacity-100",
+          editing !== null && "invisible",
         )}
       >
-        {item.text}
-      </p>
-      <Button
-        variant="ghost"
-        size="icon-sm"
+        <Button
+          variant="ghost"
+          size="icon-sm"
+          aria-label="Edit this item"
+          onClick={() => setEditing(item.text)}
+        >
+          <Pencil className="size-3.5" />
+        </Button>
+      </span>
+      <span
         className={cn(
-          "shrink-0 opacity-0 transition-opacity group-hover:opacity-100 focus-visible:opacity-100",
+          "flex shrink-0 opacity-0 transition-opacity group-hover:opacity-100 has-focus-visible:opacity-100",
           item.excluded && "opacity-100",
         )}
-        aria-label={item.excluded ? "Put this item back" : "Leave this item out"}
-        onClick={onToggle}
       >
-        {item.excluded ? <Undo2 className="size-3.5" /> : <X className="size-3.5" />}
-      </Button>
+        <Button
+          variant="ghost"
+          size="icon-sm"
+          aria-label={item.excluded ? "Put this item back" : "Leave this item out"}
+          onClick={onToggle}
+        >
+          {item.excluded ? <Undo2 className="size-3.5" /> : <X className="size-3.5" />}
+        </Button>
+      </span>
     </div>
   );
 }

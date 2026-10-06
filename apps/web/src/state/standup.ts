@@ -60,6 +60,8 @@ export interface StandupView {
   readonly showDay: (day: string) => void;
   readonly generate: () => Promise<void>;
   readonly setItemExcluded: (itemId: string, excluded: boolean) => Promise<void>;
+  /** Rewrites one bullet. Blank text is ignored; removing is `setItemExcluded`. */
+  readonly setItemText: (itemId: string, text: string) => Promise<void>;
   readonly addItem: (text: string) => Promise<void>;
   /** Stores a new bullet order. The panel shows the drag result immediately. */
   readonly reorderItems: (items: readonly StandupItem[]) => Promise<void>;
@@ -72,6 +74,29 @@ export function formatStandupText(items: readonly StandupItem[]): string {
     .filter((item) => !item.excluded)
     .map((item) => `• ${item.text}`)
     .join("\n");
+}
+
+/**
+ * The same bullets as an HTML list, for the `text/html` clipboard flavor.
+ *
+ * Slack's composer pastes a plain-text bullet character as literal text, but
+ * turns a pasted `<ul>` into one of its own lists. Carrying both flavors keeps
+ * the plain text for terminals and editors and gives Slack real bullets.
+ */
+export function formatStandupHtml(items: readonly StandupItem[]): string {
+  const rows = items
+    .filter((item) => !item.excluded)
+    .map((item) => `<li>${escapeHtml(item.text)}</li>`)
+    .join("");
+  return `<ul>${rows}</ul>`;
+}
+
+function escapeHtml(text: string): string {
+  return text
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;");
 }
 
 export function useStandup(environmentId: EnvironmentId | null): StandupView {
@@ -150,6 +175,21 @@ export function useStandup(environmentId: EnvironmentId | null): StandupView {
     [currentItems, writeItems],
   );
 
+  // The source stays as it was, so a regeneration feeds the edited wording to
+  // the model as a kept item instead of pinning it verbatim like a typed one.
+  const setItemText = useCallback(
+    (itemId: string, text: string) => {
+      const trimmed = text.trim();
+      if (trimmed.length === 0) return Promise.resolve();
+      const current = currentItems.find((item) => item.itemId === itemId);
+      if (current === undefined || current.text === trimmed) return Promise.resolve();
+      return writeItems(
+        currentItems.map((item) => (item.itemId === itemId ? { ...item, text: trimmed } : item)),
+      );
+    },
+    [currentItems, writeItems],
+  );
+
   const addItem = useCallback(
     (text: string) => {
       const trimmed = text.trim();
@@ -195,6 +235,7 @@ export function useStandup(environmentId: EnvironmentId | null): StandupView {
     showDay,
     generate,
     setItemExcluded,
+    setItemText,
     addItem,
     reorderItems: writeItems,
     save,
