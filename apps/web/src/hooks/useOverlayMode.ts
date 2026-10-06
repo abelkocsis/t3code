@@ -38,7 +38,6 @@ export function useOverlayMode(): void {
   const nowMinute = useNowMinute();
   const enabled = useClientSettings((settings) => settings.overlayModeEnabled);
   const hiddenUntil = useClientSettings((settings) => settings.overlayHiddenUntil);
-  const keepAwake = useClientSettings((settings) => settings.overlayKeepAwake);
   const position = useClientSettings((settings) => settings.overlayPosition);
   const showIdlePill = useClientSettings((settings) => settings.overlayShowIdlePill);
   const stepAway = useStepAwayStore((state) => state.active);
@@ -71,8 +70,10 @@ export function useOverlayMode(): void {
       workingCount: resolved.workingCount,
       dismissedCount: resolved.dismissedCount,
       // Holding off display sleep is the point of step away mode: a dark
-      // screen cannot be read from across the room.
-      keepAwake: keepAwake || stepAway,
+      // screen cannot be read from across the room. The pill and the full
+      // overlay let the display sleep, or the Mac would never rest while
+      // T3 Code runs.
+      keepAwake: stepAway,
       position,
     };
   }, [
@@ -80,7 +81,6 @@ export function useOverlayMode(): void {
     dismissedCount,
     enabled,
     hiddenUntil,
-    keepAwake,
     nowMinute,
     position,
     showIdlePill,

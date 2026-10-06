@@ -276,29 +276,6 @@ export function NotificationsSettings() {
             />
           }
         />
-
-        <SettingsRow
-          {...searchableSetting("overlay-keep-awake")}
-          description="Hold off display sleep while the overlay is on screen. Closing the lid still sleeps the Mac."
-          resetAction={
-            settings.overlayKeepAwake !== DEFAULT_CLIENT_SETTINGS.overlayKeepAwake ? (
-              <SettingResetButton
-                label="keep awake"
-                onClick={() =>
-                  updateSettings({ overlayKeepAwake: DEFAULT_CLIENT_SETTINGS.overlayKeepAwake })
-                }
-              />
-            ) : null
-          }
-          control={
-            <Switch
-              checked={settings.overlayKeepAwake}
-              disabled={!settings.overlayModeEnabled}
-              onCheckedChange={(checked) => updateSettings({ overlayKeepAwake: Boolean(checked) })}
-              aria-label="Keep this Mac awake while the overlay shows"
-            />
-          }
-        />
       </SettingsSection>
     </SettingsPageContainer>
   );

@@ -37,7 +37,6 @@ const clientSettings: ClientSettings = {
   composerCollapseOnScroll: true,
   overlayModeEnabled: false,
   overlayHiddenUntil: null,
-  overlayKeepAwake: false,
   overlayShowIdlePill: false,
   overlayPosition: null,
   desktopNotificationsEnabled: false,

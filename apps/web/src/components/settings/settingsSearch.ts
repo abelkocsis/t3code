@@ -205,13 +205,6 @@ export const SETTINGS_SEARCH_ITEMS = [
     desktopOnly: true,
   },
   {
-    id: "overlay-keep-awake",
-    title: "Keep this Mac awake",
-    to: "/settings/notifications",
-    searchTerms: ["display sleep screensaver prevent power"],
-    desktopOnly: true,
-  },
-  {
     id: "notify-on-approval",
     title: "Approval needed",
     to: "/settings/notifications",
