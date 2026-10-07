@@ -10289,9 +10289,10 @@ export default function ChatView(props: ChatViewProps) {
               ref={setComposerOverlayElement}
               inert={isRevertingCheckpoint}
               data-chat-composer-overlay="true"
+              data-draft-hero={isDraftHeroState ? "true" : undefined}
               className={
                 isDraftHeroState
-                  ? "pointer-events-none absolute inset-0 z-20 flex items-center"
+                  ? "pointer-events-none absolute inset-0 z-20 flex items-center [container-type:size]"
                   : "pointer-events-none absolute inset-x-0 bottom-0 z-20 pt-1.5 sm:pt-2"
               }
             >

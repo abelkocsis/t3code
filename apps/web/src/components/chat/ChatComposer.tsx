@@ -6950,6 +6950,10 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
                     containerClassName={cn(isComposerResting && "min-w-0 flex-1")}
                     className={cn(
                       showMobilePendingAnswerActions && "max-sm:pb-12",
+                      // On a new thread the centered composer grows until the
+                      // headline above and the toolbar below would leave the pane.
+                      !isComposerResting &&
+                        "in-data-[draft-hero]:max-h-[max(13rem,calc(100cqh-25rem))]",
                       isComposerResting &&
                         "my-0 max-h-8 min-h-8 overflow-hidden py-0 whitespace-pre! leading-8",
                       isComposerApprovalState && "min-h-10",
