@@ -262,7 +262,7 @@ import { ComposerPendingApprovalPanel } from "./ComposerPendingApprovalPanel";
 import { ComposerPendingUserInputPanel } from "./ComposerPendingUserInputPanel";
 import { ComposerPlanFollowUpBanner } from "./ComposerPlanFollowUpBanner";
 import { ComposerQuickReplies } from "./ComposerQuickReplies";
-import { shouldShowQuickReplies } from "./quickReplyVisibility";
+import { offeredQuickReplies, shouldShowQuickReplies } from "./quickReplyVisibility";
 import {
   ComposerControl,
   ComposerControlIcon,
@@ -2573,9 +2573,12 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
     (!isComposerCollapsedMobile && showPlanFollowUpPrompt && activeProposedPlan !== null);
   const showCollapsedMobilePromptRow =
     isComposerCollapsedMobile && !isComposerApprovalState && pendingUserInputs.length === 0;
+  const quickReplies = useMemo(
+    () => offeredQuickReplies(settings.quickReplies, routeKind === "draft"),
+    [routeKind, settings.quickReplies],
+  );
   const showQuickReplies = shouldShowQuickReplies({
-    replyCount: settings.quickReplies.length,
-    isDraftThread: routeKind === "draft",
+    replyCount: quickReplies.length,
     hasSendableContent: composerSendState.hasSendableContent,
     hasPendingApproval: isComposerApprovalState,
     pendingUserInputCount: pendingUserInputs.length,
@@ -6388,7 +6391,7 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
             </ComposerBanner.Attachment>
           ) : null}
           {showQuickReplies ? (
-            <ComposerQuickReplies replies={settings.quickReplies} onSelect={applyQuickReply} />
+            <ComposerQuickReplies replies={quickReplies} onSelect={applyQuickReply} />
           ) : null}
           {!activityStackItem &&
           isTasksDrawerOpen &&

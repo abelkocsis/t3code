@@ -1,3 +1,16 @@
+import type { QuickReply } from "@t3tools/contracts";
+
+/**
+ * The replies a thread offers. A thread that has never run usually has
+ * nothing to say "go" to, so it offers only the replies marked for new threads.
+ */
+export function offeredQuickReplies(
+  replies: ReadonlyArray<QuickReply>,
+  isDraftThread: boolean,
+): ReadonlyArray<QuickReply> {
+  return isDraftThread ? replies.filter((reply) => reply.showInNewThread === true) : replies;
+}
+
 /**
  * When the composer offers its saved quick replies.
  *
@@ -8,7 +21,6 @@
  */
 export interface QuickRepliesVisibilityInput {
   readonly replyCount: number;
-  readonly isDraftThread: boolean;
   readonly hasSendableContent: boolean;
   readonly hasPendingApproval: boolean;
   readonly pendingUserInputCount: number;
@@ -19,8 +31,6 @@ export interface QuickRepliesVisibilityInput {
 
 export function shouldShowQuickReplies(input: QuickRepliesVisibilityInput): boolean {
   if (input.replyCount === 0) return false;
-  // A thread that has never run has nothing to say "go" to.
-  if (input.isDraftThread) return false;
   if (input.hasSendableContent) return false;
   if (input.hasPendingApproval) return false;
   if (input.pendingUserInputCount > 0) return false;

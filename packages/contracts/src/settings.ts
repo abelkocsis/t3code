@@ -1170,12 +1170,14 @@ export type StorageCleanupSettings = typeof StorageCleanupSettings.Type;
  * One saved reply the composer offers as a chip while the draft is empty.
  *
  * `label` is what the chip shows and `text` is what the agent receives, so a
- * long instruction can sit behind a two-word chip.
+ * long instruction can sit behind a two-word chip. `showInNewThread` also
+ * offers the chip on a thread that has not run yet; absent means it does not.
  */
 export const QuickReply = Schema.Struct({
   id: TrimmedNonEmptyString,
   label: TrimmedNonEmptyString,
   text: TrimmedNonEmptyString,
+  showInNewThread: Schema.optionalKey(Schema.Boolean),
 });
 export type QuickReply = typeof QuickReply.Type;
 

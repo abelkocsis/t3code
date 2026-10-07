@@ -4,6 +4,7 @@ import { useState } from "react";
 
 import { randomUUID } from "../../lib/utils";
 import { Button } from "../ui/button";
+import { Checkbox } from "../ui/checkbox";
 import { Input } from "../ui/input";
 import { Textarea } from "../ui/textarea";
 import { searchableSetting } from "./settingsSearch";
@@ -19,7 +20,8 @@ function sameReplies(left: ReadonlyArray<QuickReply>, right: ReadonlyArray<Quick
         other !== undefined &&
         other.id === reply.id &&
         other.label === reply.label &&
-        other.text === reply.text
+        other.text === reply.text &&
+        (other.showInNewThread === true) === (reply.showInNewThread === true)
       );
     })
   );
@@ -57,7 +59,7 @@ export function QuickRepliesSettings() {
       serverScoped
       settingKeys={["quickReplies"]}
       {...searchableSetting("quick-replies")}
-      description="One tap sends the reply. Shift-click puts it in the composer instead. The chips show while the draft is empty."
+      description="One tap sends the reply. Shift-click puts it in the composer instead. The chips show while the draft is empty. A ticked reply also shows on a new thread."
       resetAction={
         sameReplies(replies, DEFAULT_QUICK_REPLIES) ? null : (
           <SettingResetButton
@@ -93,6 +95,22 @@ export function QuickRepliesSettings() {
               onChange={(event) => editRow(reply.id, { text: event.target.value })}
               onBlur={() => commit(rows)}
             />
+            <div className="flex h-8 flex-none items-center sm:h-7">
+              <Checkbox
+                aria-label={`Show ${reply.label || "reply"} on new threads`}
+                title="Show on new threads"
+                checked={reply.showInNewThread === true}
+                onCheckedChange={(checked) =>
+                  commit(
+                    rows.map((candidate) =>
+                      candidate.id === reply.id
+                        ? { ...candidate, showInNewThread: checked === true }
+                        : candidate,
+                    ),
+                  )
+                }
+              />
+            </div>
             <Button
               variant="ghost"
               size="icon-sm"

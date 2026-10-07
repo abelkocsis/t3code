@@ -1,10 +1,13 @@
 import { describe, expect, it } from "vite-plus/test";
 
-import { shouldShowQuickReplies, type QuickRepliesVisibilityInput } from "./quickReplyVisibility";
+import {
+  offeredQuickReplies,
+  shouldShowQuickReplies,
+  type QuickRepliesVisibilityInput,
+} from "./quickReplyVisibility";
 
 const visible: QuickRepliesVisibilityInput = {
   replyCount: 4,
-  isDraftThread: false,
   hasSendableContent: false,
   hasPendingApproval: false,
   pendingUserInputCount: 0,
@@ -28,12 +31,25 @@ describe("shouldShowQuickReplies", () => {
     expect(shouldShowQuickReplies({ ...visible, showPlanFollowUpPrompt: true })).toBe(false);
   });
 
-  it("hides them on a thread that has never run, and when sending is blocked", () => {
-    expect(shouldShowQuickReplies({ ...visible, isDraftThread: true })).toBe(false);
+  it("hides them when sending is blocked", () => {
     expect(shouldShowQuickReplies({ ...visible, isSendDisabled: true })).toBe(false);
   });
 
   it("hides them when the user has emptied the list", () => {
     expect(shouldShowQuickReplies({ ...visible, replyCount: 0 })).toBe(false);
+  });
+});
+
+describe("offeredQuickReplies", () => {
+  const go = { id: "go", label: "Go", text: "go" };
+  const review = { id: "review", label: "Review", text: "review the diff", showInNewThread: true };
+
+  it("offers every reply on a thread that has run", () => {
+    expect(offeredQuickReplies([go, review], false)).toEqual([go, review]);
+  });
+
+  it("offers only the replies marked for new threads on a thread that has never run", () => {
+    expect(offeredQuickReplies([go, review], true)).toEqual([review]);
+    expect(offeredQuickReplies([go], true)).toEqual([]);
   });
 });
