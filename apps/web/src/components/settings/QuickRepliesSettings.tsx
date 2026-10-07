@@ -5,6 +5,7 @@ import { useState } from "react";
 import { randomUUID } from "../../lib/utils";
 import { Button } from "../ui/button";
 import { Input } from "../ui/input";
+import { Textarea } from "../ui/textarea";
 import { searchableSetting } from "./settingsSearch";
 import { SettingResetButton, SettingsRow } from "./settingsLayout";
 import { useScopedSettings, useUpdateScopedSettings } from "./useScopedSettings";
@@ -71,7 +72,7 @@ export function QuickRepliesSettings() {
     >
       <div className="flex flex-col gap-1.5">
         {rows.map((reply) => (
-          <div key={reply.id} className="flex items-center gap-1.5">
+          <div key={reply.id} className="flex items-start gap-1.5">
             <div className="w-32 flex-none rounded-lg border border-border bg-input">
               <Input
                 size="sm"
@@ -82,16 +83,16 @@ export function QuickRepliesSettings() {
                 onBlur={() => commit(rows)}
               />
             </div>
-            <div className="min-w-0 flex-1 rounded-lg border border-border bg-input">
-              <Input
-                size="sm"
-                aria-label="Message sent"
-                placeholder="Message the agent receives"
-                value={reply.text}
-                onChange={(event) => editRow(reply.id, { text: event.target.value })}
-                onBlur={() => commit(rows)}
-              />
-            </div>
+            <Textarea
+              size="sm"
+              compact
+              rows={1}
+              aria-label="Message sent"
+              placeholder="Message the agent receives"
+              value={reply.text}
+              onChange={(event) => editRow(reply.id, { text: event.target.value })}
+              onBlur={() => commit(rows)}
+            />
             <Button
               variant="ghost"
               size="icon-sm"
