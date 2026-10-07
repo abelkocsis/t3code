@@ -35,7 +35,10 @@ vi.mock("~/hooks/useSettings", () => ({
   useClientSettings: (select: (settings: typeof DEFAULT_CLIENT_SETTINGS) => unknown) =>
     select(DEFAULT_CLIENT_SETTINGS),
 }));
-vi.mock("~/hooks/useLiveRefresh", () => ({ useLiveRefresh: () => {} }));
+vi.mock("~/hooks/useLiveRefresh", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("~/hooks/useLiveRefresh")>()),
+  useLiveRefresh: () => {},
+}));
 vi.mock("~/hooks/useHandleNewThread", () => ({ useNewThreadHandler: () => newThread }));
 vi.mock("~/lib/sourceControlActions", () => ({
   usePreparePullRequestThreadAction: () => ({ run: prepareThread }),
