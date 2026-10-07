@@ -56,6 +56,11 @@ function snapshotFieldsOf(summary: PullRequestSummary): SnapshotFields {
     ...(summary.reviewDecision === undefined ? {} : { reviewDecision: summary.reviewDecision }),
     ...(summary.checksState === undefined ? {} : { checksState: summary.checksState }),
     ...(summary.mergeability === undefined ? {} : { mergeability: summary.mergeability }),
+    ...(summary.mergeState === undefined ? {} : { mergeState: summary.mergeState }),
+    ...(summary.lastReviewer === undefined ? {} : { lastReviewer: summary.lastReviewer }),
+    ...(summary.unresolvedReviewThreads === undefined
+      ? {}
+      : { unresolvedReviewThreads: summary.unresolvedReviewThreads }),
   };
 }
 
@@ -76,7 +81,11 @@ function snapshotFieldsEqual(left: SnapshotFields, right: SnapshotFields): boole
     left.changedFiles === right.changedFiles &&
     (left.reviewDecision ?? null) === (right.reviewDecision ?? null) &&
     (left.checksState ?? null) === (right.checksState ?? null) &&
-    left.mergeability === right.mergeability
+    left.mergeability === right.mergeability &&
+    left.mergeState === right.mergeState &&
+    (left.lastReviewer?.login ?? null) === (right.lastReviewer?.login ?? null) &&
+    (left.lastReviewer === undefined) === (right.lastReviewer === undefined) &&
+    left.unresolvedReviewThreads === right.unresolvedReviewThreads
   );
 }
 

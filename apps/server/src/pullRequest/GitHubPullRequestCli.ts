@@ -1798,6 +1798,8 @@ export const make = Effect.gen(function* () {
             reviewDecision: detail.reviewDecision,
             checksState: detail.checksState,
             mergeability: detail.mergeability,
+            ...(detail.mergeState === undefined ? {} : { mergeState: detail.mergeState }),
+            ...(detail.lastReviewer === undefined ? {} : { lastReviewer: detail.lastReviewer }),
           });
         }),
       );

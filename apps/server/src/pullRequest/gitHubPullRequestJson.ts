@@ -73,6 +73,7 @@ const RawReviewRequestSchema = Schema.Struct({
 const RawLatestReviewSchema = Schema.Struct({
   author: Schema.optional(Schema.NullOr(RawActorSchema)),
   state: Schema.optional(Schema.NullOr(Schema.String)),
+  submittedAt: Schema.optional(Schema.NullOr(Schema.String)),
 });
 
 const RawCheckSchema = Schema.Struct({
@@ -1214,6 +1215,8 @@ export interface GitHubPullRequestDetail extends GitHubPullRequestListItem {
   readonly autoMergeMethod?: PullRequestMergeMethod;
   /** Absent where GitHub did not answer for the merge state at all. */
   readonly mergeState?: PullRequestMergeState;
+  /** Absent where the read did not ask for the reviews. */
+  readonly lastReviewer?: PullRequestActor | null;
 }
 
 export interface GitHubWorkflowRunApproval {
@@ -1385,6 +1388,28 @@ function toReviewDecisionWithReviews(
   if (states.has("CHANGES_REQUESTED")) return "changes-requested";
   if (states.has("APPROVED")) return "approved";
   return summarized;
+}
+
+/**
+ * Whom to ask for the next review: the person behind the newest review, whatever its verdict.
+ * The author's own replies in a review thread arrive as reviews too, and a bot cannot be asked
+ * for anything, so neither counts.
+ */
+function toLastReviewer(
+  reviews: ReadonlyArray<Schema.Schema.Type<typeof RawLatestReviewSchema> | null>,
+  authorLogin: string | null | undefined,
+): PullRequestActor | null {
+  const author = trimmed(authorLogin)?.toLowerCase() ?? null;
+  let latest: { readonly actor: PullRequestActor; readonly at: string } | null = null;
+  for (const review of reviews) {
+    const actor = toActor(review?.author);
+    const at = trimmed(review?.submittedAt);
+    if (actor === null || at === null || actor.isBot === true) continue;
+    const login = actor.login.toLowerCase();
+    if (login === author || login.endsWith("[bot]") || login.startsWith("copilot")) continue;
+    if (latest === null || at > latest.at) latest = { actor, at };
+  }
+  return latest?.actor ?? null;
 }
 
 function toReviewDecision(value: string | null | undefined): PullRequestReviewDecision | null {
@@ -1654,6 +1679,9 @@ function toDetail(raw: Schema.Schema.Type<typeof RawDetailSchema>): GitHubPullRe
       : { autoMergeEnabled: raw.autoMergeRequest !== null }),
     ...(autoMergeMethod === undefined ? {} : { autoMergeMethod }),
     ...(mergeState === undefined ? {} : { mergeState }),
+    ...(raw.latestReviews == null
+      ? {}
+      : { lastReviewer: toLastReviewer(raw.latestReviews, raw.author?.login) }),
   };
 }
 
@@ -1888,7 +1916,9 @@ const PULL_REQUEST_SUMMARY_SELECTION =
   "number title url state isDraft mergeable reviewDecision additions deletions changedFiles " +
   "updatedAt mergedAt closedAt headRefName baseRefName " +
   "author { __typename login avatarUrl ... on User { name } } " +
-  "latestReviews(first: 20) { nodes { state author { login } } } " +
+  "mergeStateStatus " +
+  "latestReviews(first: 20) { nodes { state submittedAt author { __typename login avatarUrl ... on User { name } } } } " +
+  "reviewThreads(first: 100) { nodes { isResolved } } " +
   "commits(last: 1) { nodes { commit { statusCheckRollup { state } } } }";
 
 /**
@@ -1915,6 +1945,16 @@ export function buildPullRequestSummariesGraphQlQuery(
 
 const RawSummarySchema = Schema.Struct({
   ...RawSearchItemSchema.fields,
+  mergeStateStatus: Schema.optional(Schema.NullOr(Schema.String)),
+  reviewThreads: Schema.optional(
+    Schema.NullOr(
+      Schema.Struct({
+        nodes: Schema.Array(
+          Schema.NullOr(Schema.Struct({ isResolved: Schema.optional(Schema.Boolean) })),
+        ),
+      }),
+    ),
+  ),
   changedFiles: Schema.optional(Schema.NullOr(Schema.Int)),
   additions: Schema.optional(Schema.NullOr(Schema.Int)),
   deletions: Schema.optional(Schema.NullOr(Schema.Int)),
@@ -1953,6 +1993,9 @@ export interface GitHubPullRequestSummary {
   readonly reviewDecision: PullRequestReviewDecision | null;
   readonly checksState: PullRequestChecksState | null;
   readonly mergeability: PullRequestMergeability;
+  readonly mergeState?: PullRequestMergeState;
+  readonly lastReviewer: PullRequestActor | null;
+  readonly unresolvedReviewThreads?: number;
   /** Null when GitHub says the pull request is in no stack; absent when the read did not ask. */
   readonly stack?: PullRequestStackMembership | null;
 }
@@ -1973,6 +2016,7 @@ export function decodePullRequestSummariesJson(
     const entry = decodeSummaryEntry(value.pullRequest);
     if (!Exit.isSuccess(entry)) continue;
     const pr = entry.value;
+    const mergeState = toMergeState(pr.mergeStateStatus);
     summaries.set(Number(index), {
       number: pr.number,
       title: pr.title,
@@ -2000,6 +2044,15 @@ export function decodePullRequestSummariesJson(
         }),
       ),
       mergeability: toMergeability(pr.mergeable),
+      ...(mergeState === undefined ? {} : { mergeState }),
+      lastReviewer: toLastReviewer(pr.latestReviews?.nodes ?? [], pr.author?.login),
+      ...(pr.reviewThreads == null
+        ? {}
+        : {
+            unresolvedReviewThreads: pr.reviewThreads.nodes.filter(
+              (thread) => thread !== null && thread.isResolved === false,
+            ).length,
+          }),
       ...(pr.stack === undefined ? {} : { stack: toStackMembership(pr) ?? null }),
     });
   }

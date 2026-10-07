@@ -117,6 +117,10 @@ export interface ProviderChangeRequestSummary {
   readonly reviewDecision?: PullRequestReviewDecision | null | undefined;
   readonly checksState?: PullRequestChecksState | null | undefined;
   readonly mergeability?: PullRequestMergeability | undefined;
+  readonly mergeState?: PullRequestMergeState | undefined;
+  /** The most recent reviewer other than the author or a bot; null where nobody reviewed. */
+  readonly lastReviewer?: PullRequestActor | null | undefined;
+  readonly unresolvedReviewThreads?: number | undefined;
   /**
    * The host-native stack the pull request sits in, from the same read. Null when the host says
    * it is in none; absent when the read did not ask.
@@ -226,6 +230,8 @@ export interface ProviderChangeRequestDetail extends ProviderChangeRequest {
   readonly behindBy?: number;
   /** Whether the host's rules let this merge now; absent from a host that does not say. */
   readonly mergeState?: PullRequestMergeState;
+  readonly lastReviewer?: PullRequestActor | null;
+  readonly unresolvedReviewThreads?: number;
   /** Absent from a host that does not report whether it is armed to merge this on its own. */
   readonly autoMergeEnabled?: boolean;
   /** The strategy stored with an armed auto-merge, where the host reports it. */

@@ -764,6 +764,15 @@ export const PullRequestSummary = Schema.Struct({
   reviewDecision: Schema.optional(Schema.NullOr(PullRequestReviewDecision)),
   checksState: Schema.optional(Schema.NullOr(PullRequestChecksState)),
   mergeability: Schema.optional(PullRequestMergeability),
+  /** Absent where the host does not report it, which is every host but GitHub. */
+  mergeState: Schema.optional(PullRequestMergeState),
+  /**
+   * The person whose review is the most recent, leaving out the author and bots. Null where
+   * nobody has reviewed; absent where the read does not say.
+   */
+  lastReviewer: Schema.optional(Schema.NullOr(PullRequestActor)),
+  /** Review comment threads nobody has resolved; absent where the read does not count them. */
+  unresolvedReviewThreads: Schema.optional(NonNegativeInt),
   /** Null when the host says the pull request is in no stack; absent when the read did not ask. */
   stack: Schema.optional(Schema.NullOr(PullRequestStackMembership)),
 });

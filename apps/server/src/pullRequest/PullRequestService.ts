@@ -1596,6 +1596,15 @@ export const make = Effect.gen(function* () {
             ...(changeRequest.mergeability === undefined
               ? {}
               : { mergeability: changeRequest.mergeability }),
+            ...(changeRequest.mergeState === undefined
+              ? {}
+              : { mergeState: changeRequest.mergeState }),
+            ...(changeRequest.lastReviewer === undefined
+              ? {}
+              : { lastReviewer: changeRequest.lastReviewer }),
+            ...(changeRequest.unresolvedReviewThreads === undefined
+              ? {}
+              : { unresolvedReviewThreads: changeRequest.unresolvedReviewThreads }),
             ...(changeRequest.stack === undefined ? {} : { stack: changeRequest.stack }),
           })),
         );

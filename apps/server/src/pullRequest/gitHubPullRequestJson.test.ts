@@ -1950,6 +1950,64 @@ describe("batched pull request summaries", () => {
     expect(decoded.success.get(0)).not.toHaveProperty("stack");
   });
 
+  it("names the last human reviewer and counts unresolved review threads", () => {
+    const review = (login: string, submittedAt: string, typename = "User") => ({
+      state: "COMMENTED",
+      submittedAt,
+      author: { __typename: typename, login, avatarUrl: null },
+    });
+    const decoded = decodePullRequestSummariesJson(
+      JSON.stringify({
+        data: {
+          s0: {
+            pullRequest: {
+              number: 7,
+              title: "Fix",
+              url: "https://github.com/acme/web/pull/7",
+              author: { __typename: "User", login: "abel" },
+              headRefName: "fix/seven",
+              baseRefName: "main",
+              state: "OPEN",
+              updatedAt: "2026-08-24T00:00:00Z",
+              mergeStateStatus: "BLOCKED",
+              latestReviews: {
+                nodes: [
+                  review("ana", "2026-08-20T00:00:00Z"),
+                  review("bo", "2026-08-21T00:00:00Z"),
+                  // The author's own replies and a bot's review are newer, and still not asked.
+                  review("abel", "2026-08-22T00:00:00Z"),
+                  review("copilot-pull-request-reviewer", "2026-08-23T00:00:00Z", "Bot"),
+                ],
+              },
+              reviewThreads: { nodes: [{ isResolved: true }, { isResolved: false }, null] },
+            },
+          },
+          s1: {
+            pullRequest: {
+              number: 8,
+              title: "Fresh",
+              url: "https://github.com/acme/web/pull/8",
+              headRefName: "feat/eight",
+              baseRefName: "main",
+              state: "OPEN",
+              updatedAt: "2026-08-24T00:00:00Z",
+            },
+          },
+        },
+      }),
+    );
+    expect(Result.isSuccess(decoded)).toBe(true);
+    if (!Result.isSuccess(decoded)) return;
+    expect(decoded.success.get(0)).toMatchObject({
+      mergeState: "blocked",
+      lastReviewer: { login: "bo" },
+      unresolvedReviewThreads: 1,
+    });
+    expect(decoded.success.get(1)?.lastReviewer).toBeNull();
+    // A document that did not ask for the threads does not claim there are none.
+    expect(decoded.success.get(1)).not.toHaveProperty("unresolvedReviewThreads");
+  });
+
   it("reads stack membership only where the document asked for it", () => {
     expect(
       buildPullRequestSummariesGraphQlQuery([{ repository: "acme/web", number: 7 }], true),
