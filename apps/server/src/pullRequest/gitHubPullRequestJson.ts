@@ -17,6 +17,7 @@ import type {
   PullRequestMergeMethod,
   PullRequestOmittedFileStat,
   PullRequestMergeability,
+  PullRequestMergeState,
   PullRequestReaction,
   PullRequestReactionContent,
   PullRequestReviewCommentDraft,
@@ -404,6 +405,7 @@ const RawDetailSchema = Schema.Struct({
   body: Schema.optional(Schema.String),
   changedFiles: Schema.optional(Schema.Int),
   closedAt: Schema.optional(Schema.NullOr(Schema.String)),
+  mergeStateStatus: Schema.optional(Schema.NullOr(Schema.String)),
   /** The standing instruction and strategy GitHub will use once its requirements are met. */
   autoMergeRequest: Schema.optional(
     Schema.NullOr(Schema.Struct({ mergeMethod: Schema.optional(Schema.NullOr(Schema.String)) })),
@@ -704,14 +706,14 @@ export function decodeActorAvatarsJson(
 export const PULL_REQUEST_LIST_JSON_FIELDS =
   "number,title,url,author,headRefName,baseRefName,state,isDraft,mergeable,reviewDecision,additions,deletions,createdAt,updatedAt,mergedAt,reviewRequests,latestReviews,labels,statusCheckRollup";
 
-export const PULL_REQUEST_DETAIL_JSON_FIELDS = `${PULL_REQUEST_LIST_JSON_FIELDS},body,changedFiles,closedAt,isCrossRepository,headRepositoryOwner,headRefOid,autoMergeRequest`;
+export const PULL_REQUEST_DETAIL_JSON_FIELDS = `${PULL_REQUEST_LIST_JSON_FIELDS},body,changedFiles,closedAt,isCrossRepository,headRepositoryOwner,headRefOid,autoMergeRequest,mergeStateStatus`;
 
 /** Pull refs let the comparison share the detail read without first resolving a fork branch. */
 export const PULL_REQUEST_CORE_GRAPHQL_QUERY = `query($owner: String!, $name: String!, $number: Int!, $headRef: String!) {
   repository(owner: $owner, name: $name) {
     mergeCommitAllowed squashMergeAllowed rebaseMergeAllowed viewerPermission
     pullRequest(number: $number) {
-      number title url body state isDraft mergeable reviewDecision
+      number title url body state isDraft mergeable reviewDecision mergeStateStatus
       additions deletions changedFiles createdAt updatedAt mergedAt closedAt
       headRefName baseRefName headRefOid isCrossRepository
       headRepositoryOwner { login }
@@ -1210,6 +1212,8 @@ export interface GitHubPullRequestDetail extends GitHubPullRequestListItem {
   readonly autoMergeEnabled?: boolean;
   /** Absent where auto-merge is off or GitHub did not report the stored strategy. */
   readonly autoMergeMethod?: PullRequestMergeMethod;
+  /** Absent where GitHub did not answer for the merge state at all. */
+  readonly mergeState?: PullRequestMergeState;
 }
 
 export interface GitHubWorkflowRunApproval {
@@ -1312,6 +1316,30 @@ function toMergeability(value: string | null | undefined): PullRequestMergeabili
       return "mergeable";
     case "CONFLICTING":
       return "conflicting";
+    default:
+      return "unknown";
+  }
+}
+
+function toMergeState(value: string | null | undefined): PullRequestMergeState | undefined {
+  switch (value?.trim().toUpperCase()) {
+    case undefined:
+    case "":
+      return undefined;
+    case "CLEAN":
+      return "clean";
+    case "HAS_HOOKS":
+      return "has-hooks";
+    case "UNSTABLE":
+      return "unstable";
+    case "BLOCKED":
+      return "blocked";
+    case "BEHIND":
+      return "behind";
+    case "DIRTY":
+      return "dirty";
+    case "DRAFT":
+      return "draft";
     default:
       return "unknown";
   }
@@ -1606,6 +1634,7 @@ function toListItem(raw: Schema.Schema.Type<typeof RawListItemSchema>): GitHubPu
 
 function toDetail(raw: Schema.Schema.Type<typeof RawDetailSchema>): GitHubPullRequestDetail {
   const autoMergeMethod = toMergeMethod(raw.autoMergeRequest?.mergeMethod);
+  const mergeState = toMergeState(raw.mergeStateStatus);
   return {
     ...toListItem(raw),
     ...(typeof raw.isCrossRepository === "boolean"
@@ -1624,6 +1653,7 @@ function toDetail(raw: Schema.Schema.Type<typeof RawDetailSchema>): GitHubPullRe
       ? {}
       : { autoMergeEnabled: raw.autoMergeRequest !== null }),
     ...(autoMergeMethod === undefined ? {} : { autoMergeMethod }),
+    ...(mergeState === undefined ? {} : { mergeState }),
   };
 }
 

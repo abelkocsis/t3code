@@ -579,7 +579,16 @@ export function summarizePullRequestChecks(checks: ReadonlyArray<PullRequestChec
   ).length;
   const pending = checks.filter((check) => check.status === "pending").length;
   const passed = checks.filter((check) => check.status === "success").length;
-  if (failed > 0) return `${failed} of ${checks.length} failing`;
+  // Each state counted on its own: "1 of 9 running" read as if only one check had got anywhere.
+  const counts = () =>
+    [
+      failed > 0 ? `${failed} failing` : null,
+      passed > 0 ? `${passed} passed` : null,
+      pending > 0 ? `${pending} running` : null,
+    ]
+      .filter((segment) => segment !== null)
+      .join(" · ");
+  if (failed > 0) return counts();
   if (workflowApprovalRequired > 0 && otherActionRequired > 0) {
     return `${workflowApprovalRequired} ${workflowApprovalRequired === 1 ? "workflow" : "workflows"} and ${otherActionRequired} ${otherActionRequired === 1 ? "check" : "checks"} awaiting action`;
   }
@@ -589,6 +598,6 @@ export function summarizePullRequestChecks(checks: ReadonlyArray<PullRequestChec
   if (otherActionRequired > 0) {
     return `${otherActionRequired} ${otherActionRequired === 1 ? "check" : "checks"} awaiting action`;
   }
-  if (pending > 0) return `${pending} of ${checks.length} running`;
+  if (pending > 0) return counts();
   return passed === checks.length ? "All checks passed" : `${passed} of ${checks.length} passing`;
 }

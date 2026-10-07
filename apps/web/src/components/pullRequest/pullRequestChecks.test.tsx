@@ -42,13 +42,22 @@ describe("pullRequestChecksState", () => {
     expect(summarizePullRequestChecks([check("success"), workflow])).toBe(
       "1 workflow awaiting approval",
     );
-    expect(summarizePullRequestChecks([check("failure"), workflow])).toBe("1 of 2 failing");
+    expect(summarizePullRequestChecks([check("failure"), workflow])).toBe("1 failing");
     expect(summarizePullRequestChecks([check("success"), manualGate])).toBe(
       "1 check awaiting action",
     );
     expect(summarizePullRequestChecks([workflow, manualGate])).toBe(
       "1 workflow and 1 check awaiting action",
     );
+  });
+
+  it("counts each state on its own instead of against the total", () => {
+    const passed = Array.from({ length: 8 }, () => check("success"));
+    expect(summarizePullRequestChecks([...passed, check("pending")])).toBe("8 passed · 1 running");
+    expect(summarizePullRequestChecks([check("failure"), ...passed, check("pending")])).toBe(
+      "1 failing · 8 passed · 1 running",
+    );
+    expect(summarizePullRequestChecks([check("pending"), check("skipped")])).toBe("1 running");
   });
 });
 

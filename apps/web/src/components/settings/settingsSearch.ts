@@ -436,6 +436,12 @@ export const SETTINGS_SEARCH_ITEMS = [
     searchTerms: ["automatically open diff pull request pr right panel agent completion"],
   },
   {
+    id: "pull-request-auto-merge",
+    title: "Pull request auto-merge",
+    to: "/settings/general",
+    searchTerms: ["pull request pr merge automatically auto merge blocked button"],
+  },
+  {
     id: "skills-in-slash-menu",
     title: "Show skills in slash menu",
     to: "/settings/general",

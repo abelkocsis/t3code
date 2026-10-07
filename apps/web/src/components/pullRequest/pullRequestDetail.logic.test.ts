@@ -44,6 +44,7 @@ import {
   readPullRequestDetailSnapshot,
   resolveDisplayedPullRequestDetail,
   resolvePullRequestReferenceHost,
+  resolvePullRequestMergeBlockers,
   resolvePullRequestPrimaryControl,
   allowsSinglePullRequestMerge,
   shouldRefreshPullRequestActivity,
@@ -252,31 +253,16 @@ describe("pull request primary control", () => {
     state: "open" as const,
     isDraft: false,
     mergeability: "mergeable" as const,
-    checksState: "passing" as const,
     autoMergeEnabled: false,
     hasMergeMethod: true,
     canMerge: true,
     canMarkReady: true,
-    canEnableAutoMerge: true,
+    blocked: false,
   };
 
-  it("moves pending and failing checks to auto-merge", () => {
-    expect(resolvePullRequestPrimaryControl({ ...open, checksState: "pending" })).toBe(
-      "enable-auto-merge",
-    );
-    expect(resolvePullRequestPrimaryControl({ ...open, checksState: "failing" })).toBe(
-      "enable-auto-merge",
-    );
-  });
-
-  it("does not offer auto-merge while the host state is unknown", () => {
-    expect(
-      resolvePullRequestPrimaryControl({
-        ...open,
-        checksState: "pending",
-        autoMergeEnabled: undefined,
-      }),
-    ).toBe("merge");
+  it("shows a blocked merge in place of the Merge button", () => {
+    expect(resolvePullRequestPrimaryControl(open)).toBe("merge");
+    expect(resolvePullRequestPrimaryControl({ ...open, blocked: true })).toBe("blocked");
   });
 
   it("keeps armed and terminal states in the merge button slot", () => {
@@ -292,6 +278,54 @@ describe("pull request primary control", () => {
       "resolve",
     );
     expect(resolvePullRequestPrimaryControl({ ...open, isDraft: true })).toBe("ready");
+    expect(resolvePullRequestPrimaryControl({ ...open, isDraft: true, blocked: true })).toBe(
+      "ready",
+    );
+  });
+});
+
+describe("pull request merge blockers", () => {
+  const open = {
+    state: "open" as const,
+    mergeState: "blocked" as const,
+    reviewDecision: null,
+    checksState: "passing" as const,
+  };
+
+  it("names every reason a blocked merge is waiting on", () => {
+    expect(
+      resolvePullRequestMergeBlockers({
+        ...open,
+        reviewDecision: "review-required",
+        checksState: "pending",
+      }),
+    ).toEqual(["review-required", "checks-running"]);
+    expect(
+      resolvePullRequestMergeBlockers({ ...open, reviewDecision: "changes-requested" }),
+    ).toEqual(["changes-requested"]);
+    expect(resolvePullRequestMergeBlockers({ ...open, checksState: "failing" })).toEqual([
+      "checks-failing",
+    ]);
+  });
+
+  it("still reports a block that neither reviews nor checks explain", () => {
+    expect(resolvePullRequestMergeBlockers(open)).toEqual(["branch-rules"]);
+    expect(resolvePullRequestMergeBlockers({ ...open, mergeState: "behind" })).toEqual(["behind"]);
+  });
+
+  it("lets optional checks and silent hosts merge", () => {
+    expect(
+      resolvePullRequestMergeBlockers({ ...open, mergeState: "unstable", checksState: "failing" }),
+    ).toEqual([]);
+    expect(resolvePullRequestMergeBlockers({ ...open, mergeState: "clean" })).toEqual([]);
+    expect(
+      resolvePullRequestMergeBlockers({
+        ...open,
+        mergeState: undefined,
+        reviewDecision: "review-required",
+      }),
+    ).toEqual([]);
+    expect(resolvePullRequestMergeBlockers({ ...open, state: "merged" })).toEqual([]);
   });
 });
 

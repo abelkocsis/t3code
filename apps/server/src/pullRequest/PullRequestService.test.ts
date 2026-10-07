@@ -4787,6 +4787,46 @@ it.effect("carries an armed auto-merge through to the detail, and silence as sil
   }),
 );
 
+it.effect("carries the review decision and merge state through to the detail", () =>
+  Effect.gen(function* () {
+    const service = yield* makeService({
+      projects: [project({ id: "p1", title: "web", workspaceRoot: "/a", repository: "acme/web" })],
+      providers: [
+        fakeProvider("github", {
+          getChangeRequest: () =>
+            Effect.succeed({
+              ...changeRequest(1, "2026-07-02T00:00:00Z"),
+              body: "",
+              changedFiles: 0,
+              mergedAt: null,
+              closedAt: null,
+              reviewers: [],
+              checks: [],
+              mergeCapabilities: { merge: true, squash: true, rebase: true },
+              viewerPermissions: {
+                actions: ["merge"],
+                comment: true,
+                resolve: true,
+                verdicts: ["comment", "approve", "request-changes"],
+                requestReviewers: true,
+              },
+              reviewDecision: "review-required" as const,
+              mergeState: "blocked" as const,
+            }),
+        }),
+      ],
+    });
+    const detail = yield* service.detail({
+      projectId: "p1" as ProjectId,
+      repository: "acme/web",
+      number: 1,
+    });
+
+    assert.strictEqual(detail.reviewDecision, "review-required");
+    assert.strictEqual(detail.mergeState, "blocked");
+  }),
+);
+
 it.effect("narrows the rows of a host that ignored the filters it was handed", () =>
   Effect.gen(function* () {
     const service = yield* makeService({

@@ -18,6 +18,7 @@ import type {
   PullRequestListState,
   PullRequestMergeCapabilities,
   PullRequestMergeMethod,
+  PullRequestMergeState,
   PullRequestMergeability,
   PullRequestOmittedFileStat,
   PullRequestReaction,
@@ -223,6 +224,8 @@ export interface ProviderChangeRequestDetail extends ProviderChangeRequest {
   /** Absent from a host that cannot compare the branch with its base, which is most of them. */
   readonly baseComparison?: PullRequestBaseComparison;
   readonly behindBy?: number;
+  /** Whether the host's rules let this merge now; absent from a host that does not say. */
+  readonly mergeState?: PullRequestMergeState;
   /** Absent from a host that does not report whether it is armed to merge this on its own. */
   readonly autoMergeEnabled?: boolean;
   /** The strategy stored with an armed auto-merge, where the host reports it. */

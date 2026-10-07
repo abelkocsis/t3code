@@ -4,12 +4,13 @@ import {
   visibleThreadPullRequests,
 } from "@t3tools/shared/threadPullRequests";
 import { ArrowUpRightIcon, LinkIcon, MoreHorizontalIcon, PlusIcon } from "lucide-react";
-import { useCallback, useMemo } from "react";
+import { useCallback, useEffect, useEffectEvent, useMemo } from "react";
 
 import { writeTextToClipboard } from "~/hooks/useCopyToClipboard";
 import { useOpenPrLink } from "~/lib/openPullRequestLink";
 import { cn } from "~/lib/utils";
 import { useServerConfigs, useThreadShell } from "~/state/entities";
+import { pullRequestEnvironment } from "~/state/pullRequests";
 import { PullRequestsUnavailableState } from "./PullRequestsUnavailableState";
 import { threadEnvironment } from "~/state/threads";
 import { useAtomCommand } from "~/state/use-atom-command";
@@ -20,6 +21,7 @@ import { MiddleTruncate } from "../ui/middle-truncate";
 import { ScrollArea } from "../ui/scroll-area";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
 import { openLinkPullRequestDialog } from "./LinkPullRequestDialog";
+import { claimPullRequestHostRefresh, pullRequestHostRefreshKey } from "./pullRequestHostRefresh";
 import { pullRequestListLines, type PullRequestListLine } from "./pullRequestListLines";
 import {
   PULL_REQUEST_ROW_CLASS,
@@ -250,6 +252,31 @@ function EnabledThreadPullRequestsPanel({ threadRef }: { threadRef: ScopedThread
   const unlink = useAtomCommand(threadEnvironment.unlinkPullRequest, { reportFailure: true });
   const links = useMemo(() => visibleThreadPullRequests(thread?.pullRequests ?? []), [thread]);
   const lines = useMemo(() => pullRequestListLines(resolveThreadPullRequestChains(links)), [links]);
+  // Opening the list and arriving from another thread re-read every link from the host, which
+  // also asks the server to resync the snapshots these rows draw from.
+  const invalidate = useAtomCommand(pullRequestEnvironment.invalidate, { reportFailure: false });
+  const refreshOnArrival = useEffectEvent(() => {
+    if (!thread) return;
+    for (const link of links) {
+      const key = pullRequestHostRefreshKey({ environmentId: threadRef.environmentId, ...link });
+      if (!claimPullRequestHostRefresh(key)) continue;
+      void invalidate({
+        environmentId: threadRef.environmentId,
+        input: {
+          reference: {
+            projectId: thread.projectId,
+            host: link.host,
+            repository: link.repository,
+            number: link.number,
+          },
+        },
+      });
+    }
+  });
+  const threadLoaded = thread !== null && thread !== undefined;
+  useEffect(() => {
+    refreshOnArrival();
+  }, [threadRef.environmentId, threadRef.threadId, threadLoaded]);
   const handleUnlink = useCallback(
     (link: ThreadPullRequestLink) => {
       void unlink({

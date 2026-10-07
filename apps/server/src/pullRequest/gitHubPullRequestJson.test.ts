@@ -337,6 +337,18 @@ describe("pull request detail decoding", () => {
     expect(armed({}).autoMergeEnabled).toBeUndefined();
   });
 
+  it("reads the merge state, and leaves it out where GitHub did not answer", () => {
+    const raw = JSON.parse(detailJson) as Record<string, unknown>;
+    const decode = (entry: Record<string, unknown>) =>
+      expectSuccess(decodePullRequestDetailJson(JSON.stringify({ ...raw, ...entry })));
+
+    expect(decode({ mergeStateStatus: "BLOCKED" }).mergeState).toBe("blocked");
+    expect(decode({ mergeStateStatus: "HAS_HOOKS" }).mergeState).toBe("has-hooks");
+    expect(decode({ mergeStateStatus: "SOMETHING_NEW" }).mergeState).toBe("unknown");
+    expect(decode({ mergeStateStatus: null }).mergeState).toBeUndefined();
+    expect(decode({}).mergeState).toBeUndefined();
+  });
+
   it("shows a re-running check once, as the run that is happening now", () => {
     // What `statusCheckRollup` reports while a workflow is being re-run: the same check twice,
     // the finished run and the one that replaced it, with no id to tell them apart.

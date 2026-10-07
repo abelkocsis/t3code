@@ -22,6 +22,7 @@ import {
   ArrowUpRightIcon,
   BookOpenIcon,
   CircleDotIcon,
+  CircleSlashIcon,
   CopyIcon,
   ChevronDownIcon,
   ExternalLinkIcon,
@@ -150,6 +151,7 @@ import {
   pullRequestCheckoutCommand,
   pullRequestFindingKey,
   pullRequestHandoffLabels,
+  PULL_REQUEST_MERGE_BLOCKER_LABELS,
   PULL_REQUEST_MERGE_METHOD_LABELS,
   readableFailure,
   readPullRequestDetailSnapshot,
@@ -158,12 +160,14 @@ import {
   resolvePullRequestPrimaryControl,
   allowsSinglePullRequestMerge,
   resolveBaseFreshness,
+  resolvePullRequestMergeBlockers,
   resolvePullRequestMergeMethod,
   type PullRequestFinding,
   shouldRefreshPullRequestActivity,
   stripPullRequestHandoffReferences,
   writePullRequestDetailSnapshot,
 } from "./pullRequestDetail.logic";
+import { claimPullRequestHostRefresh, pullRequestHostRefreshKey } from "./pullRequestHostRefresh";
 import { canEditPullRequestChangeRequest } from "./pullRequestEditing.logic";
 import {
   resolvePickableEnvironments,
@@ -570,6 +574,7 @@ export function PullRequestDetailPanel({
     (settings) => settings.pullRequestMergeMethodOverrides,
   );
   const projectGroupingSettings = useClientSettings(selectProjectGroupingSettings);
+  const autoMergeOffered = useClientSettings((settings) => settings.pullRequestAutoMergeEnabled);
   const projectDefaultMergeMethod =
     resolveProjectSettings(
       environmentConfigs.get(environmentId)?.settings ?? DEFAULT_SERVER_SETTINGS,
@@ -862,6 +867,21 @@ export function PullRequestDetailPanel({
       setIsInvalidating(false);
     }
   }, [environmentId, invalidate, reference, refreshDetail]);
+  // Opening the panel and arriving from another thread both read past the server's cache, which
+  // otherwise answers with whatever snapshot it last held.
+  const threadKey = threadRef ? scopedThreadKey(threadRef) : null;
+  const refreshOnArrival = useEffectEvent(() => {
+    const key = pullRequestHostRefreshKey({
+      environmentId,
+      host: reference.host,
+      repository: reference.repository,
+      number: reference.number,
+    });
+    if (claimPullRequestHostRefresh(key)) void refreshFromHost();
+  });
+  useEffect(() => {
+    refreshOnArrival();
+  }, [environmentId, pullRequestKey, threadKey]);
   // A refresh asked for by the page: the detail, and through the token below, the diff with it.
   const appliedForcedToken = useRef(forcedRefreshToken);
   useEffect(() => {
@@ -1424,7 +1444,6 @@ export function PullRequestDetailPanel({
     lastSelectedMergeMethod,
   );
   const selectedMergeMethodLabel = PULL_REQUEST_MERGE_METHOD_LABELS[selectedMergeMethod];
-  const pendingAutoMergeLabel = `Auto-merge (${selectedMergeMethodLabel.toLowerCase()})`;
   const conflicting = detail?.state === "open" && detail.mergeability === "conflicting";
   // Only an outright yes arms it. A host that reports nothing has not said the merge is already
   // spoken for, and an off switch for something that may not be on says the wrong thing twice.
@@ -1467,6 +1486,14 @@ export function PullRequestDetailPanel({
       : latestChecksState;
   // A newer rollup cannot tell us which runs changed or how many passed.
   const checksStale = checksState !== detailChecksState;
+  const mergeBlockers = detail
+    ? resolvePullRequestMergeBlockers({
+        state: detail.state,
+        mergeState: detail.mergeState,
+        reviewDecision: detail.reviewDecision,
+        checksState,
+      })
+    : [];
   // The merge state remains in one stable slot from waiting through completion. Conflicts take
   // the slot while they need a person; the armed badge remains beside them so that state is not lost.
   const primaryAction = detail
@@ -1474,12 +1501,11 @@ export function PullRequestDetailPanel({
         state: detail.state,
         isDraft: detail.isDraft,
         mergeability: detail.mergeability,
-        checksState,
         autoMergeEnabled: detail.autoMergeEnabled,
         hasMergeMethod: allowedMergeMethods.length > 0,
         canMerge: canMergeSinglePullRequest && can("merge"),
         canMarkReady: can("ready"),
-        canEnableAutoMerge: canMergeSinglePullRequest && can("enable-auto-merge"),
+        blocked: mergeBlockers.length > 0,
       })
     : null;
   // What the menu's action group holds. Named once so the separators around it are drawn from
@@ -1493,15 +1519,17 @@ export function PullRequestDetailPanel({
     detail?.state === "open" &&
     ((autoMergeArmed && can("disable-auto-merge")) ||
       (!autoMergeArmed &&
-        primaryAction !== "enable-auto-merge" &&
+        autoMergeOffered &&
         !detail.isDraft &&
         !conflicting &&
         can("enable-auto-merge") &&
         allowedMergeMethods.length > 0));
+  // The header has no Merge button while the host blocks it or holds an armed auto-merge, so the
+  // menu carries one for a reader whose permissions let them bypass the rules.
   const showsMergeNow =
     canMergeSinglePullRequest &&
     detail?.state === "open" &&
-    (primaryAction === "enable-auto-merge" || primaryAction === "auto-merge-armed") &&
+    (primaryAction === "blocked" || primaryAction === "auto-merge-armed") &&
     can("merge") &&
     !detail.isDraft &&
     !conflicting &&
@@ -1902,36 +1930,35 @@ export function PullRequestDetailPanel({
                   />
                   <TooltipPopup side="top">Ready for review</TooltipPopup>
                 </Tooltip>
-              ) : primaryAction === "enable-auto-merge" ? (
+              ) : primaryAction === "blocked" && mergeBlockers[0] !== undefined ? (
                 <Tooltip>
                   <TooltipTrigger
                     render={
-                      <span className="inline-flex shrink-0">
-                        <Button
-                          size="xs"
-                          variant="default"
-                          disabled={actionPending}
-                          onClick={() =>
-                            setConfirmation({ open: true, action: "enable-auto-merge" })
-                          }
-                          aria-label={
-                            pendingAction === "enable-auto-merge"
-                              ? "Enabling..."
-                              : pendingAutoMergeLabel
-                          }
-                        >
-                          <PullRequestGlyph.merged aria-hidden className="size-3.5" />
-                          <span className="@max-[30rem]/pr-header:hidden">
-                            {pendingAction === "enable-auto-merge"
-                              ? "Enabling..."
-                              : pendingAutoMergeLabel}
-                          </span>
-                        </Button>
-                      </span>
+                      <Badge
+                        size="control"
+                        variant={
+                          mergeBlockers[0] === "changes-requested" ||
+                          mergeBlockers[0] === "checks-failing"
+                            ? "error"
+                            : "warning"
+                        }
+                        role="img"
+                        aria-label={`Merge blocked: ${mergeBlockers
+                          .map((blocker) => PULL_REQUEST_MERGE_BLOCKER_LABELS[blocker])
+                          .join(", ")}`}
+                      >
+                        <CircleSlashIcon aria-hidden className="size-3.5" />
+                        <span className="@max-[30rem]/pr-header:hidden">
+                          {PULL_REQUEST_MERGE_BLOCKER_LABELS[mergeBlockers[0]]}
+                        </span>
+                      </Badge>
                     }
                   />
                   <TooltipPopup side="top">
-                    {pendingAction === "enable-auto-merge" ? "Enabling..." : pendingAutoMergeLabel}
+                    Merge blocked:{" "}
+                    {mergeBlockers
+                      .map((blocker) => PULL_REQUEST_MERGE_BLOCKER_LABELS[blocker].toLowerCase())
+                      .join(", ")}
                   </TooltipPopup>
                 </Tooltip>
               ) : primaryAction === "auto-merge-armed" ? (

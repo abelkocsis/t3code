@@ -14,9 +14,11 @@ import {
   type PullRequestDetailView,
   type PullRequestMergeability,
   type PullRequestMergeMethod,
+  type PullRequestMergeState,
   type PullRequestReaction,
   type PullRequestRef,
   type RepositoryIdentity,
+  type PullRequestReviewDecision,
   type PullRequestReviewThread,
   type PullRequestState,
   type PullRequestUpdateMethod,
@@ -72,7 +74,7 @@ export type PullRequestPrimaryControl =
   | "resolve"
   | "ready"
   | "merge"
-  | "enable-auto-merge"
+  | "blocked"
   | "auto-merge-armed"
   | "merged"
   | "closed"
@@ -83,28 +85,62 @@ export function resolvePullRequestPrimaryControl(input: {
   readonly state: PullRequestState;
   readonly isDraft: boolean;
   readonly mergeability: PullRequestMergeability;
-  readonly checksState: PullRequestChecksState | null;
   readonly autoMergeEnabled: boolean | undefined;
   readonly hasMergeMethod: boolean;
   readonly canMerge: boolean;
   readonly canMarkReady: boolean;
-  readonly canEnableAutoMerge: boolean;
+  readonly blocked: boolean;
 }): PullRequestPrimaryControl {
   if (input.state === "merged") return "merged";
   if (input.state === "closed") return "closed";
   if (input.mergeability === "conflicting") return "resolve";
   if (input.isDraft) return input.canMarkReady ? "ready" : null;
   if (input.autoMergeEnabled) return "auto-merge-armed";
+  if (input.blocked) return "blocked";
   if (!input.hasMergeMethod) return null;
-  if (
-    input.autoMergeEnabled === false &&
-    input.checksState !== null &&
-    input.checksState !== "passing" &&
-    input.canEnableAutoMerge
-  ) {
-    return "enable-auto-merge";
-  }
   return input.canMerge ? "merge" : null;
+}
+
+/** Why the host will not merge an open change request yet, most pressing first. */
+export type PullRequestMergeBlocker =
+  | "changes-requested"
+  | "review-required"
+  | "checks-failing"
+  | "checks-running"
+  | "behind"
+  | "branch-rules";
+
+export const PULL_REQUEST_MERGE_BLOCKER_LABELS: Record<PullRequestMergeBlocker, string> = {
+  "changes-requested": "Changes requested",
+  "review-required": "Review required",
+  "checks-failing": "Checks failing",
+  "checks-running": "Checks running",
+  behind: "Branch out of date",
+  "branch-rules": "Blocked by branch rules",
+};
+
+/**
+ * Drafts and conflicts have their own header controls, so they are not listed here. Only a host
+ * that reports its merge state can say a merge is blocked: everywhere else the list stays empty
+ * and the header offers Merge, which the host refuses if it must. Under a block, the review
+ * decision and the checks narrow down which rule is holding it; a block neither explains is
+ * still a block.
+ */
+export function resolvePullRequestMergeBlockers(input: {
+  readonly state: PullRequestState;
+  readonly mergeState: PullRequestMergeState | undefined;
+  readonly reviewDecision: PullRequestReviewDecision | null | undefined;
+  readonly checksState: PullRequestChecksState | null;
+}): ReadonlyArray<PullRequestMergeBlocker> {
+  if (input.state !== "open") return [];
+  if (input.mergeState === "behind") return ["behind"];
+  if (input.mergeState !== "blocked") return [];
+  const blockers: PullRequestMergeBlocker[] = [];
+  if (input.reviewDecision === "changes-requested") blockers.push("changes-requested");
+  if (input.reviewDecision === "review-required") blockers.push("review-required");
+  if (input.checksState === "failing") blockers.push("checks-failing");
+  if (input.checksState === "pending") blockers.push("checks-running");
+  return blockers.length > 0 ? blockers : ["branch-rules"];
 }
 
 export function pullRequestCheckoutCommand(
