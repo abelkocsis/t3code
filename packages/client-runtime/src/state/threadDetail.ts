@@ -64,6 +64,7 @@ export function mergeEnvironmentThread(
     snoozedUntil: shell.snoozedUntil,
     snoozedAt: shell.snoozedAt,
     folderId: shell.folderId,
+    slackThread: shell.slackThread,
     pinnedAt: shell.pinnedAt,
     pinOrderKey: shell.pinOrderKey,
     session: shell.session,

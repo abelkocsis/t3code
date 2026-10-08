@@ -199,6 +199,7 @@ import * as ResourceAttribution from "./resourceTelemetry/ResourceAttribution.ts
 import * as ResourceTelemetry from "./resourceTelemetry/ResourceTelemetry.ts";
 import * as UsageService from "./usage/UsageService.ts";
 import * as StandupService from "./standup/StandupService.ts";
+import * as SlackReplyService from "./slack/SlackReplyService.ts";
 import * as TodoStore from "./todos/TodoStore.ts";
 import * as AnalyticsService from "./telemetry/AnalyticsService.ts";
 import * as Data from "effect/Data";
@@ -1107,7 +1108,12 @@ const buildAppUnderTest = (options?: {
     const appLayer = servedRoutesLayer.pipe(
       Layer.provide(resourceTelemetryLayer),
       Layer.provide(
-        Layer.mergeAll(UsageService.layerTest, StandupService.layerTest, TodoStore.layerTest),
+        Layer.mergeAll(
+          UsageService.layerTest,
+          StandupService.layerTest,
+          TodoStore.layerTest,
+          SlackReplyService.layerTest,
+        ),
       ),
       Layer.provide(
         Layer.mock(AnalyticsService.AnalyticsService)({

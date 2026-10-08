@@ -2,12 +2,13 @@ import {
   DEFAULT_SERVER_SETTINGS,
   type PullRequestMergeMethod,
   type PullRequestRef,
+  type SlackThreadRef,
 } from "@t3tools/contracts";
 import { scopeThreadRef } from "@t3tools/client-runtime/environment";
 import { squashAtomCommandFailure } from "@t3tools/client-runtime/state/runtime";
 import { resolveProjectSettings } from "@t3tools/shared/projectSettings";
 import { useNavigate } from "@tanstack/react-router";
-import { CopyIcon } from "lucide-react";
+import { CopyIcon, HashIcon, SendIcon } from "lucide-react";
 import { useEffect, useEffectEvent, useMemo, useState, type ReactNode } from "react";
 
 import { isElectron } from "../../env";
@@ -17,6 +18,7 @@ import { useThreadActions } from "../../hooks/useThreadActions";
 import { cn } from "../../lib/utils";
 import { useServerConfigs, useThreadShells } from "../../state/entities";
 import { pullRequestEnvironment } from "../../state/pullRequests";
+import { serverEnvironment } from "../../state/server";
 import { useAtomCommand } from "../../state/use-atom-command";
 import { buildThreadRouteParams } from "../../threadRoutes";
 import { useUiStateStore } from "../../uiStateStore";
@@ -53,6 +55,7 @@ import {
   collectShippingItems,
   groupShippingReviews,
   SHIPPING_PROBLEM_LABELS,
+  slackThreadPostedAt,
   type ShippingItem,
 } from "./shipping.logic";
 
@@ -175,23 +178,50 @@ export function ShippingPage() {
                 >
                   {reviewGroups.map((group) => (
                     <div
-                      key={group.reviewer?.login ?? ""}
+                      key={
+                        group.kind === "slack"
+                          ? `slack:${group.slackThread.channelId}/${group.slackThread.threadTs}`
+                          : group.kind === "reviewer"
+                            ? `reviewer:${group.reviewer.login}`
+                            : "unassigned"
+                      }
                       className="flex flex-col rounded-lg border border-border/60"
                     >
                       <div className="flex items-center justify-between gap-2 border-b border-border/60 px-3 py-2 text-sm">
-                        {group.reviewer ? (
+                        {group.kind === "slack" ? (
+                          <a
+                            href={group.slackThread.url}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="flex min-w-0 items-center gap-1.5 font-medium hover:underline"
+                          >
+                            <HashIcon aria-hidden className="size-3.5 shrink-0" />
+                            <span className="truncate">
+                              Slack thread from{" "}
+                              {slackThreadPostedAt(group.slackThread).toLocaleDateString()}
+                            </span>
+                          </a>
+                        ) : group.kind === "reviewer" ? (
                           <PullRequestActorLabel actor={group.reviewer} />
                         ) : (
                           <span className="font-medium text-muted-foreground">No reviewer</span>
                         )}
-                        <Button
-                          size="xs"
-                          variant="outline"
-                          onClick={() => copyRequest(group.items)}
-                        >
-                          <CopyIcon aria-hidden className="size-3.5" />
-                          Copy request
-                        </Button>
+                        <span className="flex shrink-0 items-center gap-1.5">
+                          <Button
+                            size="xs"
+                            variant="outline"
+                            onClick={() => copyRequest(group.items)}
+                          >
+                            <CopyIcon aria-hidden className="size-3.5" />
+                            Copy request
+                          </Button>
+                          {group.kind === "slack" ? (
+                            <SendToSlackButton
+                              slackThread={group.slackThread}
+                              items={group.items}
+                            />
+                          ) : null}
+                        </span>
                       </div>
                       {group.items.map((item) => (
                         <ShippingRow key={item.link.url} item={item} onOpen={openThread}>
@@ -234,6 +264,46 @@ export function ShippingPage() {
         </ScrollArea>
       </div>
     </SidebarInset>
+  );
+}
+
+/** Posts the request as a reply in the Slack thread, as the user, through their Slack connection. */
+function SendToSlackButton({
+  slackThread,
+  items,
+}: {
+  slackThread: SlackThreadRef;
+  items: ReadonlyArray<ShippingItem>;
+}) {
+  const reply = useAtomCommand(serverEnvironment.replyInSlackThread, { reportFailure: false });
+  const [sending, setSending] = useState(false);
+  const environmentId = items[0]?.thread.environmentId;
+  const send = async () => {
+    if (environmentId === undefined) return;
+    setSending(true);
+    const result = await reply({
+      environmentId,
+      input: { thread: slackThread, text: buildReviewRequestMessage(items) },
+    });
+    setSending(false);
+    if (result._tag === "Failure") {
+      toastManager.add({
+        type: "error",
+        title: "Could not send to Slack",
+        description: readableFailure(
+          squashAtomCommandFailure(result),
+          "Check that the Claude provider is signed in and its Slack connection works.",
+        ),
+      });
+      return;
+    }
+    toastManager.add({ type: "success", title: "Review request sent to Slack" });
+  };
+  return (
+    <Button size="xs" disabled={sending} onClick={() => void send()}>
+      <SendIcon aria-hidden className="size-3.5" />
+      {sending ? "Sending..." : "Send"}
+    </Button>
   );
 }
 

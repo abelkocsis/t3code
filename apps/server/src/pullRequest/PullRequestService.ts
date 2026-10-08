@@ -1605,6 +1605,9 @@ export const make = Effect.gen(function* () {
             ...(changeRequest.unresolvedReviewThreads === undefined
               ? {}
               : { unresolvedReviewThreads: changeRequest.unresolvedReviewThreads }),
+            ...(changeRequest.viewerDidAuthor === undefined
+              ? {}
+              : { viewerDidAuthor: changeRequest.viewerDidAuthor }),
             ...(changeRequest.stack === undefined ? {} : { stack: changeRequest.stack }),
           })),
         );

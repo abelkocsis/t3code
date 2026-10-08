@@ -16,6 +16,7 @@ export type ThreadActionMenuId =
   | "folder:new"
   | "folder:clear"
   | `folder:set:${string}`
+  | "slack-thread"
   | "settle"
   | "unsettle"
   | "auto-settle"
@@ -50,6 +51,8 @@ export interface ThreadActionMenuState {
   readonly folderId: string | null;
   /** Every folder in the sidebar, so the submenu can offer them. */
   readonly folders: ReadonlyArray<{ readonly id: string; readonly name: string }>;
+  /** Whether a Slack thread is linked, which only changes the item's wording. */
+  readonly slackThreadLinked: boolean;
   readonly isSettled: boolean;
   /** False while the user has turned automatic settlement off for this thread. */
   readonly autoSettleEnabled: boolean;
@@ -66,6 +69,8 @@ export interface ThreadActionMenuState {
     readonly pinning: boolean;
     /** Server understands thread.folder.set. */
     readonly folders: boolean;
+    /** Server understands thread.slack-thread.set. */
+    readonly slackThreads: boolean;
     readonly titleRegeneration: boolean;
   };
   readonly snoozePresets: ReadonlyArray<SnoozePreset>;
@@ -120,6 +125,15 @@ export function buildThreadActionMenuItems(
                 ? []
                 : [{ id: "folder:clear" as const, label: "Remove from folder" }]),
             ],
+          },
+        ]
+      : []),
+    ...(state.supports.slackThreads
+      ? [
+          {
+            id: "slack-thread" as const,
+            label: state.slackThreadLinked ? "Change Slack thread…" : "Link Slack thread…",
+            icon: "hash",
           },
         ]
       : []),

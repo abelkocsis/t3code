@@ -246,6 +246,16 @@ export function applyThreadDetailEvent(
         },
       };
 
+    case "thread.slack-thread-set":
+      return {
+        kind: "updated",
+        thread: {
+          ...thread,
+          slackThread: event.payload.slackThread,
+          updatedAt: event.payload.updatedAt,
+        },
+      };
+
     case "thread.pinned":
       return {
         kind: "updated",

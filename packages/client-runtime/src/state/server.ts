@@ -1189,5 +1189,15 @@ export function createServerEnvironmentAtoms<R, E>(
       label: "environment-data:server:set-todo-list",
       tag: WS_METHODS.serverSetTodoList,
     }),
+    // Each call posts to Slack, so a second press joins the send in flight.
+    replyInSlackThread: createEnvironmentRpcCommand(runtime, {
+      label: "environment-data:server:reply-in-slack-thread",
+      tag: WS_METHODS.serverReplyInSlackThread,
+      concurrency: {
+        mode: "singleFlight",
+        key: ({ environmentId, input }) =>
+          JSON.stringify([environmentId, input.thread.channelId, input.thread.threadTs]),
+      },
+    }),
   };
 }

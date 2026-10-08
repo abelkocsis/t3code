@@ -3,7 +3,7 @@ import {
   resolveThreadPullRequestChains,
   visibleThreadPullRequests,
 } from "@t3tools/shared/threadPullRequests";
-import { ArrowUpRightIcon, LinkIcon, MoreHorizontalIcon, PlusIcon } from "lucide-react";
+import { ArrowUpRightIcon, HashIcon, LinkIcon, MoreHorizontalIcon, PlusIcon } from "lucide-react";
 import { useCallback, useEffect, useEffectEvent, useMemo } from "react";
 
 import { writeTextToClipboard } from "~/hooks/useCopyToClipboard";
@@ -21,6 +21,7 @@ import { MiddleTruncate } from "../ui/middle-truncate";
 import { ScrollArea } from "../ui/scroll-area";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
 import { openLinkPullRequestDialog } from "./LinkPullRequestDialog";
+import { openSlackThreadDialog, useSupportsSlackThreads } from "../slack/SlackThreadDialog";
 import { claimPullRequestHostRefresh, pullRequestHostRefreshKey } from "./pullRequestHostRefresh";
 import { pullRequestListLines, type PullRequestListLine } from "./pullRequestListLines";
 import {
@@ -248,6 +249,7 @@ export function ThreadPullRequestsPanel({ threadRef }: { threadRef: ScopedThread
 
 function EnabledThreadPullRequestsPanel({ threadRef }: { threadRef: ScopedThreadRef }) {
   const thread = useThreadShell(threadRef);
+  const supportsSlackThreads = useSupportsSlackThreads();
   const openLinkDialog = useCallback(() => openLinkPullRequestDialog(threadRef), [threadRef]);
   const unlink = useAtomCommand(threadEnvironment.unlinkPullRequest, { reportFailure: true });
   const links = useMemo(() => visibleThreadPullRequests(thread?.pullRequests ?? []), [thread]);
@@ -340,10 +342,23 @@ function EnabledThreadPullRequestsPanel({ threadRef }: { threadRef: ScopedThread
           {openCount} open · {links.length} linked
           {lastSynced ? ` · synced ${formatRelativeTimeLabel(lastSynced)}` : ""}
         </span>
-        <Button size="xs" variant="ghost" onClick={openLinkDialog}>
-          <PlusIcon className="size-3.5" />
-          Link
-        </Button>
+        <span className="flex items-center gap-1">
+          {supportsSlackThreads(threadRef) ? (
+            <Button
+              size="xs"
+              variant="ghost"
+              onClick={() => openSlackThreadDialog([threadRef])}
+              title={thread?.slackThread?.url}
+            >
+              <HashIcon className="size-3.5" />
+              {thread?.slackThread ? "Slack thread" : "Link Slack"}
+            </Button>
+          ) : null}
+          <Button size="xs" variant="ghost" onClick={openLinkDialog}>
+            <PlusIcon className="size-3.5" />
+            Link
+          </Button>
+        </span>
       </footer>
     </div>
   );

@@ -795,6 +795,21 @@ const makeOrchestrationProjectionPipeline = Effect.fn("makeOrchestrationProjecti
           return;
         }
 
+        case "thread.slack-thread-set": {
+          const existingRow = yield* projectionThreadRepository.getById({
+            threadId: event.payload.threadId,
+          });
+          if (Option.isNone(existingRow)) {
+            return;
+          }
+          yield* projectionThreadRepository.upsert({
+            ...existingRow.value,
+            slackThread: event.payload.slackThread,
+            updatedAt: event.payload.updatedAt,
+          });
+          return;
+        }
+
         case "thread.pinned": {
           const existingRow = yield* projectionThreadRepository.getById({
             threadId: event.payload.threadId,

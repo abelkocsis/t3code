@@ -834,6 +834,33 @@ export const decideOrchestrationCommand = Effect.fn("decideOrchestrationCommand"
       };
     }
 
+    case "thread.slack-thread.set": {
+      const thread = yield* requireThreadNotArchived({
+        readModel,
+        command,
+        threadId: command.threadId,
+      });
+      // Idempotent like thread.folder.set: relinking the same message keeps updatedAt.
+      const unchanged =
+        (thread.slackThread?.channelId ?? null) === (command.slackThread?.channelId ?? null) &&
+        (thread.slackThread?.threadTs ?? null) === (command.slackThread?.threadTs ?? null);
+      const occurredAt = yield* nowIso;
+      return {
+        ...(yield* withEventBase({
+          aggregateKind: "thread",
+          aggregateId: command.threadId,
+          occurredAt,
+          commandId: command.commandId,
+        })),
+        type: "thread.slack-thread-set" as const,
+        payload: {
+          threadId: command.threadId,
+          slackThread: command.slackThread,
+          updatedAt: unchanged ? thread.updatedAt : occurredAt,
+        },
+      };
+    }
+
     case "thread.folder.set": {
       const thread = yield* requireThreadNotArchived({
         readModel,

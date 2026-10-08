@@ -168,6 +168,7 @@ import * as ResourceTelemetry from "./resourceTelemetry/ResourceTelemetry.ts";
 import * as UsageLimitSources from "./usage/UsageLimitSources.ts";
 import * as UsageService from "./usage/UsageService.ts";
 import * as StandupService from "./standup/StandupService.ts";
+import * as SlackReplyService from "./slack/SlackReplyService.ts";
 import * as StandupStore from "./standup/StandupStore.ts";
 import * as TodoStore from "./todos/TodoStore.ts";
 import { OrchestrationLayerLive } from "./orchestration/runtimeLayer.ts";
@@ -621,6 +622,7 @@ const RuntimeDependenciesBaseLive = RuntimeCoreDependenciesLive.pipe(
 // generation, so it composes on top of the runtime rather than inside it.
 const RuntimeDependenciesLive = StandupLayerLive.pipe(
   Layer.provideMerge(TodoStore.layer),
+  Layer.provideMerge(SlackReplyService.layer),
   Layer.provideMerge(RuntimeDependenciesBaseLive),
 );
 

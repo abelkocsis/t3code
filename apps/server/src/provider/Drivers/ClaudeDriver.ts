@@ -24,6 +24,7 @@ import { HttpClient } from "effect/unstable/http";
 import { ChildProcessSpawner } from "effect/unstable/process";
 
 import { makeClaudeTextGeneration } from "../../textGeneration/ClaudeTextGeneration.ts";
+import { makeClaudeSlackReply } from "./ClaudeSlackReply.ts";
 import * as BackgroundPolicy from "../../background/BackgroundPolicy.ts";
 import { ServerConfig } from "../../config.ts";
 import { expandHomePath } from "../../pathExpansion.ts";
@@ -177,6 +178,19 @@ export const ClaudeDriver: ProviderDriver<ClaudeSettings, ClaudeDriverEnv> = {
         processEnv,
         modelCatalog,
       );
+      const runSlackReply = yield* makeClaudeSlackReply(effectiveConfig, processEnv);
+      const replyInSlackThread: NonNullable<ProviderInstance["replyInSlackThread"]> = (input) =>
+        runSlackReply(input).pipe(
+          Effect.mapError(
+            (cause) =>
+              new ProviderDriverError({
+                driver: DRIVER_KIND,
+                instanceId,
+                detail: cause.detail,
+                cause,
+              }),
+          ),
+        );
 
       // Per-instance capabilities cache: keyed on binary + resolved HOME so
       // account-specific probes never share auth metadata across instances.
@@ -347,6 +361,7 @@ export const ClaudeDriver: ProviderDriver<ClaudeSettings, ClaudeDriverEnv> = {
         snapshotForCwd,
         adapter,
         textGeneration,
+        replyInSlackThread,
         consumeResetCredit,
       } satisfies ProviderInstance;
     }),

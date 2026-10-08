@@ -139,11 +139,13 @@ import { useNowMinute } from "../hooks/useNowMinute";
 import { IssuePickerDialog } from "./issues/IssuePickerDialog";
 import { useEnvironments, usePrimaryEnvironmentId } from "../state/environments";
 import {
+  readEnvironmentSupportsSlackThreads,
   readThreadShell,
   useAllEnvironmentProjectSnapshotsReady,
   useProjects,
   useThreadShells,
 } from "../state/entities";
+import { openSlackThreadDialog } from "./slack/SlackThreadDialog";
 import { environmentServerConfigsAtom, primaryServerKeybindingsAtom } from "../state/server";
 import { vcsEnvironment } from "../state/vcs";
 import { threadEnvironment } from "../state/threads";
@@ -2936,7 +2938,14 @@ export default function Sidebar() {
       ...snoozedThreads,
       ...settledThreads,
     ],
-    [activeThreads, pinnedThreads, settledThreads, snoozedThreads, threadsByFolderId, workingThreads],
+    [
+      activeThreads,
+      pinnedThreads,
+      settledThreads,
+      snoozedThreads,
+      threadsByFolderId,
+      workingThreads,
+    ],
   );
   const searchEnvironmentIds = useMemo(
     () =>
@@ -3598,7 +3607,14 @@ export default function Sidebar() {
     add(snoozedThreads, "snoozed");
     add(settledThreads, "settled");
     return map;
-  }, [activeThreads, pinnedThreads, settledThreads, snoozedThreads, threadsByFolderId, workingThreads]);
+  }, [
+    activeThreads,
+    pinnedThreads,
+    settledThreads,
+    snoozedThreads,
+    threadsByFolderId,
+    workingThreads,
+  ]);
   const pinnedKeys = useMemo(
     () =>
       pinnedThreads.map((thread) =>
@@ -4441,6 +4457,11 @@ export default function Sidebar() {
                 ]
               : []),
             ...(titleRegenerationMenuItem ? [titleRegenerationMenuItem] : []),
+            ...(selectedThreads.every((thread) =>
+              readEnvironmentSupportsSlackThreads(thread.environmentId),
+            )
+              ? [{ id: "slack-thread", label: `Link Slack thread… (${count})` }]
+              : []),
             { id: "mark-unread", label: `Mark unread (${count})` },
             { id: "delete", label: `Delete (${count})`, destructive: true },
           ],
@@ -4448,6 +4469,12 @@ export default function Sidebar() {
         ),
       );
       if (clicked._tag === "Failure") return;
+      if (clicked.value === "slack-thread") {
+        openSlackThreadDialog(
+          selectedThreads.map((thread) => scopeThreadRef(thread.environmentId, thread.id)),
+        );
+        return;
+      }
       if (clicked.value?.startsWith("snooze:")) {
         const preset =
           clicked.value === "snooze:custom"
@@ -4767,6 +4794,7 @@ export default function Sidebar() {
               isPinned,
               folderId: thread.folderId ?? null,
               folders: readThreadFolders().folders,
+              slackThreadLinked: thread.slackThread != null,
               isSettled,
               autoSettleEnabled: thread.autoSettleDisabledAt == null,
               isSnoozed,
@@ -4780,6 +4808,7 @@ export default function Sidebar() {
                 snooze: supportsSnooze,
                 pinning: supportsPinning,
                 folders: supportsFolders,
+                slackThreads: readEnvironmentSupportsSlackThreads(thread.environmentId),
                 titleRegeneration: supportsTitleRegeneration,
               },
               snoozePresets,
@@ -4882,6 +4911,9 @@ export default function Sidebar() {
             }
             return;
           }
+          case "slack-thread":
+            openSlackThreadDialog([threadRef]);
+            return;
           case "rename":
             startThreadRename(threadRef, thread.title);
             return;

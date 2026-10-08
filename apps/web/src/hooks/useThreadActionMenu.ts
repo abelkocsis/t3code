@@ -1,5 +1,6 @@
 import { requestCustomSnooze } from "../components/CustomSnoozeDialog";
 import { requestFolderName } from "../components/FolderNameDialog";
+import { openSlackThreadDialog } from "../components/slack/SlackThreadDialog";
 import { scopeProjectRef, scopedThreadKey } from "@t3tools/client-runtime/environment";
 import {
   type AtomCommandResult,
@@ -23,6 +24,7 @@ import { useAtomCommand } from "../state/use-atom-command";
 import {
   readEnvironmentSupportsAutoSettleOptOut,
   readEnvironmentSupportsFolders,
+  readEnvironmentSupportsSlackThreads,
   readEnvironmentSupportsPinning,
   readEnvironmentSupportsSettlement,
   readEnvironmentSupportsSnooze,
@@ -147,6 +149,7 @@ export function useThreadActionMenu(input: {
           snooze: readEnvironmentSupportsSnooze(threadRef.environmentId),
           pinning: readEnvironmentSupportsPinning(threadRef.environmentId),
           folders: readEnvironmentSupportsFolders(threadRef.environmentId),
+          slackThreads: readEnvironmentSupportsSlackThreads(threadRef.environmentId),
           titleRegeneration: readEnvironmentSupportsTitleRegeneration(threadRef.environmentId),
         };
         const isRegeneratingTitle = thread.titleRegeneration != null;
@@ -159,6 +162,7 @@ export function useThreadActionMenu(input: {
           isPinned: thread.pinnedAt != null,
           folderId: thread.folderId ?? null,
           folders: threadFoldersRef.current.folders,
+          slackThreadLinked: thread.slackThread != null,
           isSettled: supports.settlement && thread.settledOverride === "settled",
           autoSettleEnabled: thread.autoSettleDisabledAt == null,
           isSnoozed: supports.snooze && effectiveSnoozed(thread, { now: now.toISOString() }),
@@ -289,6 +293,9 @@ export function useThreadActionMenu(input: {
             await reportFailure("Failed to update auto-settle", () =>
               setThreadAutoSettle(threadRef, action === "auto-settle:enabled"),
             );
+            return;
+          case "slack-thread":
+            openSlackThreadDialog([threadRef]);
             return;
           case "rename":
             onStartRename();

@@ -72,6 +72,8 @@ export const RPC_REQUIRED_SCOPES = {
   [WS_METHODS.serverSaveStandupSummary]: AuthOrchestrationOperateScope,
   [WS_METHODS.serverGetTodoList]: AuthOrchestrationReadScope,
   [WS_METHODS.serverSetTodoList]: AuthOrchestrationOperateScope,
+  // Sends a message to Slack as the user.
+  [WS_METHODS.serverReplyInSlackThread]: AuthOrchestrationOperateScope,
   [WS_METHODS.serverSignalProcess]: AuthOrchestrationOperateScope,
   [WS_METHODS.serverReportClientActivity]: AuthOrchestrationReadScope,
   [WS_METHODS.serverReportHostPowerState]: AuthOrchestrationOperateScope,

@@ -773,6 +773,8 @@ export const PullRequestSummary = Schema.Struct({
   lastReviewer: Schema.optional(Schema.NullOr(PullRequestActor)),
   /** Review comment threads nobody has resolved; absent where the read does not count them. */
   unresolvedReviewThreads: Schema.optional(NonNegativeInt),
+  /** Whether the signed-in host account opened it; absent where the read does not say. */
+  viewerDidAuthor: Schema.optional(Schema.Boolean),
   /** Null when the host says the pull request is in no stack; absent when the read did not ask. */
   stack: Schema.optional(Schema.NullOr(PullRequestStackMembership)),
 });

@@ -61,6 +61,7 @@ function snapshotFieldsOf(summary: PullRequestSummary): SnapshotFields {
     ...(summary.unresolvedReviewThreads === undefined
       ? {}
       : { unresolvedReviewThreads: summary.unresolvedReviewThreads }),
+    ...(summary.viewerDidAuthor === undefined ? {} : { viewerDidAuthor: summary.viewerDidAuthor }),
   };
 }
 
@@ -85,7 +86,8 @@ function snapshotFieldsEqual(left: SnapshotFields, right: SnapshotFields): boole
     left.mergeState === right.mergeState &&
     (left.lastReviewer?.login ?? null) === (right.lastReviewer?.login ?? null) &&
     (left.lastReviewer === undefined) === (right.lastReviewer === undefined) &&
-    left.unresolvedReviewThreads === right.unresolvedReviewThreads
+    left.unresolvedReviewThreads === right.unresolvedReviewThreads &&
+    left.viewerDidAuthor === right.viewerDidAuthor
   );
 }
 

@@ -1970,6 +1970,7 @@ describe("batched pull request summaries", () => {
               state: "OPEN",
               updatedAt: "2026-08-24T00:00:00Z",
               mergeStateStatus: "BLOCKED",
+              viewerDidAuthor: true,
               latestReviews: {
                 nodes: [
                   review("ana", "2026-08-20T00:00:00Z"),
@@ -2000,6 +2001,7 @@ describe("batched pull request summaries", () => {
     if (!Result.isSuccess(decoded)) return;
     expect(decoded.success.get(0)).toMatchObject({
       mergeState: "blocked",
+      viewerDidAuthor: true,
       lastReviewer: { login: "bo" },
       unresolvedReviewThreads: 1,
     });

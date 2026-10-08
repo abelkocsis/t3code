@@ -275,6 +275,7 @@ import {
   StandupUpdateItemsInput,
 } from "./standup.ts";
 import { TodoError, TodoList, TodoListInput } from "./todos.ts";
+import { SlackThreadReplyError, SlackThreadReplyInput, SlackThreadReplyResult } from "./slack.ts";
 import { ServerSettings, ServerSettingsError, ServerSettingsPatch } from "./settings.ts";
 import {
   ProjectCloneActionInput,
@@ -424,6 +425,7 @@ export const WS_METHODS = {
   serverSaveStandupSummary: "server.saveStandupSummary",
   serverGetTodoList: "server.getTodoList",
   serverSetTodoList: "server.setTodoList",
+  serverReplyInSlackThread: "server.replyInSlackThread",
 
   // Cloud environment methods
   cloudGetRelayClientStatus: "cloud.getRelayClientStatus",
@@ -742,6 +744,16 @@ const WsServerGenerateStandupSummaryRpc = Rpc.make(WS_METHODS.serverGenerateStan
   payload: StandupGenerateInput,
   success: StandupSummary,
   error: Schema.Union([EnvironmentAuthorizationError, StandupError]),
+});
+
+/**
+ * Posts a reply in a Slack thread as the user, through the Slack connection of a provider account
+ * on this server. Each call sends a message, so the client calls it only on an explicit Send.
+ */
+const WsServerReplyInSlackThreadRpc = Rpc.make(WS_METHODS.serverReplyInSlackThread, {
+  payload: SlackThreadReplyInput,
+  success: SlackThreadReplyResult,
+  error: Schema.Union([EnvironmentAuthorizationError, SlackThreadReplyError]),
 });
 
 /** Replaces the item list, which covers excluding a bullet and adding one. */
@@ -1583,6 +1595,7 @@ export const WsRpcGroup = RpcGroup.make(
   WsServerSaveStandupSummaryRpc,
   WsServerGetTodoListRpc,
   WsServerSetTodoListRpc,
+  WsServerReplyInSlackThreadRpc,
   WsServerSignalProcessRpc,
   WsServerReportClientActivityRpc,
   WsServerReportHostPowerStateRpc,

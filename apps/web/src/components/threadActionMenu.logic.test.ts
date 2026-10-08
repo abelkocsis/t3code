@@ -8,6 +8,7 @@ const baseState: ThreadActionMenuState = {
   isPinned: false,
   folderId: null,
   folders: [],
+  slackThreadLinked: false,
   isSettled: false,
   autoSettleEnabled: true,
   isSnoozed: false,
@@ -20,6 +21,7 @@ const baseState: ThreadActionMenuState = {
     snooze: true,
     pinning: true,
     folders: true,
+    slackThreads: false,
     titleRegeneration: true,
   },
   snoozePresets: [
@@ -48,6 +50,7 @@ describe("buildThreadActionMenuItems", () => {
           snooze: false,
           pinning: false,
           folders: false,
+          slackThreads: false,
           titleRegeneration: false,
         },
       }),
@@ -83,6 +86,17 @@ describe("buildThreadActionMenuItems", () => {
     expect(
       allIds({ ...baseState, supports: { ...baseState.supports, folders: false } }),
     ).not.toContain("folder");
+  });
+
+  it("offers linking a Slack thread, and changing it once one is linked", () => {
+    const supports = { ...baseState.supports, slackThreads: true };
+    const label = (slackThreadLinked: boolean) =>
+      buildThreadActionMenuItems({ ...baseState, supports, slackThreadLinked }).find(
+        (item) => item.id === "slack-thread",
+      )?.label;
+    expect(label(false)).toBe("Link Slack thread…");
+    expect(label(true)).toBe("Change Slack thread…");
+    expect(ids(baseState)).not.toContain("slack-thread");
   });
 
   it("groups project settings with utility actions before archive", () => {
@@ -190,6 +204,7 @@ describe("buildThreadActionMenuItems", () => {
           snooze: false,
           pinning: false,
           folders: false,
+          slackThreads: false,
           titleRegeneration: false,
         },
       }),

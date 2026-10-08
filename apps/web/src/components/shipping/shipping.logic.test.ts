@@ -109,10 +109,12 @@ describe("collectShippingItems", () => {
         link(2, { ...green, isDraft: true }),
         link(3, { ...green, state: "merged" }),
         link(4, null),
+        link(6, { ...green, viewerDidAuthor: false }),
+        link(7, { ...green, viewerDidAuthor: true }),
       ]),
       thread("t2", [link(5, green)], { archivedAt: "2026-10-01T00:00:00Z" }),
     ]);
-    expect(items.map((item) => item.link.number)).toEqual([1]);
+    expect(items.map((item) => item.link.number)).toEqual([1, 7]);
   });
 
   it("shows a pull request linked twice once, beside the active thread", () => {
@@ -135,19 +137,42 @@ describe("groupShippingReviews", () => {
         link(5, { ...green, checksState: "failing", lastReviewer: reviewer("ana") }),
       ]),
     ]);
-    const groups = groupShippingReviews(items);
-    expect(
-      groups.map((group) => [
-        group.reviewer?.login ?? null,
-        group.items.map((item) => item.link.number),
-      ]),
-    ).toEqual([
+    expect(summarize(groupShippingReviews(items))).toEqual([
       ["ana", [3]],
       ["bo", [1, 4]],
       [null, [2]],
     ]);
   });
+
+  it("sends every pull request of a Slack-linked thread to that Slack thread", () => {
+    const slackThread = {
+      url: "https://acme.slack.com/archives/C01/p1700000000123456",
+      channelId: "C01",
+      threadTs: "1700000000.123456",
+    };
+    const items = collectShippingItems([
+      thread("linked", [link(1, { ...green, lastReviewer: reviewer("ana") }), link(2, green)], {
+        slackThread,
+      }),
+      thread("other", [link(3, { ...green, lastReviewer: reviewer("ana") })]),
+    ]);
+    expect(summarize(groupShippingReviews(items))).toEqual([
+      ["slack:C01", [1, 2]],
+      ["ana", [3]],
+    ]);
+  });
 });
+
+function summarize(groups: ReturnType<typeof groupShippingReviews>) {
+  return groups.map((group) => [
+    group.kind === "slack"
+      ? `slack:${group.slackThread.channelId}`
+      : group.kind === "reviewer"
+        ? group.reviewer.login
+        : null,
+    group.items.map((item) => item.link.number),
+  ]);
+}
 
 describe("buildReviewRequestMessage", () => {
   it("lists one URL per line under the request", () => {

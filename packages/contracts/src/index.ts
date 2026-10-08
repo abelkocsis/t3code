@@ -43,6 +43,7 @@ export * from "./previewAutomation.ts";
 export * from "./resourceTelemetry.ts";
 export * from "./usage.ts";
 export * from "./standup.ts";
+export * from "./slack.ts";
 export * from "./todos.ts";
 export * from "./rpc.ts";
 export * from "./worktreeSetup.ts";

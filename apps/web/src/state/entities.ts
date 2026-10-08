@@ -264,6 +264,13 @@ export function readEnvironmentSupportsFolders(environmentId: EnvironmentId): bo
   );
 }
 
+export function readEnvironmentSupportsSlackThreads(environmentId: EnvironmentId): boolean {
+  return (
+    appAtomRegistry.get(environmentServerConfigsAtom).get(environmentId)?.environment.capabilities
+      .threadSlackThreads === true
+  );
+}
+
 export function readEnvironmentSupportsActiveReorder(environmentId: EnvironmentId): boolean {
   return (
     appAtomRegistry.get(environmentServerConfigsAtom).get(environmentId)?.environment.capabilities

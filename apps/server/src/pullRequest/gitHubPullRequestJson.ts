@@ -1916,7 +1916,7 @@ const PULL_REQUEST_SUMMARY_SELECTION =
   "number title url state isDraft mergeable reviewDecision additions deletions changedFiles " +
   "updatedAt mergedAt closedAt headRefName baseRefName " +
   "author { __typename login avatarUrl ... on User { name } } " +
-  "mergeStateStatus " +
+  "mergeStateStatus viewerDidAuthor " +
   "latestReviews(first: 20) { nodes { state submittedAt author { __typename login avatarUrl ... on User { name } } } } " +
   "reviewThreads(first: 100) { nodes { isResolved } } " +
   "commits(last: 1) { nodes { commit { statusCheckRollup { state } } } }";
@@ -1946,6 +1946,7 @@ export function buildPullRequestSummariesGraphQlQuery(
 const RawSummarySchema = Schema.Struct({
   ...RawSearchItemSchema.fields,
   mergeStateStatus: Schema.optional(Schema.NullOr(Schema.String)),
+  viewerDidAuthor: Schema.optional(Schema.Boolean),
   reviewThreads: Schema.optional(
     Schema.NullOr(
       Schema.Struct({
@@ -1996,6 +1997,7 @@ export interface GitHubPullRequestSummary {
   readonly mergeState?: PullRequestMergeState;
   readonly lastReviewer: PullRequestActor | null;
   readonly unresolvedReviewThreads?: number;
+  readonly viewerDidAuthor?: boolean;
   /** Null when GitHub says the pull request is in no stack; absent when the read did not ask. */
   readonly stack?: PullRequestStackMembership | null;
 }
@@ -2053,6 +2055,7 @@ export function decodePullRequestSummariesJson(
               (thread) => thread !== null && thread.isResolved === false,
             ).length,
           }),
+      ...(pr.viewerDidAuthor === undefined ? {} : { viewerDidAuthor: pr.viewerDidAuthor }),
       ...(pr.stack === undefined ? {} : { stack: toStackMembership(pr) ?? null }),
     });
   }

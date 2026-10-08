@@ -29,6 +29,7 @@ import {
   type SetThreadRuntimeModeInput,
   type PinThreadInput,
   type SetThreadFolderInput,
+  type SetThreadSlackThreadInput,
   type ReorderPinnedThreadInput,
   type ScheduleThreadMessageInput,
   type UnscheduleThreadMessageInput,
@@ -58,6 +59,7 @@ import {
   setThreadRuntimeMode,
   pinThread,
   setThreadFolder,
+  setThreadSlackThread,
   reorderPinnedThread,
   scheduleThreadMessage,
   unscheduleThreadMessage,
@@ -91,6 +93,7 @@ export type {
   SetThreadRuntimeModeInput,
   PinThreadInput,
   SetThreadFolderInput,
+  SetThreadSlackThreadInput,
   ReorderPinnedThreadInput,
   ReorderActiveThreadInput,
   SetThreadAutoSettleInput,
@@ -182,6 +185,12 @@ export function createThreadEnvironmentAtoms<R, E>(
     setFolder: createEnvironmentCommand(runtime, {
       label: "environment-data:commands:thread:set-folder",
       execute: (input: SetThreadFolderInput) => setThreadFolder(input),
+      scheduler,
+      concurrency,
+    }),
+    setSlackThread: createEnvironmentCommand(runtime, {
+      label: "environment-data:commands:thread:set-slack-thread",
+      execute: (input: SetThreadSlackThreadInput) => setThreadSlackThread(input),
       scheduler,
       concurrency,
     }),
@@ -350,6 +359,10 @@ export function createThreadEnvironmentAtoms<R, E>(
     setFolder: optimistic.wrap(commands.setFolder, (thread, input) => ({
       ...thread,
       folderId: input.folderId,
+    })),
+    setSlackThread: optimistic.wrap(commands.setSlackThread, (thread, input) => ({
+      ...thread,
+      slackThread: input.slackThread,
     })),
     pin: optimistic.wrap(commands.pin, (thread, input, now) => ({
       ...thread,
