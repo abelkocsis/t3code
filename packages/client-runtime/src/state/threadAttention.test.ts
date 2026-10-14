@@ -59,6 +59,35 @@ function makeThread(input: {
 }
 
 describe("resolveThreadAttention", () => {
+  it("treats a factory task at a human gate as finished work, stamped with the stage change", () => {
+    const factory = {
+      input: { kind: "free-text" as const, value: "x" },
+      phase: "ready-for-review" as const,
+      summary: null,
+      startedAt: THREAD_UPDATED_AT,
+      updatedAt: "2026-10-14T13:00:00.000Z",
+    };
+    expect(resolveThreadAttention({ ...makeThread({ sessionStatus: "idle" }), factory })).toEqual({
+      phase: "completed",
+      at: "2026-10-14T13:00:00.000Z",
+    });
+    expect(
+      resolveThreadAttention({
+        ...makeThread({ sessionStatus: "idle" }),
+        factory: { ...factory, phase: "under-review" as const },
+      }),
+    ).toEqual({ phase: "completed", at: expect.any(String) });
+  });
+
+  it("asks nothing for a snoozed thread", () => {
+    expect(
+      resolveThreadAttention({
+        ...makeThread({ pending: "approval" }),
+        snoozedUntil: "2999-01-01T00:00:00.000Z",
+      }),
+    ).toBeNull();
+  });
+
   it("reports a pending approval and stamps it with the thread's own update time", () => {
     expect(resolveThreadAttention(makeThread({ pending: "approval" }))).toEqual({
       phase: "waiting_for_approval",

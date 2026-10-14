@@ -810,6 +810,21 @@ const makeOrchestrationProjectionPipeline = Effect.fn("makeOrchestrationProjecti
           return;
         }
 
+        case "thread.factory-set": {
+          const existingRow = yield* projectionThreadRepository.getById({
+            threadId: event.payload.threadId,
+          });
+          if (Option.isNone(existingRow)) {
+            return;
+          }
+          yield* projectionThreadRepository.upsert({
+            ...existingRow.value,
+            factory: event.payload.factory,
+            updatedAt: event.payload.updatedAt,
+          });
+          return;
+        }
+
         case "thread.pinned": {
           const existingRow = yield* projectionThreadRepository.getById({
             threadId: event.payload.threadId,

@@ -1,4 +1,4 @@
-import { ArrowLeftIcon, ChartNoAxesColumnIcon, RocketIcon, SettingsIcon } from "lucide-react";
+import { ArrowLeftIcon, ChartNoAxesColumnIcon, FactoryIcon, SettingsIcon } from "lucide-react";
 import type { ReactNode } from "react";
 import { memo, useCallback } from "react";
 import { Link, useLocation, useNavigate } from "@tanstack/react-router";
@@ -6,7 +6,9 @@ import { Link, useLocation, useNavigate } from "@tanstack/react-router";
 import { useEnvironmentIdentificationMode } from "../../hooks/useSettings";
 import { useUpstreamRelease } from "../../hooks/useUpstreamRelease";
 import { cn } from "../../lib/utils";
+import { useThreadShells } from "../../state/entities";
 import { useEnvironments } from "../../state/environments";
+import { countFactoryTasksWaiting } from "../factory/factory.logic";
 import { T3Wordmark } from "../T3Wordmark";
 import {
   resolveEnvironmentIdentificationPillLabel,
@@ -169,9 +171,11 @@ export const SidebarUtilityMenu = memo(function SidebarUtilityMenu() {
       search: readPullRequestListPreferences(),
     });
   }, [closeMobileSidebar, navigate]);
-  const handleShippingClick = useCallback(() => {
+  const threads = useThreadShells();
+  const factoryWaiting = countFactoryTasksWaiting(threads);
+  const handleFactoryClick = useCallback(() => {
     closeMobileSidebar();
-    void navigate({ to: "/shipping" });
+    void navigate({ to: "/factory" });
   }, [closeMobileSidebar, navigate]);
   const handleSettingsClick = useCallback(() => {
     closeMobileSidebar();
@@ -217,13 +221,17 @@ export const SidebarUtilityMenu = memo(function SidebarUtilityMenu() {
               onClick={handlePullRequestsClick}
             />
           ) : null}
-          {pullRequestsSupported ? (
-            <SidebarUtilityItem
-              icon={<RocketIcon />}
-              label="Shipping"
-              onClick={handleShippingClick}
-            />
-          ) : null}
+          <SidebarUtilityItem
+            icon={<FactoryIcon />}
+            label="Factory"
+            badge={factoryWaiting > 0}
+            {...(factoryWaiting > 0
+              ? {
+                  badgeLabel: `Factory. ${factoryWaiting} ${factoryWaiting === 1 ? "task waits" : "tasks wait"} on you`,
+                }
+              : {})}
+            onClick={handleFactoryClick}
+          />
           <SidebarUtilityItem
             icon={<ChartNoAxesColumnIcon />}
             label="Usage"

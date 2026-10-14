@@ -10,6 +10,7 @@ import {
   isToolLifecycleItemType,
   ThreadId,
   type ThreadTokenUsageSnapshot,
+  type ThreadFactory,
   TurnId,
   type OrchestrationCheckpointSummary,
   type OrchestrationThreadActivity,
@@ -18,6 +19,7 @@ import {
   type ProviderRuntimeEvent,
   type ResponseStreamingMode,
   RuntimeRequestId,
+  parseFactoryPhaseMarker,
 } from "@t3tools/contracts";
 import * as Cache from "effect/Cache";
 import * as Cause from "effect/Cause";
@@ -1779,6 +1781,35 @@ const make = Effect.gen(function* () {
     },
   );
 
+  // A factory task reports its phase with one marker line per assistant
+  // message. The finished message is read back so buffered deltas count too.
+  const recordFactoryPhaseMarker = Effect.fn("recordFactoryPhaseMarker")(function* (input: {
+    readonly event: ProviderRuntimeEvent;
+    readonly threadId: ThreadId;
+    readonly factory: ThreadFactory;
+    readonly messageId: MessageId;
+    readonly fallbackText: string | undefined;
+    readonly updatedAt: string;
+  }) {
+    const message = yield* getThreadMessageById(input.threadId, input.messageId);
+    const text =
+      message?.text && message.text.length > 0 ? message.text : (input.fallbackText ?? "");
+    const marker = parseFactoryPhaseMarker(text);
+    if (!marker) return;
+    if (marker.phase === input.factory.phase && marker.summary === input.factory.summary) return;
+    yield* orchestrationEngine.dispatch({
+      type: "thread.factory.set",
+      commandId: yield* providerCommandId(input.event, "factory-phase"),
+      threadId: input.threadId,
+      factory: {
+        ...input.factory,
+        phase: marker.phase,
+        summary: marker.summary,
+        updatedAt: input.updatedAt,
+      },
+    });
+  });
+
   const processRuntimeEvent = (event: ProviderRuntimeEvent) =>
     Effect.gen(function* () {
       if (
@@ -2328,6 +2359,17 @@ const make = Effect.gen(function* () {
 
           if (turnId) {
             yield* forgetAssistantMessageId(thread.id, turnId, assistantMessageId);
+          }
+
+          if (thread.factory) {
+            yield* recordFactoryPhaseMarker({
+              event,
+              threadId: thread.id,
+              factory: thread.factory,
+              messageId: assistantMessageId,
+              fallbackText: assistantCompletion.fallbackText,
+              updatedAt: now,
+            });
           }
         }
 

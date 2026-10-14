@@ -31,6 +31,8 @@ function makeUiState(overrides: Partial<UiState> = {}): UiState {
     threadChangedFilesExpandedById: {},
     defaultAdvertisedEndpointKey: null,
     pullRequestMergeMethod: "merge",
+    factoryTaskOrder: [],
+    factoryLastIssueRepository: null,
     ...overrides,
   };
 }
@@ -273,6 +275,8 @@ describe("parsePersistedState", () => {
       defaultAdvertisedEndpointKey: "desktop-core:lan:http",
       sidebarProjectScopeKey: null,
       pullRequestMergeMethod: "merge",
+      factoryTaskOrder: [],
+      factoryLastIssueRepository: null,
       threadChangedFilesExpandedById: {
         "environment:thread-1": {
           "turn-1": false,
@@ -403,6 +407,8 @@ describe("uiStateStore persistence", () => {
         },
       },
       pullRequestMergeMethod: "merge",
+      factoryTaskOrder: [],
+      factoryLastIssueRepository: null,
     });
     expect(parsePersistedState(persisted)).toEqual({
       ...state,

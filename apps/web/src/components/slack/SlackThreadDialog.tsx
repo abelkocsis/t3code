@@ -121,9 +121,8 @@ function SlackThreadDialog({
         <DialogHeader>
           <DialogTitle>Link Slack thread</DialogTitle>
           <DialogDescription>
-            {count === 1 ? "This thread's" : `These ${count} threads'`} pull requests are grouped
-            under this Slack thread on the Shipping page, and re-review requests are posted there as
-            replies.
+            {count === 1 ? "This thread's" : `These ${count} threads'`} review requests from the
+            Factory page are posted under this Slack thread as replies.
           </DialogDescription>
         </DialogHeader>
         <DialogPanel>

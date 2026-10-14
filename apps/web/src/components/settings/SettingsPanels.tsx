@@ -172,6 +172,7 @@ import {
   useSettingsSearchTargetId,
 } from "./settingsLayout";
 import { searchableSetting } from "./settingsSearch";
+import { Textarea } from "../ui/textarea";
 import { ProjectFavicon } from "../ProjectFavicon";
 import { PanelAnimationsPreview } from "./PanelAnimationsPreview";
 
@@ -2711,6 +2712,34 @@ export function GeneralSettingsPanel() {
         />
 
         <SettingsRow
+          {...searchableSetting("factory-pull-request-in-browser")}
+          description="On the Factory page, the pull request button opens the browser instead of the thread's pull request panel."
+          resetAction={
+            settings.factoryPullRequestOpensInBrowser !==
+            DEFAULT_UNIFIED_SETTINGS.factoryPullRequestOpensInBrowser ? (
+              <SettingResetButton
+                label="factory pull request button"
+                onClick={() =>
+                  updateSettings({
+                    factoryPullRequestOpensInBrowser:
+                      DEFAULT_UNIFIED_SETTINGS.factoryPullRequestOpensInBrowser,
+                  })
+                }
+              />
+            ) : null
+          }
+          control={
+            <Switch
+              checked={settings.factoryPullRequestOpensInBrowser}
+              onCheckedChange={(checked) =>
+                updateSettings({ factoryPullRequestOpensInBrowser: Boolean(checked) })
+              }
+              aria-label="Factory pull request button opens the browser"
+            />
+          }
+        />
+
+        <SettingsRow
           {...searchableSetting("skills-in-slash-menu")}
           description="Also include skills in the / command menu. Skills always appear when you type $."
           resetAction={
@@ -3334,6 +3363,35 @@ export function GeneralSettingsPanel() {
             )
           }
         />
+      </SettingsSection>
+
+      <SettingsSection id="factory" title="Factory">
+        <SettingsRow
+          serverScoped
+          settingKeys={["factoryPromptTemplate"]}
+          {...searchableSetting("factory-prompt-template")}
+          title="Task prompt"
+          description="The first message of a factory task. {{input}} stands for the issue link or text."
+          resetAction={
+            settings.factoryPromptTemplate !== DEFAULT_UNIFIED_SETTINGS.factoryPromptTemplate ? (
+              <SettingResetButton
+                label="factory task prompt"
+                onClick={() =>
+                  updateSettings({
+                    factoryPromptTemplate: DEFAULT_UNIFIED_SETTINGS.factoryPromptTemplate,
+                  })
+                }
+              />
+            ) : undefined
+          }
+        >
+          <Textarea
+            aria-label="Factory task prompt"
+            value={settings.factoryPromptTemplate}
+            rows={10}
+            onChange={(event) => updateSettings({ factoryPromptTemplate: event.target.value })}
+          />
+        </SettingsRow>
       </SettingsSection>
 
       <SettingsSection id="about" title="About">

@@ -11,6 +11,7 @@ import { ProviderRuntimeIngestionService } from "../Services/ProviderRuntimeInge
 import { ThreadDeletionReactor } from "../Services/ThreadDeletionReactor.ts";
 import { ThreadForkReactor } from "../Services/ThreadForkReactor.ts";
 import * as ScheduledMessageReactor from "../ScheduledMessageReactor.ts";
+import * as FactoryReviewReactor from "../FactoryReviewReactor.ts";
 import * as ThreadSettlementReactor from "../ThreadSettlementReactor.ts";
 import * as PullRequestSyncReactor from "../PullRequestSyncReactor.ts";
 import * as ThreadPullRequestReactor from "../ThreadPullRequestReactor.ts";
@@ -27,6 +28,7 @@ export const makeOrchestrationReactor = Effect.gen(function* () {
   const pullRequestSyncReactor = yield* PullRequestSyncReactor.PullRequestSyncReactor;
   const threadPullRequestReactor = yield* ThreadPullRequestReactor.ThreadPullRequestReactor;
   const scheduledMessageReactor = yield* ScheduledMessageReactor.ScheduledMessageReactor;
+  const factoryReviewReactor = yield* FactoryReviewReactor.FactoryReviewReactor;
   const agentAwarenessRelay = yield* AgentAwarenessRelay.AgentAwarenessRelay;
   const storageCleanup = yield* StorageCleanup.StorageCleanup;
 
@@ -40,6 +42,7 @@ export const makeOrchestrationReactor = Effect.gen(function* () {
     yield* threadSettlementReactor.start();
     yield* pullRequestSyncReactor.start();
     yield* scheduledMessageReactor.start();
+    yield* factoryReviewReactor.start();
     yield* agentAwarenessRelay.start();
     yield* storageCleanup.start();
   });

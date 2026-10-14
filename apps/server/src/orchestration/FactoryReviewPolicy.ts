@@ -1,0 +1,198 @@
+import type {
+  FactoryReviewMemo,
+  OrchestrationThreadShell,
+  ThreadFactory,
+  ThreadPullRequestLink,
+  ThreadPullRequestSnapshot,
+} from "@t3tools/contracts";
+import { FACTORY_PHASE_MARKER } from "@t3tools/contracts";
+import { visibleThreadPullRequests } from "@t3tools/shared/threadPullRequests";
+
+import { threadHasQueuedTurnStart } from "./ThreadSettlementPolicy.ts";
+
+/**
+ * What the review sweep does to one thread: update its factory state, send the agent a
+ * message, or both. `null` means leave the thread alone.
+ */
+export interface FactoryReviewDecision {
+  readonly factory: ThreadFactory | null;
+  readonly message: string | null;
+}
+
+const EMPTY_MEMO: FactoryReviewMemo = {
+  seenUpdatedAt: null,
+  seenUnresolved: 0,
+  seenChecksState: null,
+  seenMergeState: null,
+};
+
+/** The pull request a task follows: an open one first, then a merged one, then any. */
+export function factoryPullRequest(
+  thread: Pick<OrchestrationThreadShell, "pullRequests">,
+): (ThreadPullRequestLink & { readonly snapshot: ThreadPullRequestSnapshot }) | null {
+  const links = visibleThreadPullRequests(thread.pullRequests);
+  const withSnapshot = links.filter(
+    (link): link is ThreadPullRequestLink & { readonly snapshot: ThreadPullRequestSnapshot } =>
+      link.snapshot !== null,
+  );
+  return (
+    withSnapshot.find((link) => link.snapshot.state === "open") ??
+    withSnapshot.find((link) => link.snapshot.state === "merged") ??
+    withSnapshot[0] ??
+    null
+  );
+}
+
+/** A message to the agent must not land mid-turn or jump an unanswered question. */
+export function canMessageThread(thread: OrchestrationThreadShell, now: string): boolean {
+  if (thread.archivedAt !== null) return false;
+  if (thread.session?.status === "starting" || thread.session?.status === "running") return false;
+  if (thread.hasPendingApprovals || thread.hasPendingUserInput) return false;
+  if (thread.backgroundLiveness != null) return false;
+  return !threadHasQueuedTurnStart(thread, now);
+}
+
+function memoOf(snapshot: ThreadPullRequestSnapshot): FactoryReviewMemo {
+  return {
+    seenUpdatedAt: snapshot.updatedAt ?? null,
+    seenUnresolved: snapshot.unresolvedReviewThreads ?? 0,
+    seenChecksState: snapshot.checksState ?? null,
+    seenMergeState: snapshot.mergeState ?? null,
+  };
+}
+
+function commentsMessage(link: ThreadPullRequestLink): string {
+  return [
+    `New review activity on ${link.url}.`,
+    "Read every open comment and the review decision. Decide for each one yourself: fix it on this branch, or push back with a reason. Pushing back is fine when the comment is wrong or out of scope. Do not ask me which ones to fix.",
+    'Push the fixes. Then answer every comment on the pull request: a fixed one gets a reply that says "Resolved in commit <short sha>" and its conversation gets resolved; a declined one gets your reason and stays open.',
+    "Post a short report under the pull request: what you changed, what you declined, and which agents and models ran.",
+    `When you are done, print "${FACTORY_PHASE_MARKER} ready-for-review" with one sentence.`,
+    `If a comment needs a decision from me, print "${FACTORY_PHASE_MARKER} human-gate" and ask.`,
+  ].join("\n");
+}
+
+function ciMessage(link: ThreadPullRequestLink): string {
+  return [
+    `CI is failing on ${link.url}.`,
+    "Find out whether this branch caused the failure. If it did, fix it on this branch and push.",
+    `If the failure comes from elsewhere, or the fix is a big change, do not fix it here. Print "${FACTORY_PHASE_MARKER} human-gate" and ask me whether to open a new task for it, with a one-paragraph proposal.`,
+    `When the branch is green again, print "${FACTORY_PHASE_MARKER} ready-for-review" with one sentence.`,
+  ].join("\n");
+}
+
+function behindMessage(link: ThreadPullRequestLink, snapshot: ThreadPullRequestSnapshot): string {
+  return [
+    `The base branch ${snapshot.baseBranch} moved ahead of ${link.url}.`,
+    "Rebase this branch onto the base branch, resolve conflicts, run the tests that cover the change, and push.",
+    `If a conflict needs a decision from me, print "${FACTORY_PHASE_MARKER} human-gate" and ask.`,
+    `When the branch is up to date, print "${FACTORY_PHASE_MARKER} ready-for-review" with one sentence.`,
+  ].join("\n");
+}
+
+/**
+ * Moves a task through the review stages from its pull request, and tells the agent when
+ * review work is needed. The human marks "under-review" and merges; this never merges.
+ *
+ * - A thread without factory state joins as "ready-for-review" when its own open pull
+ *   request gets linked.
+ * - A merged pull request ends the task as "merged"; a closed one as "done".
+ * - "done" with a pull request becomes "ready-for-review".
+ * - Under review: approval plus green checks on an unblocked branch gives "ready-to-merge".
+ *   New comments, a failed check, or a stale base become a message to the agent and the
+ *   phase goes to "fix". Each cause fires once per pull request change.
+ * - Ready to merge falls back to the under-review rules when the pull request changes.
+ */
+export function decideFactoryReview(
+  thread: OrchestrationThreadShell,
+  now: string,
+): FactoryReviewDecision | null {
+  if (thread.archivedAt !== null) return null;
+  const link = factoryPullRequest(thread);
+  const factory = thread.factory ?? null;
+
+  if (!factory) {
+    if (!link || link.snapshot.state !== "open" || link.snapshot.viewerDidAuthor !== true) {
+      return null;
+    }
+    return {
+      factory: {
+        input: { kind: "pull-request", value: link.url },
+        phase: "ready-for-review",
+        summary: link.snapshot.title,
+        startedAt: now,
+        updatedAt: now,
+        review: memoOf(link.snapshot),
+      },
+      message: null,
+    };
+  }
+
+  if (!link) return null;
+  const snapshot = link.snapshot;
+  const stage = (phase: ThreadFactory["phase"], summary: string | null, memo?: FactoryReviewMemo) =>
+    ({
+      factory: {
+        ...factory,
+        phase,
+        summary,
+        updatedAt: now,
+        ...(memo ? { review: memo } : {}),
+      },
+      message: null,
+    }) satisfies FactoryReviewDecision;
+
+  if (snapshot.state === "merged") {
+    return factory.phase === "merged" ? null : stage("merged", "Pull request merged.");
+  }
+  if (snapshot.state === "closed") {
+    return factory.phase === "done" ? null : stage("done", "Pull request closed without a merge.");
+  }
+  if (factory.phase === "done") {
+    return stage("ready-for-review", snapshot.title, memoOf(snapshot));
+  }
+  if (factory.phase !== "under-review" && factory.phase !== "ready-to-merge") return null;
+
+  const memo = factory.review ?? EMPTY_MEMO;
+  const changed = (snapshot.updatedAt ?? null) !== memo.seenUpdatedAt;
+  const approved = snapshot.reviewDecision === "approved";
+  const green = snapshot.checksState === "passing";
+  const unblocked =
+    snapshot.mergeState === "clean" ||
+    snapshot.mergeState === "has-hooks" ||
+    snapshot.mergeState === "unstable";
+
+  if (approved && green && unblocked && (snapshot.unresolvedReviewThreads ?? 0) === 0) {
+    return factory.phase === "ready-to-merge"
+      ? null
+      : stage("ready-to-merge", "Approved and green.", memoOf(snapshot));
+  }
+
+  const needsWork =
+    (changed &&
+      (snapshot.reviewDecision === "changes-requested" ||
+        (snapshot.unresolvedReviewThreads ?? 0) > memo.seenUnresolved)) ||
+    (snapshot.checksState === "failing" && memo.seenChecksState !== "failing") ||
+    (snapshot.mergeState === "behind" && memo.seenMergeState !== "behind");
+  if (!needsWork) {
+    // Ready to merge no longer holds, for example a new commit set checks back to pending.
+    return factory.phase === "ready-to-merge"
+      ? stage("under-review", "Waiting on checks or reviewers.", memoOf(snapshot))
+      : null;
+  }
+  if (!canMessageThread(thread, now)) return null;
+
+  const message =
+    snapshot.checksState === "failing" && memo.seenChecksState !== "failing"
+      ? ciMessage(link)
+      : snapshot.mergeState === "behind" && memo.seenMergeState !== "behind"
+        ? behindMessage(link, snapshot)
+        : commentsMessage(link);
+  const summary =
+    message === commentsMessage(link)
+      ? "Reading new review comments."
+      : snapshot.checksState === "failing"
+        ? "CI failed; the agent is looking."
+        : "Rebasing onto the base branch.";
+  return { ...stage("fix", summary, memoOf(snapshot)), message };
+}

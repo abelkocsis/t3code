@@ -1440,6 +1440,82 @@ describe("ProviderRuntimeIngestion", () => {
     expect(message?.streaming).toBe(false);
   });
 
+  it("moves a factory task to the phase named in the finished assistant message", async () => {
+    const harness = await createHarness();
+    const now = "2026-01-01T00:00:00.000Z";
+    await harness.dispatch({
+      type: "thread.factory.set",
+      commandId: CommandId.make("cmd-factory-start"),
+      threadId: asThreadId("thread-1"),
+      factory: {
+        input: { kind: "free-text", value: "Add a range cap" },
+        phase: "requirements",
+        summary: null,
+        startedAt: now,
+        updatedAt: now,
+      },
+    });
+
+    harness.emit({
+      type: "content.delta",
+      eventId: asEventId("evt-factory-delta-1"),
+      provider: ProviderDriverKind.make("codex"),
+      createdAt: now,
+      threadId: asThreadId("thread-1"),
+      turnId: asTurnId("turn-factory"),
+      itemId: asItemId("item-factory-1"),
+      payload: { streamKind: "assistant_text", delta: "Specs are in.\nFACTORY PHASE: review " },
+    });
+    harness.emit({
+      type: "content.delta",
+      eventId: asEventId("evt-factory-delta-2"),
+      provider: ProviderDriverKind.make("codex"),
+      createdAt: now,
+      threadId: asThreadId("thread-1"),
+      turnId: asTurnId("turn-factory"),
+      itemId: asItemId("item-factory-1"),
+      payload: { streamKind: "assistant_text", delta: "Three reviewers read the diff." },
+    });
+    harness.emit({
+      type: "item.completed",
+      eventId: asEventId("evt-factory-completed"),
+      provider: ProviderDriverKind.make("codex"),
+      createdAt: now,
+      threadId: asThreadId("thread-1"),
+      turnId: asTurnId("turn-factory"),
+      itemId: asItemId("item-factory-1"),
+      payload: { itemType: "assistant_message", status: "completed" },
+    });
+
+    const thread = await waitForThread(
+      harness.readModel,
+      (entry) => entry.factory?.phase === "review",
+    );
+    expect(thread.factory).toMatchObject({
+      phase: "review",
+      summary: "Three reviewers read the diff.",
+      input: { kind: "free-text", value: "Add a range cap" },
+    });
+
+    // A message without a marker leaves the phase alone.
+    harness.emit({
+      type: "item.completed",
+      eventId: asEventId("evt-factory-completed-2"),
+      provider: ProviderDriverKind.make("codex"),
+      createdAt: now,
+      threadId: asThreadId("thread-1"),
+      turnId: asTurnId("turn-factory-2"),
+      itemId: asItemId("item-factory-2"),
+      payload: { itemType: "assistant_message", status: "completed", detail: "Still reviewing." },
+    });
+    const unchanged = await waitForThread(harness.readModel, (entry) =>
+      entry.messages.some(
+        (message: ProviderRuntimeTestMessage) => message.id === "assistant:item-factory-2",
+      ),
+    );
+    expect(unchanged.factory?.phase).toBe("review");
+  });
+
   it("streams reasoning deltas into a finalized reasoning message", async () => {
     const harness = await createHarness();
     const now = "2026-01-01T00:00:00.000Z";

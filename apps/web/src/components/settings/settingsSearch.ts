@@ -442,6 +442,12 @@ export const SETTINGS_SEARCH_ITEMS = [
     searchTerms: ["pull request pr merge automatically auto merge blocked button"],
   },
   {
+    id: "factory-pull-request-in-browser",
+    title: "Factory pull request button opens the browser",
+    to: "/settings/general",
+    searchTerms: ["factory pull request pr browser panel"],
+  },
+  {
     id: "skills-in-slash-menu",
     title: "Show skills in slash menu",
     to: "/settings/general",
@@ -796,6 +802,13 @@ export const SETTINGS_SEARCH_ITEMS = [
     searchTerms: ["bitbucket atlassian access token api token email credentials sign in"],
     environmentOnly: true,
     scope: "environment-defaults",
+  },
+  {
+    id: "factory-prompt-template",
+    title: "Factory task prompt",
+    to: "/settings/general",
+    searchTerms: ["factory code-factory task prompt template background agent"],
+    environmentOnly: true,
   },
   {
     id: "source-control-writing-style",

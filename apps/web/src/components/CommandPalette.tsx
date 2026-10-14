@@ -61,7 +61,7 @@ import {
   MonitorIcon,
   MoonIcon,
   PaletteIcon,
-  RocketIcon,
+  FactoryIcon,
   RotateCcwIcon,
   SettingsIcon,
   SquarePenIcon,
@@ -2259,17 +2259,18 @@ function OpenCommandPaletteDialog(props: {
         await navigate({ to: "/pull-requests", search: readPullRequestListPreferences() });
       },
     });
-    actionItems.push({
-      kind: "action",
-      value: "action:shipping",
-      searchTerms: ["shipping", "ship", "review", "re-review", "merge", "ready", "prs", "pr"],
-      title: "Open shipping",
-      icon: <RocketIcon className={ITEM_ICON_CLASS} />,
-      run: async () => {
-        await navigate({ to: "/shipping" });
-      },
-    });
   }
+
+  actionItems.push({
+    kind: "action",
+    value: "action:factory",
+    searchTerms: ["factory", "code factory", "tasks", "gates", "review", "merge", "ready", "prs"],
+    title: "Open factory",
+    icon: <FactoryIcon className={ITEM_ICON_CLASS} />,
+    run: async () => {
+      await navigate({ to: "/factory" });
+    },
+  });
 
   actionItems.push({
     kind: "action",

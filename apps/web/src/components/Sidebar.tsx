@@ -66,7 +66,6 @@ import {
   PlusIcon,
   SettingsIcon,
   ShieldQuestionIcon,
-  CircleDotIcon,
   SquarePenIcon,
   TerminalIcon,
   Undo2Icon,
@@ -136,7 +135,6 @@ import { useClientSettings } from "../hooks/useSettings";
 import { useCopyToClipboard } from "../hooks/useCopyToClipboard";
 import { useLocalStorage } from "../hooks/useLocalStorage";
 import { useNowMinute } from "../hooks/useNowMinute";
-import { IssuePickerDialog } from "./issues/IssuePickerDialog";
 import { useEnvironments, usePrimaryEnvironmentId } from "../state/environments";
 import {
   readEnvironmentSupportsSlackThreads,
@@ -2769,9 +2767,11 @@ export default function Sidebar() {
     // memo exactly at the next wake boundary.
     void snoozeWakeTick;
     const preciseNow = new Date().toISOString();
+    // Factory tasks live on the Factory page unless the user pinned one to the sidebar.
     const visible = threads.filter(
       (thread) =>
         thread.archivedAt === null &&
+        (!thread.factory || thread.factory.showInSidebar === true) &&
         (scopedProjectKeys === null ||
           scopedProjectKeys.has(`${thread.environmentId}:${thread.projectId}`)),
     );
@@ -5126,12 +5126,6 @@ export default function Sidebar() {
     updateThreadJumpHintsVisibility(shouldShowJumpHintsNow);
   }, [shouldShowJumpHintsNow, updateThreadJumpHintsVisibility]);
 
-  // The issue picker searches one environment's GitHub account. It follows the
-  // primary environment rather than the selected project's, because a user with
-  // no project yet still has an account to search.
-  const issuePickerEnvironmentId = usePrimaryEnvironmentId();
-  const [issuePickerOpen, setIssuePickerOpen] = useState(false);
-
   // New thread defaults to the project you're in (active thread's project,
   // falling back to the top project) — same resolution the command palette
   // uses. The command palette already offers a "New thread in..." submenu
@@ -5372,28 +5366,6 @@ export default function Sidebar() {
                   )}
                 </TooltipPopup>
               </Tooltip>
-              {/* An issue carries its own project: the issue's own repository
-                  names the repository, and the picker clones it when there is
-                  nothing to reuse. So it is never disabled with the other one. */}
-              <Tooltip>
-                <TooltipTrigger
-                  render={
-                    <Button
-                      type="button"
-                      variant="outline"
-                      className="min-w-0 flex-1 justify-center gap-2 bg-transparent focus-visible:ring-offset-2 focus-visible:ring-offset-sidebar dark:bg-transparent"
-                      onClick={() => setIssuePickerOpen(true)}
-                      disabled={issuePickerEnvironmentId === null}
-                    />
-                  }
-                >
-                  <CircleDotIcon />
-                  <span className="truncate">From issue</span>
-                </TooltipTrigger>
-                <TooltipPopup side="right">
-                  Start a thread from one or more GitHub issues
-                </TooltipPopup>
-              </Tooltip>
               {/* A folder is made here, empty: it is a place to put work in,
                   not something a thread creates on its way past. */}
               <Tooltip>
@@ -5419,13 +5391,6 @@ export default function Sidebar() {
                 </TooltipPopup>
               </Tooltip>
             </div>
-            {issuePickerEnvironmentId !== null ? (
-              <IssuePickerDialog
-                open={issuePickerOpen}
-                onOpenChange={setIssuePickerOpen}
-                environmentId={issuePickerEnvironmentId}
-              />
-            ) : null}
           </SidebarGroup>
         }
       >

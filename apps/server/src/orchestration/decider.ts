@@ -861,6 +861,33 @@ export const decideOrchestrationCommand = Effect.fn("decideOrchestrationCommand"
       };
     }
 
+    case "thread.factory.set": {
+      const thread = yield* requireThreadNotArchived({
+        readModel,
+        command,
+        threadId: command.threadId,
+      });
+      // Same phase and summary again changes nothing, so updatedAt stays put.
+      const unchanged =
+        (thread.factory?.phase ?? null) === (command.factory?.phase ?? null) &&
+        (thread.factory?.summary ?? null) === (command.factory?.summary ?? null);
+      const occurredAt = yield* nowIso;
+      return {
+        ...(yield* withEventBase({
+          aggregateKind: "thread",
+          aggregateId: command.threadId,
+          occurredAt,
+          commandId: command.commandId,
+        })),
+        type: "thread.factory-set" as const,
+        payload: {
+          threadId: command.threadId,
+          factory: command.factory,
+          updatedAt: unchanged ? thread.updatedAt : occurredAt,
+        },
+      };
+    }
+
     case "thread.folder.set": {
       const thread = yield* requireThreadNotArchived({
         readModel,

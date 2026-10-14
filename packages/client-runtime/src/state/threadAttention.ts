@@ -8,7 +8,16 @@ import { resolveThreadAwarenessPhase } from "@t3tools/shared/agentAwareness";
  * user has already put the thread down.
  */
 export type AttentionThreadShell = AwarenessThreadShell &
-  Partial<Pick<OrchestrationThreadShell, "settledOverride">>;
+  Partial<Pick<OrchestrationThreadShell, "settledOverride" | "factory" | "snoozedUntil">>;
+
+/** Factory stages that wait on the human; they count like a finished turn. */
+const FACTORY_GATE_PHASES: ReadonlySet<string> = new Set(["ready-for-review", "ready-to-merge"]);
+
+function isSnoozedNow(thread: AttentionThreadShell): boolean {
+  if (thread.snoozedUntil == null) return false;
+  const wakeAtMs = Date.parse(thread.snoozedUntil);
+  return !Number.isNaN(wakeAtMs) && wakeAtMs > Date.now();
+}
 
 /**
  * The phases that ask something of the user. Two of them block the agent
@@ -47,9 +56,20 @@ export function resolveThreadAttention(thread: AttentionThreadShell): ThreadAtte
   // never asks for attention: no highlight, no overlay row, no badge count.
   // New work unsettles the thread on the server, which restores all three.
   if (thread.settledOverride === "settled") return null;
+  // A snoozed thread was put down on purpose; it asks for nothing until it wakes.
+  if (isSnoozedNow(thread)) return null;
   const phase = resolveThreadAwarenessPhase(thread);
-  if (!isAttentionPhase(phase)) return null;
-  return { phase, at: attentionTimestamp(phase, thread) };
+  if (phase === "waiting_for_approval" || phase === "waiting_for_input") {
+    return { phase, at: attentionTimestamp(phase, thread) };
+  }
+  // A factory task at a human gate waits on the user even though its agent sits idle. The
+  // stage change stamps it, so a visit after the gate opened counts as seen.
+  const factory = thread.factory;
+  if (factory && FACTORY_GATE_PHASES.has(factory.phase)) {
+    return { phase: "completed", at: factory.updatedAt };
+  }
+  if (isAttentionPhase(phase)) return { phase, at: attentionTimestamp(phase, thread) };
+  return null;
 }
 
 /**

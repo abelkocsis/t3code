@@ -16,6 +16,7 @@ import {
   ModelSelection,
   ThreadLinkedPullRequest,
   SlackThreadRef,
+  ThreadFactory,
   ThreadScheduledMessage,
   ThreadTitleState,
 } from "@t3tools/contracts";
@@ -28,6 +29,7 @@ const ProjectionThreadDbRow = ProjectionThread.mapFields(
     branchPullRequest: Schema.NullOr(Schema.fromJsonString(ThreadLinkedPullRequest)),
     scheduledMessage: Schema.NullOr(Schema.fromJsonString(ThreadScheduledMessage)),
     slackThread: Schema.NullOr(Schema.fromJsonString(SlackThreadRef)),
+    factory: Schema.NullOr(Schema.fromJsonString(ThreadFactory)),
   }),
 );
 
@@ -62,6 +64,7 @@ const makeProjectionThreadRepository = Effect.gen(function* () {
           scheduled_message_json,
           folder_id,
           slack_thread_json,
+          factory_json,
           pinned_at,
           pin_order_key,
           active_order_key,
@@ -98,6 +101,7 @@ const makeProjectionThreadRepository = Effect.gen(function* () {
           ${row.scheduledMessage === undefined || row.scheduledMessage === null ? null : JSON.stringify(row.scheduledMessage)},
           ${row.folderId ?? null},
           ${row.slackThread === undefined || row.slackThread === null ? null : JSON.stringify(row.slackThread)},
+          ${row.factory === undefined || row.factory === null ? null : JSON.stringify(row.factory)},
           ${row.pinnedAt},
           ${row.pinOrderKey ?? null},
           ${row.activeOrderKey ?? null},
@@ -134,6 +138,7 @@ const makeProjectionThreadRepository = Effect.gen(function* () {
           scheduled_message_json = excluded.scheduled_message_json,
           folder_id = excluded.folder_id,
           slack_thread_json = excluded.slack_thread_json,
+          factory_json = excluded.factory_json,
           pinned_at = excluded.pinned_at,
           pin_order_key = excluded.pin_order_key,
           active_order_key = excluded.active_order_key,
@@ -177,6 +182,7 @@ const makeProjectionThreadRepository = Effect.gen(function* () {
           scheduled_message_json AS "scheduledMessage",
           folder_id AS "folderId",
           slack_thread_json AS "slackThread",
+          factory_json AS "factory",
           pinned_at AS "pinnedAt",
           pin_order_key AS "pinOrderKey",
           active_order_key AS "activeOrderKey",

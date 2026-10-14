@@ -28,6 +28,7 @@ import {
   RuntimeMode,
 } from "./orchestration.ts";
 import { BrowserProfile, BrowserProfileId, DEFAULT_BROWSER_PROFILE_ID } from "./browserProfile.ts";
+import { DEFAULT_FACTORY_PROMPT_TEMPLATE, FactoryFolder } from "./factory.ts";
 import {
   DEFAULT_PREVIEW_APPEARANCE,
   DEFAULT_PREVIEW_ZOOM_FACTOR,
@@ -512,6 +513,10 @@ export const ClientSettingsSchema = Schema.Struct({
   ),
   proactivePanelsEnabled: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(false))),
   showSkillsInSlashMenu: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(true))),
+  /** Factory page: the pull request button opens the browser instead of the thread's panel. */
+  factoryPullRequestOpensInBrowser: Schema.Boolean.pipe(
+    Schema.withDecodingDefault(Effect.succeed(false)),
+  ),
   // Legacy sidebar (the original per-project tree). Deliberately a fresh key
   // (was `sidebarV2Enabled` + `sidebarV2ConfiguredByUser`): decoding drops the
   // old keys, so everyone, including prior beta opt-outs, resets to the new
@@ -1282,6 +1287,8 @@ export const ServerSettings = Schema.Struct({
   sidebarAutoSettleOnMerge: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(true))),
   /** Sidebar folders in the order the user made them. */
   sidebarFolders: Schema.Array(SidebarFolder).pipe(Schema.withDecodingDefault(Effect.succeed([]))),
+  /** Folders on the Factory page. Separate from the sidebar folders; tasks name them by id. */
+  factoryFolders: Schema.Array(FactoryFolder).pipe(Schema.withDecodingDefault(Effect.succeed([]))),
   backgroundActivity: BackgroundActivitySettings,
   // Legacy flat fields retained for old settings files and old clients. New
   // consumers should resolve `backgroundActivity` instead.
@@ -1358,6 +1365,10 @@ export const ServerSettings = Schema.Struct({
   ),
   sourceControlWriterModelSelection: Schema.NullOr(ModelSelection).pipe(
     Schema.withDecodingDefault(Effect.succeed(null)),
+  ),
+  /** The first message of a factory task. `{{input}}` stands for the task input. */
+  factoryPromptTemplate: TrimmedString.pipe(
+    Schema.withDecodingDefault(Effect.succeed(DEFAULT_FACTORY_PROMPT_TEMPLATE)),
   ),
   /**
    * The merge method pull requests start with; `null` reuses the method
@@ -1629,6 +1640,7 @@ export const ServerSettingsPatch = Schema.Struct({
   sidebarAutoSettleAfterDays: Schema.optionalKey(Schema.NullOr(SidebarAutoSettleAfterDays)),
   sidebarAutoSettleOnMerge: Schema.optionalKey(Schema.Boolean),
   sidebarFolders: Schema.optionalKey(Schema.Array(SidebarFolder)),
+  factoryFolders: Schema.optionalKey(Schema.Array(FactoryFolder)),
   backgroundActivity: Schema.optionalKey(
     Schema.Struct({
       schemaVersion: Schema.optionalKey(Schema.Literal(1)),
@@ -1654,6 +1666,7 @@ export const ServerSettingsPatch = Schema.Struct({
     }),
   ),
   sourceControlWriterModelSelection: Schema.optionalKey(Schema.NullOr(ModelSelection)),
+  factoryPromptTemplate: Schema.optionalKey(TrimmedString),
   pullRequestMergeMethod: Schema.optionalKey(Schema.NullOr(PullRequestMergeMethod)),
   observability: Schema.optionalKey(
     Schema.Struct({
@@ -1782,6 +1795,7 @@ export const ClientSettingsPatch = Schema.Struct({
   followUpBehavior: Schema.optionalKey(Schema.Literals(["queue", "steer"])),
   proactivePanelsEnabled: Schema.optionalKey(Schema.Boolean),
   showSkillsInSlashMenu: Schema.optionalKey(Schema.Boolean),
+  factoryPullRequestOpensInBrowser: Schema.optionalKey(Schema.Boolean),
   legacySidebarEnabled: Schema.optionalKey(Schema.Boolean),
   sidebarWorkingShelfEnabled: Schema.optionalKey(Schema.Boolean),
   sidebarProjectGroupingMode: Schema.optionalKey(SidebarProjectGroupingMode),

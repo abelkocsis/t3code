@@ -43,6 +43,7 @@ export type ScheduleThreadMessageInput = CommandInput<"thread.message.schedule">
 export type UnscheduleThreadMessageInput = CommandInput<"thread.message.unschedule">;
 export type SetThreadFolderInput = CommandInput<"thread.folder.set">;
 export type SetThreadSlackThreadInput = CommandInput<"thread.slack-thread.set">;
+export type SetThreadFactoryInput = CommandInput<"thread.factory.set">;
 export type PinThreadInput = CommandInput<"thread.pin">;
 export type UnpinThreadInput = CommandInput<"thread.unpin">;
 export type ReorderPinnedThreadInput = CommandInput<"thread.pin.reorder">;
@@ -248,6 +249,16 @@ export const setThreadSlackThread: (input: SetThreadSlackThreadInput) => Command
   return yield* dispatch({
     ...input,
     type: "thread.slack-thread.set",
+    commandId: yield* commandId(input),
+  });
+});
+
+export const setThreadFactory: (input: SetThreadFactoryInput) => CommandEffect = Effect.fn(
+  "EnvironmentCommands.setThreadFactory",
+)(function* (input) {
+  return yield* dispatch({
+    ...input,
+    type: "thread.factory.set",
     commandId: yield* commandId(input),
   });
 });

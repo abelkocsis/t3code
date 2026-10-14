@@ -32,6 +32,8 @@ export interface PersistedUiState {
   threadChangedFilesExpansionVersion?: number;
   threadChangedFilesExpandedById?: Record<string, Record<string, boolean>>;
   pullRequestMergeMethod?: string;
+  factoryTaskOrder?: string[];
+  factoryLastIssueRepository?: string | null;
 }
 
 export interface UiProjectState {
@@ -59,8 +61,15 @@ export interface UiPullRequestState {
   pullRequestMergeMethod: PullRequestMergeMethod;
 }
 
+export interface UiFactoryState {
+  /** Task keys in the order the user dragged them on the Factory page. Unknown keys sort last. */
+  factoryTaskOrder: string[];
+  /** The repository the issue picker last started a task from, or null for all. */
+  factoryLastIssueRepository: string | null;
+}
+
 export interface UiState
-  extends UiProjectState, UiThreadState, UiEndpointState, UiPullRequestState {}
+  extends UiProjectState, UiThreadState, UiEndpointState, UiPullRequestState, UiFactoryState {}
 
 const initialState: UiState = {
   projectExpandedById: {},
@@ -71,6 +80,8 @@ const initialState: UiState = {
   threadChangedFilesExpandedById: {},
   defaultAdvertisedEndpointKey: null,
   pullRequestMergeMethod: "merge",
+  factoryTaskOrder: [],
+  factoryLastIssueRepository: null,
 };
 
 const LEGACY_PROJECT_CWD_PREFERENCE_PREFIX = "legacy-project-cwd:";
@@ -164,6 +175,8 @@ export function parsePersistedState(parsed: PersistedUiState): UiState {
     pullRequestMergeMethod: isPullRequestMergeMethod(parsed.pullRequestMergeMethod)
       ? parsed.pullRequestMergeMethod
       : initialState.pullRequestMergeMethod,
+    factoryTaskOrder: sanitizeStringArray(parsed.factoryTaskOrder),
+    factoryLastIssueRepository: sanitizeOptionalKey(parsed.factoryLastIssueRepository),
   };
 }
 
@@ -239,6 +252,8 @@ export function persistState(state: UiState): void {
         threadChangedFilesExpansionVersion: THREAD_CHANGED_FILES_EXPANSION_VERSION,
         threadChangedFilesExpandedById: state.threadChangedFilesExpandedById,
         pullRequestMergeMethod: state.pullRequestMergeMethod,
+        factoryTaskOrder: state.factoryTaskOrder,
+        factoryLastIssueRepository: state.factoryLastIssueRepository,
       } satisfies PersistedUiState),
     );
     if (!legacyKeysCleanedUp) {
@@ -404,6 +419,16 @@ export function setSidebarProjectScopeKey(state: UiState, projectKey: string | n
   };
 }
 
+function setFactoryTaskOrder(state: UiState, order: readonly string[]): UiState {
+  return { ...state, factoryTaskOrder: [...order] };
+}
+
+function setFactoryLastIssueRepository(state: UiState, repository: string | null): UiState {
+  return state.factoryLastIssueRepository === repository
+    ? state
+    : { ...state, factoryLastIssueRepository: repository };
+}
+
 function setPullRequestMergeMethod(state: UiState, method: PullRequestMergeMethod): UiState {
   return state.pullRequestMergeMethod === method
     ? state
@@ -496,6 +521,8 @@ interface UiStateStore extends UiState {
   setDefaultAdvertisedEndpointKey: (key: string | null) => void;
   setSidebarProjectScopeKey: (projectKey: string | null) => void;
   setPullRequestMergeMethod: (method: PullRequestMergeMethod) => void;
+  setFactoryTaskOrder: (order: readonly string[]) => void;
+  setFactoryLastIssueRepository: (repository: string | null) => void;
   setProjectExpanded: (projectIds: string | readonly string[], expanded: boolean) => void;
   reorderProjects: (
     currentProjectOrder: readonly string[],
@@ -519,6 +546,9 @@ export const useUiStateStore = create<UiStateStore>((set) => ({
   setSidebarProjectScopeKey: (projectKey) =>
     set((state) => setSidebarProjectScopeKey(state, projectKey)),
   setPullRequestMergeMethod: (method) => set((state) => setPullRequestMergeMethod(state, method)),
+  setFactoryTaskOrder: (order) => set((state) => setFactoryTaskOrder(state, order)),
+  setFactoryLastIssueRepository: (repository) =>
+    set((state) => setFactoryLastIssueRepository(state, repository)),
   setProjectExpanded: (projectIds, expanded) =>
     set((state) => setProjectExpanded(state, projectIds, expanded)),
   reorderProjects: (currentProjectOrder, draggedProjectIds, targetProjectIds) =>

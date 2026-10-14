@@ -6,6 +6,7 @@ import * as Struct from "effect/Struct";
 import { OrchestrationMessageContext } from "./composerContext.ts";
 import { ProviderOptionSelections } from "./model.ts";
 import { SlackThreadRef } from "./slack.ts";
+import { ThreadFactory } from "./factory.ts";
 import { RepositoryIdentity, ThreadEnvMode } from "./environment.ts";
 import {
   ApprovalRequestId,
@@ -854,6 +855,9 @@ export const OrchestrationThread = Schema.Struct({
   // The Slack thread where this thread's pull requests are discussed, or null. Re-review
   // requests for them are posted there. Optional so payloads from older servers still decode.
   slackThread: Schema.optional(Schema.NullOr(SlackThreadRef)),
+  // Set while the thread runs as a factory task: hidden from the sidebar and listed on the
+  // Factory page by phase. Optional so payloads from older servers still decode.
+  factory: Schema.optional(Schema.NullOr(ThreadFactory)),
   // Active pinned threads render in the pinned block. Settled and snoozed
   // threads remain in their respective shelves even when pinned.
   // Optional so payloads from pre-pinning servers still decode.
@@ -944,6 +948,8 @@ export const OrchestrationThreadShell = Schema.Struct({
   folderId: Schema.optional(Schema.NullOr(ThreadFolderId)),
   // See OrchestrationThread.slackThread.
   slackThread: Schema.optional(Schema.NullOr(SlackThreadRef)),
+  // See OrchestrationThread.factory.
+  factory: Schema.optional(Schema.NullOr(ThreadFactory)),
   pinnedAt: Schema.optional(Schema.NullOr(IsoDateTime)),
   pinOrderKey: Schema.optional(Schema.NullOr(TrimmedNonEmptyString)),
   activeOrderKey: Schema.optional(Schema.NullOr(TrimmedNonEmptyString)),
@@ -1270,6 +1276,14 @@ const ThreadSlackThreadSetCommand = Schema.Struct({
   slackThread: Schema.NullOr(SlackThreadRef),
 });
 
+const ThreadFactorySetCommand = Schema.Struct({
+  type: Schema.Literal("thread.factory.set"),
+  commandId: CommandId,
+  threadId: ThreadId,
+  /** Null takes the thread off the Factory page and back into the sidebar. */
+  factory: Schema.NullOr(ThreadFactory),
+});
+
 const ThreadPinCommand = Schema.Struct({
   type: Schema.Literal("thread.pin"),
   commandId: CommandId,
@@ -1529,6 +1543,7 @@ const DispatchableClientOrchestrationCommand = Schema.Union([
   ThreadMessageUnscheduleCommand,
   ThreadFolderSetCommand,
   ThreadSlackThreadSetCommand,
+  ThreadFactorySetCommand,
   ThreadPinCommand,
   ThreadUnpinCommand,
   ThreadPinReorderCommand,
@@ -1568,6 +1583,7 @@ export const ClientOrchestrationCommand = Schema.Union([
   ThreadMessageUnscheduleCommand,
   ThreadFolderSetCommand,
   ThreadSlackThreadSetCommand,
+  ThreadFactorySetCommand,
   ThreadPinCommand,
   ThreadUnpinCommand,
   ThreadPinReorderCommand,
@@ -1827,6 +1843,7 @@ export const OrchestrationEventType = Schema.Literals([
   "thread.message-unscheduled",
   "thread.folder-set",
   "thread.slack-thread-set",
+  "thread.factory-set",
   "thread.pinned",
   "thread.unpinned",
   "thread.pin-reordered",
@@ -1974,6 +1991,12 @@ export const ThreadFolderSetPayload = Schema.Struct({
 export const ThreadSlackThreadSetPayload = Schema.Struct({
   threadId: ThreadId,
   slackThread: Schema.NullOr(SlackThreadRef),
+  updatedAt: IsoDateTime,
+});
+
+export const ThreadFactorySetPayload = Schema.Struct({
+  threadId: ThreadId,
+  factory: Schema.NullOr(ThreadFactory),
   updatedAt: IsoDateTime,
 });
 
@@ -2280,6 +2303,11 @@ export const OrchestrationEvent = Schema.Union([
     ...EventBaseFields,
     type: Schema.Literal("thread.slack-thread-set"),
     payload: ThreadSlackThreadSetPayload,
+  }),
+  Schema.Struct({
+    ...EventBaseFields,
+    type: Schema.Literal("thread.factory-set"),
+    payload: ThreadFactorySetPayload,
   }),
   Schema.Struct({
     ...EventBaseFields,

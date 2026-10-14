@@ -44,6 +44,7 @@ import {
   ThreadMessageUnscheduledPayload,
   ThreadFolderSetPayload,
   ThreadSlackThreadSetPayload,
+  ThreadFactorySetPayload,
   ThreadPinnedPayload,
   ThreadPinReorderedPayload,
   ThreadAutoSettleSetPayload,
@@ -624,6 +625,17 @@ export function projectEvent(
           ...nextBase,
           threads: updateThread(nextBase.threads, payload.threadId, {
             slackThread: payload.slackThread,
+            updatedAt: payload.updatedAt,
+          }),
+        })),
+      );
+
+    case "thread.factory-set":
+      return decodeForEvent(ThreadFactorySetPayload, event.payload, event.type, "payload").pipe(
+        Effect.map((payload) => ({
+          ...nextBase,
+          threads: updateThread(nextBase.threads, payload.threadId, {
+            factory: payload.factory,
             updatedAt: payload.updatedAt,
           }),
         })),
