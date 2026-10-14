@@ -211,7 +211,22 @@ export function FactoryIssuePicker({
     });
     close();
     setStarting(false);
-    const results = await Promise.all(batches.map(startFor));
+    // One checkout at a time per repository: git refuses two worktree checkouts at once in
+    // the same repository. Different repositories still run side by side.
+    const byRepository = new Map<string, ReadonlyArray<SourceControlIssueSummary>[]>();
+    for (const batch of batches) {
+      const repository = batch[0]!.repository.toLowerCase();
+      byRepository.set(repository, [...(byRepository.get(repository) ?? []), batch]);
+    }
+    const results = (
+      await Promise.all(
+        [...byRepository.values()].map(async (queue) => {
+          const outcomes = [];
+          for (const batch of queue) outcomes.push(await startFor(batch));
+          return outcomes;
+        }),
+      )
+    ).flat();
     const failed = results.filter((result) => !result.ok);
     for (const result of failed) {
       if (!result.ok) {

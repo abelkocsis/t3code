@@ -128,29 +128,31 @@ export function useStartFactoryTask(): (
           createdAt,
         },
       });
-      if (result._tag === "Failure") {
-        return {
-          ok: false,
-          title: "Could not start the task",
-          detail: readableFailure(
-            squashAtomCommandFailure(result),
-            "Check the project branch and the default model.",
-          ),
-        };
-      }
-      const flagged = await setFactory({
-        environmentId: project.environmentId,
-        input: {
-          threadId,
-          factory: {
-            input,
-            phase: "requirements",
-            summary: null,
-            startedAt: createdAt,
-            updatedAt: createdAt,
+      const flag = (summary: string | null) =>
+        setFactory({
+          environmentId: project.environmentId,
+          input: {
+            threadId,
+            factory: {
+              input,
+              phase: "requirements",
+              summary,
+              startedAt: createdAt,
+              updatedAt: createdAt,
+            },
           },
-        },
-      });
+        });
+      if (result._tag === "Failure") {
+        const detail = readableFailure(
+          squashAtomCommandFailure(result),
+          "Check the project branch and the default model.",
+        );
+        // A failed worktree leaves the thread in place with a failed session. Flag it anyway,
+        // so it shows on the page with its error instead of surfacing as a stray sidebar thread.
+        await flag(detail);
+        return { ok: false, title: "Could not start the task", detail };
+      }
+      const flagged = await flag(null);
       if (flagged._tag === "Failure") {
         return {
           ok: false,
