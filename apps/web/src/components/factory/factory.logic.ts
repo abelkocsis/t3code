@@ -9,7 +9,11 @@ import type {
   ThreadPullRequestLink,
   ThreadPullRequestSnapshot,
 } from "@t3tools/contracts";
-import { FACTORY_COMPLETED_PHASES, factoryInputRepository } from "@t3tools/contracts";
+import {
+  FACTORY_COMPLETED_PHASES,
+  FACTORY_PHASE_LABELS,
+  factoryInputRepository,
+} from "@t3tools/contracts";
 import { visibleThreadPullRequests } from "@t3tools/shared/threadPullRequests";
 
 /**
@@ -74,6 +78,22 @@ export function factoryTaskState(
   if (phase === "ready-for-review" || phase === "ready-to-merge") return "waiting";
   if (thread.latestTurn?.state === "error" || session?.status === "error") return "error";
   return phase === "under-review" ? "idle" : "working";
+}
+
+/**
+ * What the overlay says about a factory task that asks for attention. A task waiting on the
+ * human says so; otherwise the stage name is more useful than "Finished".
+ */
+export function factoryAttentionLabel(thread: EnvironmentThreadShell): {
+  readonly label: string;
+  readonly waiting: boolean;
+} | null {
+  const factory = thread.factory;
+  if (!factory) return null;
+  const state = factoryTaskState(thread);
+  if (state === "waiting") return { label: FACTORY_TASK_STATE_LABELS.waiting, waiting: true };
+  if (state === "error") return { label: FACTORY_TASK_STATE_LABELS.error, waiting: false };
+  return { label: FACTORY_PHASE_LABELS[factory.phase], waiting: false };
 }
 
 /**

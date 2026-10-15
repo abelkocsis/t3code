@@ -12,6 +12,7 @@ import {
   countFactoryTasksWaiting,
   factoryJoinState,
   factoryTaskKey,
+  factoryAttentionLabel,
   factoryTaskState,
   formatElapsed,
   moveFactoryTask,
@@ -80,6 +81,19 @@ function project(overrides: Partial<EnvironmentProject> = {}): EnvironmentProjec
     ...overrides,
   } as EnvironmentProject;
 }
+
+describe("factoryAttentionLabel", () => {
+  it("says a task at a gate waits on the user, and names the stage otherwise", () => {
+    expect(
+      factoryAttentionLabel(thread({ factory: factory({ phase: "ready-for-review" }) })),
+    ).toEqual({ label: "Waiting on you", waiting: true });
+    expect(factoryAttentionLabel(thread({ factory: factory({ phase: "merged" }) }))).toEqual({
+      label: "Merged",
+      waiting: false,
+    });
+    expect(factoryAttentionLabel(thread({ factory: null }))).toBeNull();
+  });
+});
 
 describe("factoryTaskState", () => {
   it("puts a human gate first", () => {

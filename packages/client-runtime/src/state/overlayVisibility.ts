@@ -19,6 +19,11 @@ export interface OverlayItem {
   readonly phase: AttentionPhase;
   /** The attention time a dismissal stamps, so newer work raises the row again. */
   readonly at: string;
+  /**
+   * Set for a factory task. The overlay lists it under Factory with the factory's own words,
+   * because the factory stage says more than the turn that just ended.
+   */
+  readonly factory?: { readonly label: string; readonly waiting: boolean } | null;
 }
 
 export interface OverlayState {

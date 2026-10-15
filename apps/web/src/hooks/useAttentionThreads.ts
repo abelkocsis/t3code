@@ -9,6 +9,7 @@ import {
 import { resolveThreadAwarenessPhase } from "@t3tools/shared/agentAwareness";
 import { useMemo } from "react";
 
+import { factoryAttentionLabel } from "../components/factory/factory.logic";
 import { useProjects, useThreadShells } from "../state/entities";
 import { useUiStateStore } from "../uiStateStore";
 
@@ -67,6 +68,7 @@ export function useAttentionThreads(): AttentionThreads {
         projectTitle: projectTitleByKey.get(`${thread.environmentId}:${thread.projectId}`) ?? null,
         phase: attention.phase,
         at: attention.at,
+        factory: factoryAttentionLabel(thread),
       });
     }
 
@@ -76,5 +78,5 @@ export function useAttentionThreads(): AttentionThreads {
 
 /** Overlay row text. Kept here so the label never drifts from the phase. */
 export function attentionItemLabel(item: OverlayItem): string {
-  return shortAttentionLabel(item.phase);
+  return item.factory?.label ?? shortAttentionLabel(item.phase);
 }

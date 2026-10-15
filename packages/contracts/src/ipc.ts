@@ -133,6 +133,8 @@ export const DesktopOverlayItemSchema = Schema.Struct({
   phaseLabel: Schema.String,
   /** Drives the row's accent colour. */
   phase: Schema.Literals(["waiting_for_approval", "waiting_for_input", "completed", "failed"]),
+  /** Factory tasks list apart from plain threads. Absent reads as a plain thread. */
+  section: Schema.optional(Schema.Literals(["threads", "factory"])),
 });
 export type DesktopOverlayItem = typeof DesktopOverlayItemSchema.Type;
 

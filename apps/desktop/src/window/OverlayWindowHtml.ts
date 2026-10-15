@@ -105,6 +105,10 @@ export const buildOverlayDataUrl = (): string => {
       }
       .item .project { font-size: 10.5px; color: var(--muted); margin-top: 2px; }
       .item .phase { font-size: 10.5px; font-weight: 700; white-space: nowrap; }
+      .section {
+        font-size: 10px; font-weight: 700; letter-spacing: 0.07em; text-transform: uppercase;
+        color: var(--muted); padding: 4px 2px 0;
+      }
       /* Hiding a row is a second action on a row whose whole surface already
          opens the thread, so it needs its own target, kept quiet until the
          pointer is on the row. */
@@ -173,6 +177,7 @@ export const buildOverlayDataUrl = (): string => {
       #shell.stepaway .item .title { font-size: 22px; font-weight: 600; }
       #shell.stepaway .item .project { font-size: 15px; margin-top: 4px; }
       #shell.stepaway .item .phase { font-size: 15px; }
+      #shell.stepaway .section { font-size: 14px; padding: 6px 2px 0; }
       /* Read from a few steps back, so the target is large and always shown. */
       #shell.stepaway .item .dismiss { width: 30px; height: 30px; font-size: 22px; opacity: 1; }
       /* The way out is as large as everything else: it is pressed from a
@@ -261,7 +266,26 @@ export const buildOverlayDataUrl = (): string => {
                 ? "Nothing running"
                 : "Nothing else running";
           items.replaceChildren();
+          // The two groups get headings only when both have rows; one group alone needs none.
+          var sectionOf = function (item) {
+            return item.section === "factory" ? "factory" : "threads";
+          };
+          var hasFactory = state.items.some(function (item) {
+            return sectionOf(item) === "factory";
+          });
+          var hasThreads = state.items.some(function (item) {
+            return sectionOf(item) === "threads";
+          });
+          var showSections = hasFactory && hasThreads;
+          var lastSection = null;
           state.items.forEach(function (item) {
+            if (showSections && sectionOf(item) !== lastSection) {
+              lastSection = sectionOf(item);
+              var heading = document.createElement("div");
+              heading.className = "section";
+              heading.textContent = lastSection === "factory" ? "Factory" : "Threads";
+              items.appendChild(heading);
+            }
             var row = document.createElement("div");
             row.className = "item";
             var bar = document.createElement("div");
