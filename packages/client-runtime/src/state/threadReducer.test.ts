@@ -107,6 +107,33 @@ describe("applyThreadDetailEvent", () => {
     });
   });
 
+  describe("thread.factory-set", () => {
+    it("keeps the open thread's factory stage current", () => {
+      const factory = {
+        input: { kind: "free-text" as const, value: "Add a range cap" },
+        phase: "ready-to-merge" as const,
+        summary: "Approved and green.",
+        startedAt: "2026-04-01T00:00:00.000Z",
+        updatedAt: "2026-04-01T02:00:00.000Z",
+      };
+      const result = applyThreadDetailEvent(baseThread, {
+        ...baseEventFields,
+        sequence: 1,
+        occurredAt: "2026-04-01T02:00:00.000Z",
+        aggregateKind: "thread",
+        aggregateId: ThreadId.make("thread-1"),
+        type: "thread.factory-set",
+        payload: {
+          threadId: ThreadId.make("thread-1"),
+          factory,
+          updatedAt: "2026-04-01T02:00:00.000Z",
+        },
+      });
+      expect(result.kind).toBe("updated");
+      if (result.kind === "updated") expect(result.thread.factory).toEqual(factory);
+    });
+  });
+
   describe("thread.deleted", () => {
     it("returns deleted signal", () => {
       const result = applyThreadDetailEvent(baseThread, {

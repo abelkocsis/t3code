@@ -257,6 +257,16 @@ export function applyThreadDetailEvent(
         },
       };
 
+    case "thread.factory-set":
+      return {
+        kind: "updated",
+        thread: {
+          ...thread,
+          factory: event.payload.factory,
+          updatedAt: event.payload.updatedAt,
+        },
+      };
+
     case "thread.pinned":
       return {
         kind: "updated",
