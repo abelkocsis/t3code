@@ -122,6 +122,8 @@ export interface ProviderChangeRequestSummary {
   readonly lastReviewer?: PullRequestActor | null | undefined;
   readonly unresolvedReviewThreads?: number | undefined;
   readonly viewerDidAuthor?: boolean | undefined;
+  /** The base moved ahead and the viewer may update the branch; false when it is current. */
+  readonly canUpdateBranch?: boolean | undefined;
   /**
    * The host-native stack the pull request sits in, from the same read. Null when the host says
    * it is in none; absent when the read did not ask.
@@ -234,6 +236,7 @@ export interface ProviderChangeRequestDetail extends ProviderChangeRequest {
   readonly lastReviewer?: PullRequestActor | null;
   readonly unresolvedReviewThreads?: number;
   readonly viewerDidAuthor?: boolean;
+  readonly canUpdateBranch?: boolean;
   /** Absent from a host that does not report whether it is armed to merge this on its own. */
   readonly autoMergeEnabled?: boolean;
   /** The strategy stored with an armed auto-merge, where the host reports it. */

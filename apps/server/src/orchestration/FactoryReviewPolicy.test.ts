@@ -175,6 +175,103 @@ describe("decideFactoryReview", () => {
     expect(behind?.factory?.review?.seenMergeState).toBe("behind");
   });
 
+  it("keeps a task ready for review rebased and green", () => {
+    const readyForReview = factory({ phase: "ready-for-review" });
+    const conflicts = decideFactoryReview(
+      thread({ factory: readyForReview, pullRequests: [link({ mergeState: "dirty" })] }),
+      NOW,
+    );
+    expect(conflicts?.factory?.phase).toBe("fix");
+    expect(conflicts?.message).toContain("Rebase this branch");
+
+    const failing = decideFactoryReview(
+      thread({ factory: readyForReview, pullRequests: [link({ checksState: "failing" })] }),
+      NOW,
+    );
+    expect(failing?.factory?.phase).toBe("fix");
+    expect(failing?.message).toContain("CI is failing");
+
+    // Nobody reviews yet, so comments wait until the task is under review.
+    const comments = decideFactoryReview(
+      thread({
+        factory: readyForReview,
+        pullRequests: [link({ updatedAt: NOW, unresolvedReviewThreads: 2 })],
+      }),
+      NOW,
+    );
+    expect(comments).toBeNull();
+  });
+
+  it("rebases when the base moved ahead on a repository that does not report behind", () => {
+    const decision = decideFactoryReview(
+      thread({
+        factory: factory({ phase: "ready-for-review" }),
+        pullRequests: [link({ mergeState: "blocked", canUpdateBranch: true })],
+      }),
+      NOW,
+    );
+    expect(decision?.message).toContain("Rebase this branch");
+    expect(decision?.factory?.review?.seenMergeState).toBe("behind");
+  });
+
+  it("fires again for a failure that cleared and came back", () => {
+    const seenFailing = factory({
+      phase: "ready-for-review",
+      summary: "Ready.",
+      review: {
+        seenUpdatedAt: EARLIER,
+        seenUnresolved: 0,
+        seenChecksState: "failing",
+        seenMergeState: "dirty",
+      },
+    });
+    expect(
+      decideFactoryReview(
+        thread({
+          factory: seenFailing,
+          pullRequests: [link({ checksState: "failing", mergeState: "dirty" })],
+        }),
+        NOW,
+      ),
+    ).toBeNull();
+
+    const cleared = decideFactoryReview(
+      thread({
+        factory: seenFailing,
+        pullRequests: [link({ checksState: "passing", mergeState: "blocked" })],
+      }),
+      NOW,
+    );
+    expect(cleared?.message).toBeNull();
+    expect(cleared?.factory?.phase).toBe("ready-for-review");
+    expect(cleared?.factory?.updatedAt).toBe(EARLIER);
+    expect(cleared?.factory?.review?.seenChecksState).toBe("passing");
+
+    const again = decideFactoryReview(
+      thread({
+        factory: cleared!.factory!,
+        pullRequests: [link({ checksState: "failing" })],
+      }),
+      NOW,
+    );
+    expect(again?.message).toContain("CI is failing");
+  });
+
+  it("handles a failure already present when the task becomes ready for review", () => {
+    const done = decideFactoryReview(
+      thread({
+        factory: factory({ phase: "done", review: null }),
+        pullRequests: [link({ mergeState: "dirty" })],
+      }),
+      NOW,
+    );
+    const next = decideFactoryReview(
+      thread({ factory: done!.factory!, pullRequests: [link({ mergeState: "dirty" })] }),
+      NOW,
+    );
+    expect(next?.message).toContain("Rebase this branch");
+  });
+
   it("waits with the message while the agent is busy or a question is open", () => {
     const busy = thread({
       pullRequests: [link({ checksState: "failing" })],

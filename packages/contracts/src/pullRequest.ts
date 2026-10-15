@@ -775,6 +775,11 @@ export const PullRequestSummary = Schema.Struct({
   unresolvedReviewThreads: Schema.optional(NonNegativeInt),
   /** Whether the signed-in host account opened it; absent where the read does not say. */
   viewerDidAuthor: Schema.optional(Schema.Boolean),
+  /**
+   * The base moved ahead of the branch and the viewer may update it. False when the branch is
+   * current; absent where the read does not say.
+   */
+  canUpdateBranch: Schema.optional(Schema.Boolean),
   /** Null when the host says the pull request is in no stack; absent when the read did not ask. */
   stack: Schema.optional(Schema.NullOr(PullRequestStackMembership)),
 });

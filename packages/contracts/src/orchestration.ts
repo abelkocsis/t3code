@@ -771,6 +771,7 @@ export const ThreadPullRequestSnapshot = Schema.Struct({
   lastReviewer: Schema.optional(Schema.NullOr(PullRequestActor)),
   unresolvedReviewThreads: Schema.optional(NonNegativeInt),
   viewerDidAuthor: Schema.optional(Schema.Boolean),
+  canUpdateBranch: Schema.optional(Schema.Boolean),
 });
 export type ThreadPullRequestSnapshot = typeof ThreadPullRequestSnapshot.Type;
 

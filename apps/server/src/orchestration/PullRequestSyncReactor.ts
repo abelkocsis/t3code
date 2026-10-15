@@ -62,6 +62,7 @@ function snapshotFieldsOf(summary: PullRequestSummary): SnapshotFields {
       ? {}
       : { unresolvedReviewThreads: summary.unresolvedReviewThreads }),
     ...(summary.viewerDidAuthor === undefined ? {} : { viewerDidAuthor: summary.viewerDidAuthor }),
+    ...(summary.canUpdateBranch === undefined ? {} : { canUpdateBranch: summary.canUpdateBranch }),
   };
 }
 
@@ -87,7 +88,8 @@ function snapshotFieldsEqual(left: SnapshotFields, right: SnapshotFields): boole
     (left.lastReviewer?.login ?? null) === (right.lastReviewer?.login ?? null) &&
     (left.lastReviewer === undefined) === (right.lastReviewer === undefined) &&
     left.unresolvedReviewThreads === right.unresolvedReviewThreads &&
-    left.viewerDidAuthor === right.viewerDidAuthor
+    left.viewerDidAuthor === right.viewerDidAuthor &&
+    left.canUpdateBranch === right.canUpdateBranch
   );
 }
 

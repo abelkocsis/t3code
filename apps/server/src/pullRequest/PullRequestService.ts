@@ -1608,6 +1608,9 @@ export const make = Effect.gen(function* () {
             ...(changeRequest.viewerDidAuthor === undefined
               ? {}
               : { viewerDidAuthor: changeRequest.viewerDidAuthor }),
+            ...(changeRequest.canUpdateBranch === undefined
+              ? {}
+              : { canUpdateBranch: changeRequest.canUpdateBranch }),
             ...(changeRequest.stack === undefined ? {} : { stack: changeRequest.stack }),
           })),
         );

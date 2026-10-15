@@ -52,12 +52,27 @@ export function canMessageThread(thread: OrchestrationThreadShell, now: string):
   return !threadHasQueuedTurnStart(thread, now);
 }
 
+/** Behind needs a rebase to merge; dirty has conflicts. Both mean: rebase onto the base. */
+function isStaleBase(mergeState: FactoryReviewMemo["seenMergeState"] | undefined): boolean {
+  return mergeState === "behind" || mergeState === "dirty";
+}
+
+/**
+ * The merge state with "behind" filled in from the base comparison. GitHub reports BEHIND only
+ * where the repository requires an up-to-date branch; elsewhere a branch the base moved ahead of
+ * still reads as clean or blocked.
+ */
+function baseState(snapshot: ThreadPullRequestSnapshot): FactoryReviewMemo["seenMergeState"] {
+  if (snapshot.canUpdateBranch === true && snapshot.mergeState !== "dirty") return "behind";
+  return snapshot.mergeState ?? null;
+}
+
 function memoOf(snapshot: ThreadPullRequestSnapshot): FactoryReviewMemo {
   return {
     seenUpdatedAt: snapshot.updatedAt ?? null,
     seenUnresolved: snapshot.unresolvedReviewThreads ?? 0,
     seenChecksState: snapshot.checksState ?? null,
-    seenMergeState: snapshot.mergeState ?? null,
+    seenMergeState: baseState(snapshot),
   };
 }
 
@@ -83,7 +98,7 @@ function ciMessage(link: ThreadPullRequestLink): string {
 
 function behindMessage(link: ThreadPullRequestLink, snapshot: ThreadPullRequestSnapshot): string {
   return [
-    `The base branch ${snapshot.baseBranch} moved ahead of ${link.url}.`,
+    `The base branch ${snapshot.baseBranch} moved ahead of ${link.url}, or conflicts with it.`,
     "Rebase this branch onto the base branch, resolve conflicts, run the tests that cover the change, and push.",
     `If a conflict needs a decision from me, print "${FACTORY_PHASE_MARKER} human-gate" and ask.`,
     `When the branch is up to date, print "${FACTORY_PHASE_MARKER} ready-for-review" with one sentence.`,
@@ -97,9 +112,11 @@ function behindMessage(link: ThreadPullRequestLink, snapshot: ThreadPullRequestS
  * - A thread without factory state is left alone: threads join the factory only by hand.
  * - A merged pull request ends the task as "merged"; a closed one as "done".
  * - "done" with a pull request becomes "ready-for-review".
+ * - Ready for review: nobody reviews yet, so only a failed check or a stale base (behind or
+ *   in conflict) becomes a message to the agent, and the phase goes to "fix".
  * - Under review: approval plus green checks on an unblocked branch gives "ready-to-merge".
  *   New comments, a failed check, or a stale base become a message to the agent and the
- *   phase goes to "fix". Each cause fires once per pull request change.
+ *   phase goes to "fix". Each cause fires once, and again only after it cleared.
  * - Ready to merge falls back to the under-review rules when the pull request changes.
  */
 export function decideFactoryReview(
@@ -131,11 +148,55 @@ export function decideFactoryReview(
     return factory.phase === "done" ? null : stage("done", "Pull request closed without a merge.");
   }
   if (factory.phase === "done") {
-    return stage("ready-for-review", snapshot.title, memoOf(snapshot));
+    // A failure or stale base already there still counts, so the next sweep handles it.
+    return stage("ready-for-review", snapshot.title, {
+      ...memoOf(snapshot),
+      seenChecksState: null,
+      seenMergeState: null,
+    });
   }
-  if (factory.phase !== "under-review" && factory.phase !== "ready-to-merge") return null;
+  if (
+    factory.phase !== "ready-for-review" &&
+    factory.phase !== "under-review" &&
+    factory.phase !== "ready-to-merge"
+  ) {
+    return null;
+  }
 
   const memo = factory.review ?? EMPTY_MEMO;
+  const newFailure = snapshot.checksState === "failing" && memo.seenChecksState !== "failing";
+  const newStaleBase = isStaleBase(baseState(snapshot)) && !isStaleBase(memo.seenMergeState);
+  // A cleared failure or stale base is forgotten, so the next one fires again. The stage and
+  // its timestamp stay, so the task does not ask for attention again.
+  const cleared =
+    (memo.seenChecksState === "failing" && snapshot.checksState !== "failing") ||
+    (isStaleBase(memo.seenMergeState) && !isStaleBase(baseState(snapshot)));
+  const forgetCleared = (): FactoryReviewDecision => ({
+    factory: {
+      ...factory,
+      review: {
+        ...memo,
+        seenChecksState: snapshot.checksState ?? null,
+        seenMergeState: baseState(snapshot),
+      },
+    },
+    message: null,
+  });
+
+  if (factory.phase === "ready-for-review") {
+    if (!newFailure && !newStaleBase) return cleared ? forgetCleared() : null;
+    if (!canMessageThread(thread, now)) return null;
+    return newFailure
+      ? {
+          ...stage("fix", "CI failed; the agent is looking.", memoOf(snapshot)),
+          message: ciMessage(link),
+        }
+      : {
+          ...stage("fix", "Rebasing onto the base branch.", memoOf(snapshot)),
+          message: behindMessage(link, snapshot),
+        };
+  }
+
   const changed = (snapshot.updatedAt ?? null) !== memo.seenUpdatedAt;
   const approved = snapshot.reviewDecision === "approved";
   const green = snapshot.checksState === "passing";
@@ -154,22 +215,22 @@ export function decideFactoryReview(
     (changed &&
       (snapshot.reviewDecision === "changes-requested" ||
         (snapshot.unresolvedReviewThreads ?? 0) > memo.seenUnresolved)) ||
-    (snapshot.checksState === "failing" && memo.seenChecksState !== "failing") ||
-    (snapshot.mergeState === "behind" && memo.seenMergeState !== "behind");
+    newFailure ||
+    newStaleBase;
   if (!needsWork) {
     // Ready to merge no longer holds, for example a new commit set checks back to pending.
-    return factory.phase === "ready-to-merge"
-      ? stage("under-review", "Waiting on checks or reviewers.", memoOf(snapshot))
-      : null;
+    if (factory.phase === "ready-to-merge") {
+      return stage("under-review", "Waiting on checks or reviewers.", memoOf(snapshot));
+    }
+    return cleared ? forgetCleared() : null;
   }
   if (!canMessageThread(thread, now)) return null;
 
-  const message =
-    snapshot.checksState === "failing" && memo.seenChecksState !== "failing"
-      ? ciMessage(link)
-      : snapshot.mergeState === "behind" && memo.seenMergeState !== "behind"
-        ? behindMessage(link, snapshot)
-        : commentsMessage(link);
+  const message = newFailure
+    ? ciMessage(link)
+    : newStaleBase
+      ? behindMessage(link, snapshot)
+      : commentsMessage(link);
   const summary =
     message === commentsMessage(link)
       ? "Reading new review comments."
