@@ -1023,7 +1023,8 @@ function BlockingPullRequestDialog({
 
 /**
  * What the human does at each review stage. Ready for review: send the request and mark the
- * task under review. Ready to merge: merge. The server moves the task between the stages.
+ * task under review. Under review: copy the same request again to nudge reviewers. Ready to
+ * merge: merge. The server moves the task between the stages.
  */
 function ReviewActions({ task }: { task: FactoryTask }) {
   const setFactory = useAtomCommand(threadEnvironment.setFactory, { reportFailure: false });
@@ -1068,10 +1069,13 @@ function ReviewActions({ task }: { task: FactoryTask }) {
     }
   };
 
+  // Under review, "Mark under review" already counted the round the request went out for.
+  const reReview =
+    phase === "under-review" ? (task.factory.reviewRound ?? 0) > 1 : isReReviewRequest([task]);
   const copyRequest = async () => {
     try {
       await writeTextToClipboard(
-        buildReviewRequestMessage([pullRequest.url], { reReview: isReReviewRequest([task]) }),
+        buildReviewRequestMessage([pullRequest.url], { reReview }),
         "review request",
       );
       toastManager.add({ type: "success", title: "Review request copied" });
@@ -1084,13 +1088,17 @@ function ReviewActions({ task }: { task: FactoryTask }) {
     }
   };
 
+  const copyButton = (
+    <Button size="xs" variant="outline" onClick={() => void copyRequest()}>
+      <CopyIcon aria-hidden className="size-3.5" />
+      {reReview ? "Copy re-review message" : "Copy Slack message"}
+    </Button>
+  );
+
   if (phase === "ready-for-review") {
     return (
       <>
-        <Button size="xs" variant="outline" onClick={() => void copyRequest()}>
-          <CopyIcon aria-hidden className="size-3.5" />
-          {isReReviewRequest([task]) ? "Copy re-review message" : "Copy Slack message"}
-        </Button>
+        {copyButton}
         {task.thread.slackThread ? (
           <SendToSlackButton
             environmentId={task.thread.environmentId}
@@ -1105,6 +1113,7 @@ function ReviewActions({ task }: { task: FactoryTask }) {
       </>
     );
   }
+  if (phase === "under-review") return copyButton;
   if (phase === "ready-to-merge") {
     return <MergeButton task={task} />;
   }
