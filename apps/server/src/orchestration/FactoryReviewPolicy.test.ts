@@ -159,6 +159,39 @@ describe("decideFactoryReview", () => {
     expect(decideFactoryReview(seen, NOW)).toBeNull();
   });
 
+  it("sends reviews already on the pull request to the agent first when marked under review", () => {
+    const justMarked = factory({
+      review: {
+        seenUpdatedAt: null,
+        seenUnresolved: 0,
+        seenChecksState: "passing",
+        seenMergeState: "clean",
+      },
+    });
+    const reviewer = { login: "schronck", name: null, avatarUrl: null };
+    // A comment-only review leaves no open thread and no decision; an approval would merge.
+    for (const overrides of [
+      { lastReviewer: reviewer },
+      {
+        lastReviewer: reviewer,
+        reviewDecision: "approved",
+        checksState: "passing",
+        mergeState: "clean",
+      },
+    ] as const) {
+      const decision = decideFactoryReview(
+        thread({ factory: justMarked, pullRequests: [link(overrides)] }),
+        NOW,
+      );
+      expect(decision?.factory?.phase).toBe("fix");
+      expect(decision?.message).toContain("It already has reviews");
+      expect(decision?.factory?.review?.seenUpdatedAt).toBe(EARLIER);
+    }
+
+    // No reviews yet: wait for reviewers.
+    expect(decideFactoryReview(thread({ factory: justMarked }), NOW)).toBeNull();
+  });
+
   it("asks the agent to look at a failed check and a stale base once each", () => {
     const failing = decideFactoryReview(
       thread({ pullRequests: [link({ checksState: "failing" })] }),

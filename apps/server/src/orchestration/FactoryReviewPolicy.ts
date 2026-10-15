@@ -87,6 +87,17 @@ function commentsMessage(link: ThreadPullRequestLink): string {
   ].join("\n");
 }
 
+function existingReviewsMessage(link: ThreadPullRequestLink): string {
+  return [
+    `I marked ${link.url} as under review. It already has reviews.`,
+    "Before anything else, read every review, every open comment, and the review decision. Decide for each one yourself: fix it on this branch, or push back with a reason. Do not ask me which ones to fix.",
+    'Push the fixes. Then answer every comment on the pull request: a fixed one gets a reply that says "Resolved in commit <short sha>" and its conversation gets resolved; a declined one gets your reason and stays open.',
+    `If you changed code, post a short report under the pull request and print "${FACTORY_PHASE_MARKER} ready-for-review" with one sentence.`,
+    `If nothing needs a change, print "${FACTORY_PHASE_MARKER} under-review" with one sentence.`,
+    `If a comment needs a decision from me, print "${FACTORY_PHASE_MARKER} human-gate" and ask.`,
+  ].join("\n");
+}
+
 function ciMessage(link: ThreadPullRequestLink): string {
   return [
     `CI is failing on ${link.url}.`,
@@ -114,6 +125,7 @@ function behindMessage(link: ThreadPullRequestLink, snapshot: ThreadPullRequestS
  * - "done" with a pull request becomes "ready-for-review".
  * - Ready for review: nobody reviews yet, so only a failed check or a stale base (behind or
  *   in conflict) becomes a message to the agent, and the phase goes to "fix".
+ * - Just marked under review: reviews already on the pull request go to the agent first.
  * - Under review: approval plus green checks on an unblocked branch gives "ready-to-merge".
  *   New comments, a failed check, or a stale base become a message to the agent and the
  *   phase goes to "fix". Each cause fires once, and again only after it cleared.
@@ -195,6 +207,21 @@ export function decideFactoryReview(
           ...stage("fix", "Rebasing onto the base branch.", memoOf(snapshot)),
           message: behindMessage(link, snapshot),
         };
+  }
+
+  // "Mark under review" clears seenUpdatedAt. Reviews already on the pull request then come
+  // first, even an approval, because an approval can still carry comments.
+  const justMarked = factory.phase === "under-review" && memo.seenUpdatedAt === null;
+  const hasReviews =
+    snapshot.lastReviewer != null ||
+    snapshot.reviewDecision === "changes-requested" ||
+    (snapshot.unresolvedReviewThreads ?? 0) > 0;
+  if (justMarked && hasReviews) {
+    if (!canMessageThread(thread, now)) return null;
+    return {
+      ...stage("fix", "Reading the reviews already on the pull request.", memoOf(snapshot)),
+      message: existingReviewsMessage(link),
+    };
   }
 
   const changed = (snapshot.updatedAt ?? null) !== memo.seenUpdatedAt;
