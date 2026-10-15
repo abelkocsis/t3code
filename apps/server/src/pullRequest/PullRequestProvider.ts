@@ -120,6 +120,7 @@ export interface ProviderChangeRequestSummary {
   readonly mergeState?: PullRequestMergeState | undefined;
   /** The most recent reviewer other than the author or a bot; null where nobody reviewed. */
   readonly lastReviewer?: PullRequestActor | null | undefined;
+  readonly lastReviewId?: string | null | undefined;
   readonly unresolvedReviewThreads?: number | undefined;
   readonly viewerDidAuthor?: boolean | undefined;
   /** The base moved ahead and the viewer may update the branch; false when it is current. */
@@ -234,6 +235,7 @@ export interface ProviderChangeRequestDetail extends ProviderChangeRequest {
   /** Whether the host's rules let this merge now; absent from a host that does not say. */
   readonly mergeState?: PullRequestMergeState;
   readonly lastReviewer?: PullRequestActor | null;
+  readonly lastReviewId?: string | null;
   readonly unresolvedReviewThreads?: number;
   readonly viewerDidAuthor?: boolean;
   readonly canUpdateBranch?: boolean;

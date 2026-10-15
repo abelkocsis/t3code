@@ -86,6 +86,11 @@ export const FactoryReviewMemo = Schema.Struct({
   seenUnresolved: NonNegativeInt,
   seenChecksState: Schema.NullOr(TrimmedString),
   seenMergeState: Schema.NullOr(TrimmedString),
+  /**
+   * The newest human review the agent was sent, by the host's review id. Null: none yet.
+   * Absent on a memo written before this existed.
+   */
+  seenReviewId: Schema.optional(Schema.NullOr(TrimmedNonEmptyString)),
 });
 export type FactoryReviewMemo = typeof FactoryReviewMemo.Type;
 

@@ -71,6 +71,7 @@ const RawReviewRequestSchema = Schema.Struct({
 
 /** One reviewer's most recent review: the state is all the verdict needs, the author is for who. */
 const RawLatestReviewSchema = Schema.Struct({
+  id: Schema.optional(Schema.NullOr(Schema.String)),
   author: Schema.optional(Schema.NullOr(RawActorSchema)),
   state: Schema.optional(Schema.NullOr(Schema.String)),
   submittedAt: Schema.optional(Schema.NullOr(Schema.String)),
@@ -1217,6 +1218,7 @@ export interface GitHubPullRequestDetail extends GitHubPullRequestListItem {
   readonly mergeState?: PullRequestMergeState;
   /** Absent where the read did not ask for the reviews. */
   readonly lastReviewer?: PullRequestActor | null;
+  readonly lastReviewId?: string | null;
 }
 
 export interface GitHubWorkflowRunApproval {
@@ -1395,21 +1397,32 @@ function toReviewDecisionWithReviews(
  * The author's own replies in a review thread arrive as reviews too, and a bot cannot be asked
  * for anything, so neither counts.
  */
-function toLastReviewer(
+function toLastReview(
   reviews: ReadonlyArray<Schema.Schema.Type<typeof RawLatestReviewSchema> | null>,
   authorLogin: string | null | undefined,
-): PullRequestActor | null {
+): { readonly actor: PullRequestActor; readonly id: string | null } | null {
   const author = trimmed(authorLogin)?.toLowerCase() ?? null;
-  let latest: { readonly actor: PullRequestActor; readonly at: string } | null = null;
+  let latest: {
+    readonly actor: PullRequestActor;
+    readonly at: string;
+    readonly id: string | null;
+  } | null = null;
   for (const review of reviews) {
     const actor = toActor(review?.author);
     const at = trimmed(review?.submittedAt);
     if (actor === null || at === null || actor.isBot === true) continue;
     const login = actor.login.toLowerCase();
     if (login === author || login.endsWith("[bot]") || login.startsWith("copilot")) continue;
-    if (latest === null || at > latest.at) latest = { actor, at };
+    if (latest === null || at > latest.at) latest = { actor, at, id: trimmed(review?.id) };
   }
-  return latest?.actor ?? null;
+  return latest;
+}
+
+function toLastReviewer(
+  reviews: ReadonlyArray<Schema.Schema.Type<typeof RawLatestReviewSchema> | null>,
+  authorLogin: string | null | undefined,
+): PullRequestActor | null {
+  return toLastReview(reviews, authorLogin)?.actor ?? null;
 }
 
 function toReviewDecision(value: string | null | undefined): PullRequestReviewDecision | null {
@@ -1681,7 +1694,10 @@ function toDetail(raw: Schema.Schema.Type<typeof RawDetailSchema>): GitHubPullRe
     ...(mergeState === undefined ? {} : { mergeState }),
     ...(raw.latestReviews == null
       ? {}
-      : { lastReviewer: toLastReviewer(raw.latestReviews, raw.author?.login) }),
+      : {
+          lastReviewer: toLastReviewer(raw.latestReviews, raw.author?.login),
+          lastReviewId: toLastReview(raw.latestReviews, raw.author?.login)?.id ?? null,
+        }),
   };
 }
 
@@ -1917,7 +1933,7 @@ const PULL_REQUEST_SUMMARY_SELECTION =
   "updatedAt mergedAt closedAt headRefName baseRefName " +
   "author { __typename login avatarUrl ... on User { name } } " +
   "mergeStateStatus viewerDidAuthor viewerCanUpdateBranch " +
-  "latestReviews(first: 20) { nodes { state submittedAt author { __typename login avatarUrl ... on User { name } } } } " +
+  "latestReviews(first: 20) { nodes { id state submittedAt author { __typename login avatarUrl ... on User { name } } } } " +
   "reviewThreads(first: 100) { nodes { isResolved } } " +
   "commits(last: 1) { nodes { commit { statusCheckRollup { state } } } }";
 
@@ -1997,6 +2013,7 @@ export interface GitHubPullRequestSummary {
   readonly mergeability: PullRequestMergeability;
   readonly mergeState?: PullRequestMergeState;
   readonly lastReviewer: PullRequestActor | null;
+  readonly lastReviewId: string | null;
   readonly unresolvedReviewThreads?: number;
   readonly viewerDidAuthor?: boolean;
   readonly canUpdateBranch?: boolean;
@@ -2050,6 +2067,7 @@ export function decodePullRequestSummariesJson(
       mergeability: toMergeability(pr.mergeable),
       ...(mergeState === undefined ? {} : { mergeState }),
       lastReviewer: toLastReviewer(pr.latestReviews?.nodes ?? [], pr.author?.login),
+      lastReviewId: toLastReview(pr.latestReviews?.nodes ?? [], pr.author?.login)?.id ?? null,
       ...(pr.reviewThreads == null
         ? {}
         : {

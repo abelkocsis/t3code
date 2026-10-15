@@ -24,6 +24,7 @@ const EMPTY_MEMO: FactoryReviewMemo = {
   seenUnresolved: 0,
   seenChecksState: null,
   seenMergeState: null,
+  seenReviewId: null,
 };
 
 /** The pull request a task follows: an open one first, then a merged one, then any. */
@@ -67,32 +68,25 @@ function baseState(snapshot: ThreadPullRequestSnapshot): FactoryReviewMemo["seen
   return snapshot.mergeState ?? null;
 }
 
-function memoOf(snapshot: ThreadPullRequestSnapshot): FactoryReviewMemo {
+function memoOf(
+  snapshot: ThreadPullRequestSnapshot,
+  seenReviewId: string | null | undefined,
+): FactoryReviewMemo {
   return {
     seenUpdatedAt: snapshot.updatedAt ?? null,
     seenUnresolved: snapshot.unresolvedReviewThreads ?? 0,
     seenChecksState: snapshot.checksState ?? null,
     seenMergeState: baseState(snapshot),
+    ...(seenReviewId === undefined ? {} : { seenReviewId }),
   };
 }
 
 function commentsMessage(link: ThreadPullRequestLink): string {
   return [
     `New review activity on ${link.url}.`,
-    "Read every open comment and the review decision. Decide for each one yourself: fix it on this branch, or push back with a reason. Pushing back is fine when the comment is wrong or out of scope. Do not ask me which ones to fix.",
+    "Read the new reviews, every open comment, and the review decision. Decide for each one yourself: fix it on this branch, or push back with a reason. Pushing back is fine when the comment is wrong or out of scope. Do not ask me which ones to fix.",
     'Push the fixes. Then answer every comment on the pull request: a fixed one gets a reply that says "Resolved in commit <short sha>" and its conversation gets resolved; a declined one gets your reason and stays open.',
-    "Post a short report under the pull request: what you changed, what you declined, and which agents and models ran.",
-    `When you are done, print "${FACTORY_PHASE_MARKER} ready-for-review" with one sentence.`,
-    `If a comment needs a decision from me, print "${FACTORY_PHASE_MARKER} human-gate" and ask.`,
-  ].join("\n");
-}
-
-function existingReviewsMessage(link: ThreadPullRequestLink): string {
-  return [
-    `I marked ${link.url} as under review. It already has reviews.`,
-    "Before anything else, read every review, every open comment, and the review decision. Decide for each one yourself: fix it on this branch, or push back with a reason. Do not ask me which ones to fix.",
-    'Push the fixes. Then answer every comment on the pull request: a fixed one gets a reply that says "Resolved in commit <short sha>" and its conversation gets resolved; a declined one gets your reason and stays open.',
-    `If you changed code, post a short report under the pull request and print "${FACTORY_PHASE_MARKER} ready-for-review" with one sentence.`,
+    `If you changed code, post a short report under the pull request: what you changed, what you declined, and which agents and models ran. Then print "${FACTORY_PHASE_MARKER} ready-for-review" with one sentence.`,
     `If nothing needs a change, print "${FACTORY_PHASE_MARKER} under-review" with one sentence.`,
     `If a comment needs a decision from me, print "${FACTORY_PHASE_MARKER} human-gate" and ask.`,
   ].join("\n");
@@ -125,10 +119,11 @@ function behindMessage(link: ThreadPullRequestLink, snapshot: ThreadPullRequestS
  * - "done" with a pull request becomes "ready-for-review".
  * - Ready for review: nobody reviews yet, so only a failed check or a stale base (behind or
  *   in conflict) becomes a message to the agent, and the phase goes to "fix".
- * - Just marked under review: reviews already on the pull request go to the agent first.
- * - Under review: approval plus green checks on an unblocked branch gives "ready-to-merge".
- *   New comments, a failed check, or a stale base become a message to the agent and the
- *   phase goes to "fix". Each cause fires once, and again only after it cleared.
+ * - Under review: a human review the agent was not sent yet comes first, even an approval,
+ *   because an approval can carry notes. Then approval plus green checks on an unblocked
+ *   branch gives "ready-to-merge". More open threads than before (a bot's review), a failed
+ *   check, or a stale base become a message to the agent and the phase goes to "fix". Each
+ *   cause fires once, and again only after it cleared.
  * - Ready to merge falls back to the under-review rules when the pull request changes.
  */
 export function decideFactoryReview(
@@ -160,9 +155,10 @@ export function decideFactoryReview(
     return factory.phase === "done" ? null : stage("done", "Pull request closed without a merge.");
   }
   if (factory.phase === "done") {
-    // A failure or stale base already there still counts, so the next sweep handles it.
+    // A failure or stale base already there still counts, so the next sweep handles it, and
+    // reviews already there go to the agent once the human marks the task under review.
     return stage("ready-for-review", snapshot.title, {
-      ...memoOf(snapshot),
+      ...memoOf(snapshot, null),
       seenChecksState: null,
       seenMergeState: null,
     });
@@ -176,55 +172,51 @@ export function decideFactoryReview(
   }
 
   const memo = factory.review ?? EMPTY_MEMO;
+  // The newest human review the agent was sent. A memo written before review ids existed
+  // counts the current review as sent, so old reviews do not go out again.
+  const seenReviewId =
+    memo.seenReviewId === undefined ? (snapshot.lastReviewId ?? null) : memo.seenReviewId;
+  const newReview = snapshot.lastReviewId != null && snapshot.lastReviewId !== seenReviewId;
+  const unresolved = snapshot.unresolvedReviewThreads ?? 0;
+  const newThreads = unresolved > memo.seenUnresolved;
   const newFailure = snapshot.checksState === "failing" && memo.seenChecksState !== "failing";
   const newStaleBase = isStaleBase(baseState(snapshot)) && !isStaleBase(memo.seenMergeState);
-  // A cleared failure or stale base is forgotten, so the next one fires again. The stage and
-  // its timestamp stay, so the task does not ask for attention again.
-  const cleared =
+  // A cleared failure or stale base is forgotten, so the next one fires again. Fewer open
+  // threads lower the count, so a thread opened after the agent resolved some counts as new.
+  // The stage and its timestamp stay, so the task does not ask for attention again.
+  const settled =
     (memo.seenChecksState === "failing" && snapshot.checksState !== "failing") ||
-    (isStaleBase(memo.seenMergeState) && !isStaleBase(baseState(snapshot)));
-  const forgetCleared = (): FactoryReviewDecision => ({
+    (isStaleBase(memo.seenMergeState) && !isStaleBase(baseState(snapshot))) ||
+    unresolved < memo.seenUnresolved ||
+    (memo.seenReviewId === undefined && snapshot.lastReviewId !== undefined);
+  const settle = (): FactoryReviewDecision => ({
     factory: {
       ...factory,
       review: {
         ...memo,
+        seenUnresolved: Math.min(memo.seenUnresolved, unresolved),
         seenChecksState: snapshot.checksState ?? null,
         seenMergeState: baseState(snapshot),
+        ...(snapshot.lastReviewId === undefined ? {} : { seenReviewId }),
       },
     },
     message: null,
   });
 
   if (factory.phase === "ready-for-review") {
-    if (!newFailure && !newStaleBase) return cleared ? forgetCleared() : null;
+    if (!newFailure && !newStaleBase) return settled ? settle() : null;
     if (!canMessageThread(thread, now)) return null;
     return newFailure
       ? {
-          ...stage("fix", "CI failed; the agent is looking.", memoOf(snapshot)),
+          ...stage("fix", "CI failed; the agent is looking.", memoOf(snapshot, memo.seenReviewId)),
           message: ciMessage(link),
         }
       : {
-          ...stage("fix", "Rebasing onto the base branch.", memoOf(snapshot)),
+          ...stage("fix", "Rebasing onto the base branch.", memoOf(snapshot, memo.seenReviewId)),
           message: behindMessage(link, snapshot),
         };
   }
 
-  // "Mark under review" clears seenUpdatedAt. Reviews already on the pull request then come
-  // first, even an approval, because an approval can still carry comments.
-  const justMarked = factory.phase === "under-review" && memo.seenUpdatedAt === null;
-  const hasReviews =
-    snapshot.lastReviewer != null ||
-    snapshot.reviewDecision === "changes-requested" ||
-    (snapshot.unresolvedReviewThreads ?? 0) > 0;
-  if (justMarked && hasReviews) {
-    if (!canMessageThread(thread, now)) return null;
-    return {
-      ...stage("fix", "Reading the reviews already on the pull request.", memoOf(snapshot)),
-      message: existingReviewsMessage(link),
-    };
-  }
-
-  const changed = (snapshot.updatedAt ?? null) !== memo.seenUpdatedAt;
   const approved = snapshot.reviewDecision === "approved";
   const green = snapshot.checksState === "passing";
   const unblocked =
@@ -232,37 +224,43 @@ export function decideFactoryReview(
     snapshot.mergeState === "has-hooks" ||
     snapshot.mergeState === "unstable";
 
-  if (approved && green && unblocked && (snapshot.unresolvedReviewThreads ?? 0) === 0) {
+  if (!newReview && approved && green && unblocked && unresolved === 0) {
     return factory.phase === "ready-to-merge"
       ? null
-      : stage("ready-to-merge", "Approved and green.", memoOf(snapshot));
+      : stage("ready-to-merge", "Approved and green.", memoOf(snapshot, seenReviewId));
   }
 
-  const needsWork =
-    (changed &&
-      (snapshot.reviewDecision === "changes-requested" ||
-        (snapshot.unresolvedReviewThreads ?? 0) > memo.seenUnresolved)) ||
-    newFailure ||
-    newStaleBase;
-  if (!needsWork) {
+  if (!newReview && !newThreads && !newFailure && !newStaleBase) {
     // Ready to merge no longer holds, for example a new commit set checks back to pending.
     if (factory.phase === "ready-to-merge") {
-      return stage("under-review", "Waiting on checks or reviewers.", memoOf(snapshot));
+      return stage(
+        "under-review",
+        "Waiting on checks or reviewers.",
+        memoOf(snapshot, seenReviewId),
+      );
     }
-    return cleared ? forgetCleared() : null;
+    return settled ? settle() : null;
   }
   if (!canMessageThread(thread, now)) return null;
 
-  const message = newFailure
-    ? ciMessage(link)
-    : newStaleBase
-      ? behindMessage(link, snapshot)
-      : commentsMessage(link);
-  const summary =
-    message === commentsMessage(link)
-      ? "Reading new review comments."
-      : snapshot.checksState === "failing"
-        ? "CI failed; the agent is looking."
-        : "Rebasing onto the base branch.";
-  return { ...stage("fix", summary, memoOf(snapshot)), message };
+  if (newFailure) {
+    return {
+      ...stage("fix", "CI failed; the agent is looking.", memoOf(snapshot, seenReviewId)),
+      message: ciMessage(link),
+    };
+  }
+  if (newStaleBase) {
+    return {
+      ...stage("fix", "Rebasing onto the base branch.", memoOf(snapshot, seenReviewId)),
+      message: behindMessage(link, snapshot),
+    };
+  }
+  return {
+    ...stage(
+      "fix",
+      "Reading new review comments.",
+      memoOf(snapshot, snapshot.lastReviewId ?? seenReviewId),
+    ),
+    message: commentsMessage(link),
+  };
 }

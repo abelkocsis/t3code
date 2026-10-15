@@ -771,6 +771,8 @@ export const PullRequestSummary = Schema.Struct({
    * nobody has reviewed; absent where the read does not say.
    */
   lastReviewer: Schema.optional(Schema.NullOr(PullRequestActor)),
+  /** The host's id for that most recent review. A new review from the same person changes it. */
+  lastReviewId: Schema.optional(Schema.NullOr(TrimmedNonEmptyString)),
   /** Review comment threads nobody has resolved; absent where the read does not count them. */
   unresolvedReviewThreads: Schema.optional(NonNegativeInt),
   /** Whether the signed-in host account opened it; absent where the read does not say. */

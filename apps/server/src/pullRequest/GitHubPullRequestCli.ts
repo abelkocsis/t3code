@@ -1800,6 +1800,7 @@ export const make = Effect.gen(function* () {
             mergeability: detail.mergeability,
             ...(detail.mergeState === undefined ? {} : { mergeState: detail.mergeState }),
             ...(detail.lastReviewer === undefined ? {} : { lastReviewer: detail.lastReviewer }),
+            ...(detail.lastReviewId === undefined ? {} : { lastReviewId: detail.lastReviewId }),
           });
         }),
       );

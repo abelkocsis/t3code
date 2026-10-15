@@ -769,6 +769,7 @@ export const ThreadPullRequestSnapshot = Schema.Struct({
   mergeability: Schema.optional(PullRequestMergeability),
   mergeState: Schema.optional(PullRequestMergeState),
   lastReviewer: Schema.optional(Schema.NullOr(PullRequestActor)),
+  lastReviewId: Schema.optional(Schema.NullOr(TrimmedNonEmptyString)),
   unresolvedReviewThreads: Schema.optional(NonNegativeInt),
   viewerDidAuthor: Schema.optional(Schema.Boolean),
   canUpdateBranch: Schema.optional(Schema.Boolean),

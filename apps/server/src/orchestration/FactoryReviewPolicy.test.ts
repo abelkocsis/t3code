@@ -61,6 +61,7 @@ function factory(overrides: Partial<ThreadFactory> = {}): ThreadFactory {
       seenUnresolved: 0,
       seenChecksState: "pending",
       seenMergeState: "blocked",
+      seenReviewId: null,
     },
     ...overrides,
   };
@@ -141,16 +142,21 @@ describe("decideFactoryReview", () => {
     expect(decision?.message).toBeNull();
   });
 
-  it("asks the agent to handle new review comments once", () => {
+  it("asks the agent to handle a new human review once", () => {
     const changed = thread({
       pullRequests: [
-        link({ updatedAt: NOW, reviewDecision: "changes-requested", unresolvedReviewThreads: 2 }),
+        link({
+          updatedAt: NOW,
+          reviewDecision: "changes-requested",
+          lastReviewId: "PRR_2",
+          unresolvedReviewThreads: 2,
+        }),
       ],
     });
     const decision = decideFactoryReview(changed, NOW);
     expect(decision?.factory?.phase).toBe("fix");
     expect(decision?.message).toContain("New review activity");
-    expect(decision?.factory?.review).toMatchObject({ seenUpdatedAt: NOW, seenUnresolved: 2 });
+    expect(decision?.factory?.review).toMatchObject({ seenReviewId: "PRR_2", seenUnresolved: 2 });
 
     const seen = thread({
       ...changed,
@@ -159,37 +165,88 @@ describe("decideFactoryReview", () => {
     expect(decideFactoryReview(seen, NOW)).toBeNull();
   });
 
-  it("sends reviews already on the pull request to the agent first when marked under review", () => {
-    const justMarked = factory({
+  it("does not resend a handled review or the threads the agent declined", () => {
+    // The agent fixed one comment, declined two, and the human marked the task again.
+    const marked = factory({
+      reviewRound: 2,
       review: {
-        seenUpdatedAt: null,
-        seenUnresolved: 0,
+        seenUpdatedAt: NOW,
+        seenUnresolved: 2,
         seenChecksState: "passing",
-        seenMergeState: "clean",
+        seenMergeState: "blocked",
+        seenReviewId: "PRR_1",
       },
     });
-    const reviewer = { login: "schronck", name: null, avatarUrl: null };
-    // A comment-only review leaves no open thread and no decision; an approval would merge.
-    for (const overrides of [
-      { lastReviewer: reviewer },
-      {
-        lastReviewer: reviewer,
-        reviewDecision: "approved",
-        checksState: "passing",
-        mergeState: "clean",
-      },
-    ] as const) {
-      const decision = decideFactoryReview(
-        thread({ factory: justMarked, pullRequests: [link(overrides)] }),
-        NOW,
-      );
-      expect(decision?.factory?.phase).toBe("fix");
-      expect(decision?.message).toContain("It already has reviews");
-      expect(decision?.factory?.review?.seenUpdatedAt).toBe(EARLIER);
-    }
+    const pullRequest = link({
+      updatedAt: NOW,
+      reviewDecision: "changes-requested",
+      checksState: "passing",
+      lastReviewId: "PRR_1",
+      unresolvedReviewThreads: 2,
+    });
+    expect(
+      decideFactoryReview(thread({ factory: marked, pullRequests: [pullRequest] }), NOW),
+    ).toBeNull();
+  });
 
-    // No reviews yet: wait for reviewers.
-    expect(decideFactoryReview(thread({ factory: justMarked }), NOW)).toBeNull();
+  it("sends a review that came before the first review round, even an approval", () => {
+    const decision = decideFactoryReview(
+      thread({
+        pullRequests: [
+          link({
+            lastReviewId: "PRR_1",
+            reviewDecision: "approved",
+            checksState: "passing",
+            mergeState: "clean",
+          }),
+        ],
+      }),
+      NOW,
+    );
+    expect(decision?.factory?.phase).toBe("fix");
+    expect(decision?.message).toContain("New review activity");
+  });
+
+  it("counts a new thread after the agent resolved some", () => {
+    const resolved = decideFactoryReview(
+      thread({
+        factory: factory({
+          review: {
+            seenUpdatedAt: EARLIER,
+            seenUnresolved: 3,
+            seenChecksState: "pending",
+            seenMergeState: "blocked",
+            seenReviewId: null,
+          },
+        }),
+        pullRequests: [link({ unresolvedReviewThreads: 1 })],
+      }),
+      NOW,
+    );
+    expect(resolved?.message).toBeNull();
+    expect(resolved?.factory?.review?.seenUnresolved).toBe(1);
+
+    const opened = decideFactoryReview(
+      thread({
+        factory: { ...factory(), review: resolved!.factory!.review! },
+        pullRequests: [link({ unresolvedReviewThreads: 2 })],
+      }),
+      NOW,
+    );
+    expect(opened?.message).toContain("New review activity");
+  });
+
+  it("treats the current review as handled on a memo from before review ids", () => {
+    const { seenReviewId: _, ...oldMemo } = factory().review!;
+    const decision = decideFactoryReview(
+      thread({
+        factory: factory({ review: oldMemo }),
+        pullRequests: [link({ lastReviewId: "PRR_1" })],
+      }),
+      NOW,
+    );
+    expect(decision?.message).toBeNull();
+    expect(decision?.factory?.review?.seenReviewId).toBe("PRR_1");
   });
 
   it("asks the agent to look at a failed check and a stale base once each", () => {
