@@ -51,8 +51,8 @@ export function factoryTaskPullRequest(thread: EnvironmentThreadShell): FactoryT
 }
 
 /**
- * Ready for review and ready to merge wait on the human: one sends the review request, the
- * other presses Merge. Under review, a quiet agent is idle: the server watches the pull
+ * Ready for review and ready to merge wait on the human while the agent is quiet: one sends
+ * the review request, the other presses Merge. Under review, a quiet agent is idle: the server watches the pull
  * request and wakes it when there is work. Everywhere else a quiet agent still counts as
  * working, because the flow is in its hands.
  */
@@ -62,6 +62,9 @@ export function factoryTaskState(
 ): FactoryTaskState {
   if (isFactoryTaskSnoozed(thread, now)) return "snoozed";
   if (thread.hasPendingApprovals || thread.hasPendingUserInput) return "waiting";
+  // A running agent is working at every stage, also when the user messaged it at a gate.
+  const session = thread.session;
+  if (session?.status === "running" || session?.status === "starting") return "working";
   const phase = thread.factory?.phase;
   // "done" with an open pull request is the moment before the server moves the task to
   // ready for review, so it already waits on the human rather than looking finished.
@@ -69,8 +72,6 @@ export function factoryTaskState(
   if (phase === "done" && pullRequest?.snapshot?.state === "open") return "waiting";
   if (phase && FACTORY_COMPLETED_PHASES.includes(phase)) return "done";
   if (phase === "ready-for-review" || phase === "ready-to-merge") return "waiting";
-  const session = thread.session;
-  if (session?.status === "running" || session?.status === "starting") return "working";
   if (thread.latestTurn?.state === "error" || session?.status === "error") return "error";
   return phase === "under-review" ? "idle" : "working";
 }

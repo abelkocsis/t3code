@@ -62,10 +62,15 @@ export function resolveThreadAttention(thread: AttentionThreadShell): ThreadAtte
   if (phase === "waiting_for_approval" || phase === "waiting_for_input") {
     return { phase, at: attentionTimestamp(phase, thread) };
   }
-  // A factory task at a human gate waits on the user even though its agent sits idle. The
-  // stage change stamps it, so a visit after the gate opened counts as seen.
+  // A factory task at a human gate waits on the user while its agent sits idle. The stage
+  // change stamps it, so a visit after the gate opened counts as seen.
   const factory = thread.factory;
-  if (factory && FACTORY_GATE_PHASES.has(factory.phase)) {
+  if (
+    factory &&
+    FACTORY_GATE_PHASES.has(factory.phase) &&
+    phase !== "starting" &&
+    phase !== "running"
+  ) {
     return { phase: "completed", at: factory.updatedAt };
   }
   if (isAttentionPhase(phase)) return { phase, at: attentionTimestamp(phase, thread) };

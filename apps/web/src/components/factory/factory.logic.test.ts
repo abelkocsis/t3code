@@ -119,6 +119,14 @@ describe("factoryTaskState", () => {
     expect(factoryTaskState(thread({ factory: factory({ phase: "ready-for-review" }) }))).toBe(
       "waiting",
     );
+    expect(
+      factoryTaskState(
+        thread({
+          factory: factory({ phase: "ready-for-review" }),
+          session: { status: "running" } as EnvironmentThreadShell["session"],
+        }),
+      ),
+    ).toBe("working");
     expect(factoryTaskState(thread({ factory: factory({ phase: "under-review" }) }))).toBe("idle");
     expect(factoryTaskState(thread({ factory: factory({ phase: "ready-to-merge" }) }))).toBe(
       "waiting",

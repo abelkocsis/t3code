@@ -77,6 +77,9 @@ describe("resolveThreadAttention", () => {
         factory: { ...factory, phase: "under-review" as const },
       }),
     ).toEqual({ phase: "completed", at: expect.any(String) });
+    expect(
+      resolveThreadAttention({ ...makeThread({ sessionStatus: "running" }), factory }),
+    ).toBeNull();
   });
 
   it("asks nothing for a snoozed thread", () => {
