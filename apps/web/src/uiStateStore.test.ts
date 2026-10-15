@@ -68,6 +68,19 @@ describe("uiStateStore pure functions", () => {
     ).toBe("2026-02-25T12:00:00.000Z");
   });
 
+  it("covers a factory stage change that is newer than the last finished turn", () => {
+    const stamp = (factoryUpdatedAt: string) =>
+      resolveThreadVisitStamp({
+        windowFocused: true,
+        hasOpenThread: true,
+        latestTurnCompletedAt: "2026-02-25T12:00:00.000Z",
+        factoryUpdatedAt,
+        now: "2026-02-25T12:30:00.000Z",
+      });
+    expect(stamp("2026-02-25T12:10:00.000Z")).toBe("2026-02-25T12:10:00.000Z");
+    expect(stamp("2026-02-25T11:00:00.000Z")).toBe("2026-02-25T12:00:00.000Z");
+  });
+
   it("records nothing while the window is unfocused or no thread is open", () => {
     const now = "2026-02-25T12:30:00.000Z";
     expect(

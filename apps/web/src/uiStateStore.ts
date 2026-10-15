@@ -279,6 +279,9 @@ const debouncedPersistState = new Debouncer(persistState, { wait: 500 });
  * then reached neither the sidebar highlight, nor the dock badge, nor the
  * overlay. Having it open while looking at the app is the visit.
  *
+ * A factory task at a human gate asks for attention from its stage change, which
+ * no turn completion covers, so reading it stamps the later of the two.
+ *
  * Returns null when there is nothing to record, which includes an unfocused
  * window: a thread on screen while the user works elsewhere is not read.
  */
@@ -286,10 +289,14 @@ export function resolveThreadVisitStamp(input: {
   readonly windowFocused: boolean;
   readonly hasOpenThread: boolean;
   readonly latestTurnCompletedAt: string | null | undefined;
+  readonly factoryUpdatedAt?: string | null | undefined;
   readonly now: string;
 }): string | null {
   if (!input.windowFocused || !input.hasOpenThread) return null;
-  return input.latestTurnCompletedAt ?? input.now;
+  const turnAt = input.latestTurnCompletedAt ?? null;
+  const factoryAt = input.factoryUpdatedAt ?? null;
+  if (turnAt === null || factoryAt === null) return turnAt ?? factoryAt ?? input.now;
+  return Date.parse(factoryAt) > Date.parse(turnAt) ? factoryAt : turnAt;
 }
 
 export function markThreadVisited(state: UiState, threadId: string, visitedAt: string): UiState {

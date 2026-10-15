@@ -2152,6 +2152,7 @@ export default function ChatView(props: ChatViewProps) {
       windowFocused,
       hasOpenThread: Boolean(serverThread?.id),
       latestTurnCompletedAt: serverThread?.latestTurn?.completedAt,
+      factoryUpdatedAt: serverThread?.factory?.updatedAt,
       now: new Date().toISOString(),
     });
     if (visitedAt === null || !serverThread?.id) return;
@@ -2164,6 +2165,7 @@ export default function ChatView(props: ChatViewProps) {
     serverThread?.environmentId,
     serverThread?.id,
     serverThread?.latestTurn?.completedAt,
+    serverThread?.factory?.updatedAt,
     windowFocused,
   ]);
   useEffect(() => {
