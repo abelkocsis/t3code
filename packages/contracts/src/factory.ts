@@ -130,6 +130,14 @@ export const ThreadFactory = Schema.Struct({
 });
 export type ThreadFactory = typeof ThreadFactory.Type;
 
+/**
+ * The factory state after the thread wakes. A wake from any source, such as a new message,
+ * ends the wait on a blocking pull request, so the hourly merge check stops watching it.
+ */
+export function factoryAfterWake<F extends ThreadFactory | null | undefined>(factory: F): F {
+  return factory?.blockedBy ? { ...factory, blockedBy: null } : factory;
+}
+
 /** The line an agent prints when it enters a phase. Only this line is parsed. */
 export const FACTORY_PHASE_MARKER = "FACTORY PHASE:";
 

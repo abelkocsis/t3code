@@ -301,6 +301,56 @@ describe("orchestration projector", () => {
     expect(unarchived.threads[0]?.archivedAt).toBeNull();
   });
 
+  it("ends the wait on a blocking pull request when a factory task wakes", async () => {
+    const now = "2026-01-01T00:00:00.000Z";
+    const later = "2026-01-01T00:00:01.000Z";
+    const thread = (sequence: number, type: OrchestrationEvent["type"], payload: object) =>
+      makeEvent({
+        sequence,
+        type,
+        aggregateKind: "thread",
+        aggregateId: "thread-1",
+        occurredAt: later,
+        commandId: `cmd-${sequence}`,
+        payload: { threadId: "thread-1", updatedAt: later, ...payload },
+      });
+    const events = [
+      thread(1, "thread.created", {
+        projectId: "project-1",
+        title: "demo",
+        modelSelection: { provider: ProviderDriverKind.make("codex"), model: "gpt-5-codex" },
+        runtimeMode: "full-access",
+        interactionMode: "default",
+        branch: null,
+        worktreePath: null,
+        createdAt: now,
+      }),
+      thread(2, "thread.factory-set", {
+        factory: {
+          input: { kind: "free-text", value: "demo" },
+          phase: "ready-for-review",
+          summary: null,
+          startedAt: now,
+          updatedAt: now,
+          blockedBy: {
+            url: "https://github.com/acme/web/pull/7",
+            host: "github.com",
+            repository: "acme/web",
+            number: 7,
+          },
+        },
+      }),
+      thread(3, "thread.snoozed", { snoozedAt: later, snoozedUntil: "2027-01-01T00:00:00.000Z" }),
+      // A new message wakes the thread; the block must not outlive the snooze.
+      thread(4, "thread.unsnoozed", { reason: "activity" }),
+    ];
+    let model = createEmptyReadModel(now);
+    for (const event of events) model = await Effect.runPromise(projectEvent(model, event));
+    expect(model.threads[0]?.snoozedUntil).toBeNull();
+    expect(model.threads[0]?.factory?.blockedBy).toBeNull();
+    expect(model.threads[0]?.factory?.phase).toBe("ready-for-review");
+  });
+
   it("keeps projector forward-compatible for unhandled event types", async () => {
     const now = "2026-01-01T00:00:00.000Z";
     const model = createEmptyReadModel(now);

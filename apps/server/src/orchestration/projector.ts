@@ -8,6 +8,7 @@ import type {
   ThreadPullRequestLink,
 } from "@t3tools/contracts";
 import {
+  factoryAfterWake,
   isImportedAgentSessionMessageId,
   OrchestrationCheckpointSummary,
   OrchestrationMessage,
@@ -566,14 +567,20 @@ export function projectEvent(
 
     case "thread.unsnoozed":
       return decodeForEvent(ThreadUnsnoozedPayload, event.payload, event.type, "payload").pipe(
-        Effect.map((payload) => ({
-          ...nextBase,
-          threads: updateThread(nextBase.threads, payload.threadId, {
-            snoozedUntil: null,
-            snoozedAt: null,
-            updatedAt: payload.updatedAt,
-          }),
-        })),
+        Effect.map((payload) => {
+          const factory = nextBase.threads.find(
+            (thread) => thread.id === payload.threadId,
+          )?.factory;
+          return {
+            ...nextBase,
+            threads: updateThread(nextBase.threads, payload.threadId, {
+              snoozedUntil: null,
+              snoozedAt: null,
+              ...(factory?.blockedBy ? { factory: factoryAfterWake(factory) } : {}),
+              updatedAt: payload.updatedAt,
+            }),
+          };
+        }),
       );
 
     case "thread.message-scheduled":

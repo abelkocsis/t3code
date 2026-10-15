@@ -1,5 +1,6 @@
 import {
   ApprovalRequestId,
+  factoryAfterWake,
   isImportedAgentSessionMessageId,
   UserInputAttachmentAnswerPayload,
   type ChatAttachment,
@@ -745,6 +746,7 @@ const makeOrchestrationProjectionPipeline = Effect.fn("makeOrchestrationProjecti
             ...existingRow.value,
             snoozedUntil: null,
             snoozedAt: null,
+            factory: factoryAfterWake(existingRow.value.factory),
             updatedAt: event.payload.updatedAt,
           });
           return;
