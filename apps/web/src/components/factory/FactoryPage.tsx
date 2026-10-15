@@ -118,6 +118,7 @@ import { Select, SelectItem, SelectPopup, SelectTrigger, SelectValue } from "../
 import { SidebarInset } from "../ui/sidebar";
 import { Textarea } from "../ui/textarea";
 import { toastManager } from "../ui/toast";
+import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
 import { WorkspaceBreadcrumb, WorkspaceBreadcrumbItem } from "../WorkspaceBreadcrumb";
 import { WorkspacePageContainer } from "../WorkspacePageContainer";
 import { WorkspacePageHeader } from "../WorkspacePageHeader";
@@ -745,14 +746,21 @@ function TaskRow({
       >
         <ReviewActions task={task} />
         {task.pullRequest ? (
-          <Button
-            size="icon-sm"
-            variant="ghost"
-            aria-label="Open pull request"
-            onClick={openPullRequest}
-          >
-            <PullRequestGlyph.pullRequest aria-hidden className="size-4" />
-          </Button>
+          <Tooltip>
+            <TooltipTrigger
+              render={
+                <Button
+                  size="icon-sm"
+                  variant="ghost"
+                  aria-label={`Open pull request #${task.pullRequest.number}`}
+                  onClick={openPullRequest}
+                />
+              }
+            >
+              <PullRequestGlyph.pullRequest aria-hidden className="size-4" />
+            </TooltipTrigger>
+            <TooltipPopup>Pull request #{task.pullRequest.number}</TooltipPopup>
+          </Tooltip>
         ) : null}
         <Button size="icon-sm" variant="ghost" aria-label="Open as thread" onClick={onOpen}>
           <MessageSquareIcon aria-hidden className="size-4" />
