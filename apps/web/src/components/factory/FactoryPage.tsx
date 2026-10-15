@@ -734,6 +734,13 @@ function TaskRow({
         </span>
         <TaskProgress task={task} />
       </div>
+      {(task.factory.reviewRound ?? 0) > 0 ? (
+        <span className="shrink-0 text-xs text-muted-foreground">
+          {task.factory.reviewRound === 1
+            ? "1 review round"
+            : `${task.factory.reviewRound} review rounds`}
+        </span>
+      ) : null}
       <span
         className="shrink-0 text-xs text-muted-foreground tabular-nums"
         aria-label="Time in this stage"
