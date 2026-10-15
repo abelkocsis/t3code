@@ -147,6 +147,18 @@ describe("factoryTaskState", () => {
     ).toBe("waiting");
   });
 
+  it("waits on the human at a human gate once the agent stops", () => {
+    expect(factoryTaskState(thread({ factory: factory({ phase: "human-gate" }) }))).toBe("waiting");
+    expect(
+      factoryTaskState(
+        thread({
+          factory: factory({ phase: "human-gate" }),
+          session: { status: "running" } as EnvironmentThreadShell["session"],
+        }),
+      ),
+    ).toBe("working");
+  });
+
   it("reads working, done, and error", () => {
     expect(
       factoryTaskState(
