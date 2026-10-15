@@ -271,6 +271,13 @@ export function readEnvironmentSupportsSlackThreads(environmentId: EnvironmentId
   );
 }
 
+export function readEnvironmentSupportsFactory(environmentId: EnvironmentId): boolean {
+  return (
+    appAtomRegistry.get(environmentServerConfigsAtom).get(environmentId)?.environment.capabilities
+      .threadFactory === true
+  );
+}
+
 export function readEnvironmentSupportsActiveReorder(environmentId: EnvironmentId): boolean {
   return (
     appAtomRegistry.get(environmentServerConfigsAtom).get(environmentId)?.environment.capabilities

@@ -144,6 +144,7 @@ import {
   useThreadShells,
 } from "../state/entities";
 import { openSlackThreadDialog } from "./slack/SlackThreadDialog";
+import { useFactoryMembership } from "./factory/useFactoryMembership";
 import { environmentServerConfigsAtom, primaryServerKeybindingsAtom } from "../state/server";
 import { vcsEnvironment } from "../state/vcs";
 import { threadEnvironment } from "../state/threads";
@@ -4624,6 +4625,8 @@ export default function Sidebar() {
     ],
   );
 
+  const { addToFactory, removeFromFactory } = useFactoryMembership();
+
   /** One move, with the failure surfaced: folders are otherwise silent. */
   const moveThreadToFolder = useCallback(
     async (target: ScopedThreadRef, folderId: ThreadFolderId | null) => {
@@ -4767,6 +4770,8 @@ export default function Sidebar() {
         const supportsTitleRegeneration =
           serverConfigs.get(thread.environmentId)?.environment.capabilities
             .threadTitleRegeneration === true;
+        const supportsFactory =
+          serverConfigs.get(thread.environmentId)?.environment.capabilities.threadFactory === true;
         const isRegeneratingTitle = thread.titleRegeneration != null;
         const isSettled = settledThreadKeysRef.current.has(threadKey);
         const isSnoozed = snoozedThreadKeysRef.current.has(threadKey);
@@ -4795,6 +4800,7 @@ export default function Sidebar() {
               folderId: thread.folderId ?? null,
               folders: readThreadFolders().folders,
               slackThreadLinked: thread.slackThread != null,
+              isFactoryTask: thread.factory != null,
               isSettled,
               autoSettleEnabled: thread.autoSettleDisabledAt == null,
               isSnoozed,
@@ -4809,6 +4815,7 @@ export default function Sidebar() {
                 pinning: supportsPinning,
                 folders: supportsFolders,
                 slackThreads: readEnvironmentSupportsSlackThreads(thread.environmentId),
+                factory: supportsFactory,
                 titleRegeneration: supportsTitleRegeneration,
               },
               snoozePresets,
@@ -4913,6 +4920,12 @@ export default function Sidebar() {
           }
           case "slack-thread":
             openSlackThreadDialog([threadRef]);
+            return;
+          case "factory:add":
+            await addToFactory(thread);
+            return;
+          case "factory:remove":
+            await removeFromFactory(thread);
             return;
           case "rename":
             startThreadRename(threadRef, thread.title);
@@ -5020,6 +5033,7 @@ export default function Sidebar() {
       })();
     },
     [
+      addToFactory,
       archiveThread,
       attemptPin,
       attemptSettle,
@@ -5041,6 +5055,7 @@ export default function Sidebar() {
       openProjectSettings,
       projectScopeKey,
       projectByKey,
+      removeFromFactory,
       serverConfigs,
       setProjectScopeKey,
       setThreadAutoSettle,

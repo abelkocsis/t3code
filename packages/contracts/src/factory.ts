@@ -65,7 +65,7 @@ export const FactoryInputKind = Schema.Literals([
   "github-issue",
   "notion-page",
   "free-text",
-  /** A thread that joined the factory because the user's own pull request got linked to it. */
+  /** An existing thread added to the factory by hand, with its pull request as the input. */
   "pull-request",
 ]);
 export type FactoryInputKind = typeof FactoryInputKind.Type;
@@ -208,6 +208,15 @@ Rules:
 - Each time you enter a phase, print one line on its own that starts with "${FACTORY_PHASE_MARKER}" followed by the phase word and one sentence. The phase words are: ${FACTORY_PHASES.join(", ")}. Example: "${FACTORY_PHASE_MARKER} review Three reviewers read the diff."
 - Ask me a question only when the flow needs a human decision. Print "${FACTORY_PHASE_MARKER} human-gate" before you ask.
 - Print "${FACTORY_PHASE_MARKER} done" with the pull request link as the last line when the flow ends.`;
+
+/**
+ * The task text for an existing thread added to the factory by hand, rendered into the
+ * prompt template. The agent works out where the thread stands instead of starting over.
+ */
+export const FACTORY_JOIN_TASK = `The work already done in this thread. Do not start over.
+First decide which phase the work is in: read this conversation, the branch, and any pull request. Print the marker line for that phase with one sentence.
+If the phase is unclear, print "${FACTORY_PHASE_MARKER} human-gate" and ask me.
+Then continue the flow from that phase.`;
 
 export function renderFactoryPrompt(template: string, input: FactoryInput): string {
   return template.replace(/\{\{\s*input\s*\}\}/g, input.value);

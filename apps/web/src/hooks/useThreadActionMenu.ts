@@ -1,6 +1,7 @@
 import { requestCustomSnooze } from "../components/CustomSnoozeDialog";
 import { requestFolderName } from "../components/FolderNameDialog";
 import { openSlackThreadDialog } from "../components/slack/SlackThreadDialog";
+import { useFactoryMembership } from "../components/factory/useFactoryMembership";
 import { scopeProjectRef, scopedThreadKey } from "@t3tools/client-runtime/environment";
 import {
   type AtomCommandResult,
@@ -23,6 +24,7 @@ import { threadEnvironment } from "../state/threads";
 import { useAtomCommand } from "../state/use-atom-command";
 import {
   readEnvironmentSupportsAutoSettleOptOut,
+  readEnvironmentSupportsFactory,
   readEnvironmentSupportsFolders,
   readEnvironmentSupportsSlackThreads,
   readEnvironmentSupportsPinning,
@@ -104,6 +106,7 @@ export function useThreadActionMenu(input: {
   const threadFolders = useThreadFolders();
   const threadFoldersRef = useRef(threadFolders);
   threadFoldersRef.current = threadFolders;
+  const { addToFactory, removeFromFactory } = useFactoryMembership();
   const updateThreadMetadata = useAtomCommand(threadEnvironment.updateMetadata, {
     reportFailure: false,
   });
@@ -150,6 +153,7 @@ export function useThreadActionMenu(input: {
           pinning: readEnvironmentSupportsPinning(threadRef.environmentId),
           folders: readEnvironmentSupportsFolders(threadRef.environmentId),
           slackThreads: readEnvironmentSupportsSlackThreads(threadRef.environmentId),
+          factory: readEnvironmentSupportsFactory(threadRef.environmentId),
           titleRegeneration: readEnvironmentSupportsTitleRegeneration(threadRef.environmentId),
         };
         const isRegeneratingTitle = thread.titleRegeneration != null;
@@ -163,6 +167,7 @@ export function useThreadActionMenu(input: {
           folderId: thread.folderId ?? null,
           folders: threadFoldersRef.current.folders,
           slackThreadLinked: thread.slackThread != null,
+          isFactoryTask: thread.factory != null,
           isSettled: supports.settlement && thread.settledOverride === "settled",
           autoSettleEnabled: thread.autoSettleDisabledAt == null,
           isSnoozed: supports.snooze && effectiveSnoozed(thread, { now: now.toISOString() }),
@@ -297,6 +302,12 @@ export function useThreadActionMenu(input: {
           case "slack-thread":
             openSlackThreadDialog([threadRef]);
             return;
+          case "factory:add":
+            await addToFactory(thread);
+            return;
+          case "factory:remove":
+            await removeFromFactory(thread);
+            return;
           case "rename":
             onStartRename();
             return;
@@ -388,6 +399,7 @@ export function useThreadActionMenu(input: {
       })();
     },
     [
+      addToFactory,
       archiveThread,
       confirmThreadArchive,
       confirmThreadDelete,
@@ -404,6 +416,7 @@ export function useThreadActionMenu(input: {
       projectCwd,
       projectGroupingSettings,
       projects,
+      removeFromFactory,
       router,
       setThreadAutoSettle,
       setThreadFolder,

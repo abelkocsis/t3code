@@ -10,6 +10,7 @@ import {
   collectFactoryTasks,
   isReReviewRequest,
   countFactoryTasksWaiting,
+  factoryJoinState,
   factoryTaskKey,
   factoryTaskState,
   formatElapsed,
@@ -324,5 +325,49 @@ describe("formatElapsed", () => {
     expect(formatElapsed(NOW, start + 5 * 60_000)).toBe("5m");
     expect(formatElapsed(NOW, start + 3 * 3_600_000 + 60_000)).toBe("3h 1m");
     expect(formatElapsed(NOW, start + 72 * 3_600_000)).toBe("3d");
+  });
+});
+
+describe("factoryJoinState", () => {
+  const linked = (snapshot: { state: string; title?: string } | null) =>
+    thread({
+      factory: null,
+      pullRequests: [
+        {
+          host: "github.com",
+          repository: "acme/web",
+          number: 9,
+          url: "https://github.com/acme/web/pull/9",
+          source: "agent",
+          linkedAt: NOW,
+          snapshot: snapshot as EnvironmentThreadShell["pullRequests"][number]["snapshot"],
+          stack: null,
+        },
+      ],
+    });
+
+  it("puts a thread with an open pull request straight into ready for review", () => {
+    const joined = factoryJoinState(linked({ state: "open", title: "Add a cap" }), NOW);
+    expect(joined.askAgent).toBe(false);
+    expect(joined.factory).toMatchObject({
+      input: { kind: "pull-request", value: "https://github.com/acme/web/pull/9" },
+      phase: "ready-for-review",
+      summary: "Add a cap",
+    });
+  });
+
+  it("treats a pull request the sync has not read yet as ready for review", () => {
+    expect(factoryJoinState(linked(null), NOW).factory.phase).toBe("ready-for-review");
+  });
+
+  it("files a merged or closed pull request as finished", () => {
+    expect(factoryJoinState(linked({ state: "merged" }), NOW).factory.phase).toBe("merged");
+    expect(factoryJoinState(linked({ state: "closed" }), NOW).factory.phase).toBe("done");
+  });
+
+  it("asks the agent for the phase when no pull request is linked", () => {
+    const joined = factoryJoinState(thread({ factory: null, title: "Fix the cap" }), NOW);
+    expect(joined.askAgent).toBe(true);
+    expect(joined.factory.input).toEqual({ kind: "free-text", value: "Fix the cap" });
   });
 });

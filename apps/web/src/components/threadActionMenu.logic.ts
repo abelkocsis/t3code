@@ -17,6 +17,8 @@ export type ThreadActionMenuId =
   | "folder:clear"
   | `folder:set:${string}`
   | "slack-thread"
+  | "factory:add"
+  | "factory:remove"
   | "settle"
   | "unsettle"
   | "auto-settle"
@@ -53,6 +55,8 @@ export interface ThreadActionMenuState {
   readonly folders: ReadonlyArray<{ readonly id: string; readonly name: string }>;
   /** Whether a Slack thread is linked, which only changes the item's wording. */
   readonly slackThreadLinked: boolean;
+  /** Whether the thread is a factory task, which picks between add and remove. */
+  readonly isFactoryTask: boolean;
   readonly isSettled: boolean;
   /** False while the user has turned automatic settlement off for this thread. */
   readonly autoSettleEnabled: boolean;
@@ -71,6 +75,8 @@ export interface ThreadActionMenuState {
     readonly folders: boolean;
     /** Server understands thread.slack-thread.set. */
     readonly slackThreads: boolean;
+    /** Server understands thread.factory.set. */
+    readonly factory: boolean;
     readonly titleRegeneration: boolean;
   };
   readonly snoozePresets: ReadonlyArray<SnoozePreset>;
@@ -135,6 +141,14 @@ export function buildThreadActionMenuItems(
             label: state.slackThreadLinked ? "Change Slack thread…" : "Link Slack thread…",
             icon: "hash",
           },
+        ]
+      : []),
+    // Removing keeps the thread: it goes back to the sidebar. Archive is the way to drop both.
+    ...(state.supports.factory
+      ? [
+          state.isFactoryTask
+            ? { id: "factory:remove" as const, label: "Remove from Factory", icon: "factory" }
+            : { id: "factory:add" as const, label: "Add to Factory", icon: "factory" },
         ]
       : []),
     // Both lifecycle actions stay available on pinned threads: settling

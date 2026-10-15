@@ -94,8 +94,7 @@ function behindMessage(link: ThreadPullRequestLink, snapshot: ThreadPullRequestS
  * Moves a task through the review stages from its pull request, and tells the agent when
  * review work is needed. The human marks "under-review" and merges; this never merges.
  *
- * - A thread without factory state joins as "ready-for-review" when its own open pull
- *   request gets linked.
+ * - A thread without factory state is left alone: threads join the factory only by hand.
  * - A merged pull request ends the task as "merged"; a closed one as "done".
  * - "done" with a pull request becomes "ready-for-review".
  * - Under review: approval plus green checks on an unblocked branch gives "ready-to-merge".
@@ -111,24 +110,7 @@ export function decideFactoryReview(
   const link = factoryPullRequest(thread);
   const factory = thread.factory ?? null;
 
-  if (!factory) {
-    if (!link || link.snapshot.state !== "open" || link.snapshot.viewerDidAuthor !== true) {
-      return null;
-    }
-    return {
-      factory: {
-        input: { kind: "pull-request", value: link.url },
-        phase: "ready-for-review",
-        summary: link.snapshot.title,
-        startedAt: now,
-        updatedAt: now,
-        review: memoOf(link.snapshot),
-      },
-      message: null,
-    };
-  }
-
-  if (!link) return null;
+  if (!factory || !link) return null;
   const snapshot = link.snapshot;
   const stage = (phase: ThreadFactory["phase"], summary: string | null, memo?: FactoryReviewMemo) =>
     ({

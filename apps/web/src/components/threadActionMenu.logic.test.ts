@@ -9,6 +9,7 @@ const baseState: ThreadActionMenuState = {
   folderId: null,
   folders: [],
   slackThreadLinked: false,
+  isFactoryTask: false,
   isSettled: false,
   autoSettleEnabled: true,
   isSnoozed: false,
@@ -22,6 +23,7 @@ const baseState: ThreadActionMenuState = {
     pinning: true,
     folders: true,
     slackThreads: false,
+    factory: false,
     titleRegeneration: true,
   },
   snoozePresets: [
@@ -51,6 +53,7 @@ describe("buildThreadActionMenuItems", () => {
           pinning: false,
           folders: false,
           slackThreads: false,
+          factory: false,
           titleRegeneration: false,
         },
       }),
@@ -97,6 +100,14 @@ describe("buildThreadActionMenuItems", () => {
     expect(label(false)).toBe("Link Slack thread…");
     expect(label(true)).toBe("Change Slack thread…");
     expect(ids(baseState)).not.toContain("slack-thread");
+  });
+
+  it("offers adding to the Factory, and removing once the thread is a task", () => {
+    const supports = { ...baseState.supports, factory: true };
+    expect(ids({ ...baseState, supports })).toContain("factory:add");
+    expect(ids({ ...baseState, supports, isFactoryTask: true })).toContain("factory:remove");
+    expect(ids({ ...baseState, supports, isFactoryTask: true })).not.toContain("factory:add");
+    expect(allIds(baseState).filter((id) => id.startsWith("factory:"))).toEqual([]);
   });
 
   it("groups project settings with utility actions before archive", () => {
@@ -205,6 +216,7 @@ describe("buildThreadActionMenuItems", () => {
           pinning: false,
           folders: false,
           slackThreads: false,
+          factory: false,
           titleRegeneration: false,
         },
       }),

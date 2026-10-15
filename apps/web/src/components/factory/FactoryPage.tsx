@@ -134,6 +134,7 @@ import {
   type FactoryTaskState,
 } from "./factory.logic";
 import { FactoryIssuePicker } from "./FactoryIssuePicker";
+import { useFactoryMembership } from "./useFactoryMembership";
 import { useStartFactoryTask } from "./useStartFactoryTask";
 
 const STATE_BADGE: Record<
@@ -767,9 +768,10 @@ function blockedSnoozeUntil(): string {
   return new Date(Date.now() + FACTORY_BLOCKED_SNOOZE_MS).toISOString();
 }
 
-/** Snooze, wake, and archive live behind one button so the row stays readable. */
+/** Snooze, wake, remove, and archive live behind one button so the row stays readable. */
 function TaskMenu({ task }: { task: FactoryTask }) {
   const { archiveThread, snoozeThread, unsnoozeThread } = useThreadActions();
+  const { removeFromFactory } = useFactoryMembership();
   const setFactory = useAtomCommand(threadEnvironment.setFactory, { reportFailure: false });
   const timestampFormat = useClientSettings((s) => s.timestampFormat);
   const [blockDialogOpen, setBlockDialogOpen] = useState(false);
@@ -899,6 +901,10 @@ function TaskMenu({ task }: { task: FactoryTask }) {
             Show in sidebar
           </MenuCheckboxItem>
           <MenuSeparator />
+          <MenuItem onClick={() => void removeFromFactory(task.thread)}>
+            <MessageSquareIcon aria-hidden className="size-3.5" />
+            Remove from Factory, keep thread
+          </MenuItem>
           <MenuItem onClick={() => void archive()}>
             <ArchiveIcon aria-hidden className="size-3.5" />
             Archive task

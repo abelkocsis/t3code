@@ -94,25 +94,9 @@ function thread(overrides: Partial<OrchestrationThreadShell> = {}): Orchestratio
 }
 
 describe("decideFactoryReview", () => {
-  it("enrols a thread whose own open pull request is linked", () => {
-    const decision = decideFactoryReview(thread({ factory: null }), NOW);
-    expect(decision?.factory).toMatchObject({
-      input: { kind: "pull-request" },
-      phase: "ready-for-review",
-      startedAt: NOW,
-    });
-    expect(decision?.message).toBeNull();
-  });
-
-  it("leaves other people's pull requests and unlinked threads alone", () => {
-    expect(
-      decideFactoryReview(
-        thread({ factory: null, pullRequests: [link({ viewerDidAuthor: false })] }),
-        NOW,
-      ),
-    ).toBeNull();
+  it("never enrols a thread on its own, even with the user's own open pull request", () => {
+    expect(decideFactoryReview(thread({ factory: null }), NOW)).toBeNull();
     expect(decideFactoryReview(thread({ factory: null, pullRequests: [] }), NOW)).toBeNull();
-    expect(decideFactoryReview(thread({ factory: null, archivedAt: NOW }), NOW)).toBeNull();
   });
 
   it("moves a done task with a pull request to ready for review", () => {

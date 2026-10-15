@@ -76,6 +76,41 @@ export function factoryTaskState(
 }
 
 /**
+ * The factory state for an existing thread added by hand. A linked pull request decides the
+ * stage: open, or not synced yet, is ready for review. Without one the agent works out the
+ * phase, so `askAgent` is true and "requirements" holds the place until its marker line lands.
+ */
+export function factoryJoinState(
+  thread: EnvironmentThreadShell,
+  now: string,
+): { readonly factory: ThreadFactory; readonly askAgent: boolean } {
+  const pullRequest = factoryTaskPullRequest(thread);
+  if (pullRequest) {
+    const state = pullRequest.snapshot?.state;
+    return {
+      factory: {
+        input: { kind: "pull-request", value: pullRequest.url },
+        phase: state === "merged" ? "merged" : state === "closed" ? "done" : "ready-for-review",
+        summary: pullRequest.snapshot?.title ?? null,
+        startedAt: now,
+        updatedAt: now,
+      },
+      askAgent: false,
+    };
+  }
+  return {
+    factory: {
+      input: { kind: "free-text", value: thread.title },
+      phase: "requirements",
+      summary: "Working out which phase this task is in.",
+      startedAt: now,
+      updatedAt: now,
+    },
+    askAgent: true,
+  };
+}
+
+/**
  * Every unarchived factory thread, the ones that wait on a human first, then newest first.
  * Done tasks sort last; the page lists them in their own section.
  */
