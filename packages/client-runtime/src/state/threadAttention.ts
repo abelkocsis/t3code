@@ -62,8 +62,9 @@ export function resolveThreadAttention(thread: AttentionThreadShell): ThreadAtte
   if (phase === "waiting_for_approval" || phase === "waiting_for_input") {
     return { phase, at: attentionTimestamp(phase, thread) };
   }
-  // A factory task at a human gate waits on the user while its agent sits idle. The stage
-  // change stamps it, so a visit after the gate opened counts as seen.
+  // A factory task at a human gate waits on the user while its agent sits idle. The later of
+  // the stage change and the last finished turn stamps it, so a visit after the gate opened
+  // counts as seen, and a turn the user started at the gate shows as finished again.
   const factory = thread.factory;
   if (
     factory &&
@@ -71,7 +72,12 @@ export function resolveThreadAttention(thread: AttentionThreadShell): ThreadAtte
     phase !== "starting" &&
     phase !== "running"
   ) {
-    return { phase: "completed", at: factory.updatedAt };
+    const turnAt = thread.latestTurn?.completedAt ?? null;
+    const at =
+      turnAt !== null && Date.parse(turnAt) > Date.parse(factory.updatedAt)
+        ? turnAt
+        : factory.updatedAt;
+    return { phase: "completed", at };
   }
   if (isAttentionPhase(phase)) return { phase, at: attentionTimestamp(phase, thread) };
   return null;

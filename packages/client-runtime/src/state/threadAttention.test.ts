@@ -82,6 +82,22 @@ describe("resolveThreadAttention", () => {
     ).toBeNull();
   });
 
+  it("stamps a turn finished at a factory gate with its own completion", () => {
+    const factory = {
+      input: { kind: "free-text" as const, value: "x" },
+      phase: "ready-for-review" as const,
+      summary: null,
+      startedAt: THREAD_UPDATED_AT,
+      updatedAt: "2026-04-09T09:00:00.000Z",
+    };
+    expect(
+      resolveThreadAttention({
+        ...makeThread({ sessionStatus: "idle", turnState: "completed" }),
+        factory,
+      }),
+    ).toEqual({ phase: "completed", at: TURN_COMPLETED_AT });
+  });
+
   it("asks nothing for a snoozed thread", () => {
     expect(
       resolveThreadAttention({
