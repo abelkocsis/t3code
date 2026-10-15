@@ -163,6 +163,11 @@ const STATE_BADGE: Record<
   done: "success",
 };
 
+/** Ready for review sends the first request; under review nudges the reviewers again. */
+function canRequestReview(task: FactoryTask): boolean {
+  return task.factory.phase === "ready-for-review" || task.factory.phase === "under-review";
+}
+
 /** The task state folded to a dot; the word lives in its tooltip. */
 const STATE_DOT: Record<FactoryTaskState, string> = {
   waiting: "bg-warning",
@@ -410,7 +415,7 @@ export function FactoryPage() {
           task={task}
           now={now}
           selected={selected}
-          checked={task.factory.phase === "ready-for-review" ? checkedKeys.has(key) : null}
+          checked={canRequestReview(task) ? checkedKeys.has(key) : null}
           onCheckedChange={(next) =>
             setCheckedKeys((current) => {
               const set = new Set(current);
@@ -427,7 +432,7 @@ export function FactoryPage() {
     );
   };
   const checked = active.filter(
-    (task) => task.factory.phase === "ready-for-review" && checkedKeys.has(factoryTaskKey(task)),
+    (task) => canRequestReview(task) && checkedKeys.has(factoryTaskKey(task)),
   );
 
   return (
@@ -654,7 +659,7 @@ function TaskRow({
   task: FactoryTask;
   now: number;
   selected: boolean;
-  /** Null hides the box: only ready-for-review tasks join a combined review request. */
+  /** Null hides the box: only tasks that can ask for review join a combined request. */
   checked: boolean | null;
   onCheckedChange: (checked: boolean) => void;
   onSelect: () => void;
@@ -1208,9 +1213,7 @@ function ReviewActions({ task, compact }: { task: FactoryTask; compact: boolean 
     }
   };
 
-  // Under review, "Mark under review" already counted the round the request went out for.
-  const reReview =
-    phase === "under-review" ? (task.factory.reviewRound ?? 0) > 1 : isReReviewRequest([task]);
+  const reReview = isReReviewRequest([task]);
   const copyRequest = async () => {
     try {
       await writeTextToClipboard(
@@ -1256,7 +1259,7 @@ function ReviewActions({ task, compact }: { task: FactoryTask; compact: boolean 
             environmentId={task.thread.environmentId}
             slackThread={task.thread.slackThread}
             urls={[pullRequest.url]}
-            reReview={isReReviewRequest([task])}
+            reReview={reReview}
             compact={compact}
           />
         ) : null}

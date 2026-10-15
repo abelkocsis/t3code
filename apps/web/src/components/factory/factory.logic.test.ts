@@ -378,6 +378,12 @@ describe("buildReviewRequestMessage", () => {
     ]);
     expect(isReReviewRequest(fresh)).toBe(false);
     expect(isReReviewRequest(again)).toBe(true);
+
+    // Under review, the current round is the one the request went out for.
+    const nudge = (reviewRound: number) =>
+      collectFactoryTasks([thread({ factory: factory({ phase: "under-review", reviewRound }) })]);
+    expect(isReReviewRequest(nudge(1))).toBe(false);
+    expect(isReReviewRequest(nudge(2))).toBe(true);
   });
 });
 

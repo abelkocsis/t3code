@@ -341,5 +341,12 @@ export function buildReviewRequestMessage(
 
 /** True when every task has been through review before, so the request is a re-review. */
 export function isReReviewRequest(tasks: ReadonlyArray<FactoryTask>): boolean {
-  return tasks.length > 0 && tasks.every((task) => (task.factory.reviewRound ?? 0) > 0);
+  // Under review, "Mark under review" already counted the round the request went out for.
+  return (
+    tasks.length > 0 &&
+    tasks.every(
+      (task) =>
+        (task.factory.reviewRound ?? 0) - (task.factory.phase === "under-review" ? 1 : 0) > 0,
+    )
+  );
 }
