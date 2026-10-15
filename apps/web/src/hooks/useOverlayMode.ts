@@ -15,6 +15,8 @@ import { useEffect, useEffectEvent, useMemo } from "react";
 import { useStepAwayStore } from "../stepAwayStore";
 import { useUiStateStore } from "../uiStateStore";
 import { buildThreadRouteParams } from "../threadRoutes";
+import { factoryProjectLine, opensOnFactoryPage } from "../components/factory/factory.logic";
+import { useThreadShells } from "../state/entities";
 import { attentionItemLabel, useAttentionThreads } from "./useAttentionThreads";
 import { useNowMinute } from "./useNowMinute";
 import { useClientSettings, useUpdateClientSettings } from "./useSettings";
@@ -31,6 +33,7 @@ import { useWindowFocused } from "./useWindowFocused";
 export function useOverlayMode(): void {
   const navigate = useNavigate();
   const { unseen, workingCount, dismissedCount } = useAttentionThreads();
+  const threads = useThreadShells();
   const appFocused = useWindowFocused();
   const updateSettings = useUpdateClientSettings();
   // A temporary hide expires on the clock, not on a thread event, so the
@@ -69,7 +72,7 @@ export function useOverlayMode(): void {
         environmentId: item.environmentId,
         threadId: item.threadId,
         threadTitle: item.threadTitle,
-        projectTitle: item.projectTitle,
+        projectTitle: item.factory ? factoryProjectLine(item.projectTitle) : item.projectTitle,
         // A factory task at a gate waits on the user, so it takes the waiting colour.
         phase: item.factory?.waiting ? "waiting_for_approval" : item.phase,
         phaseLabel: attentionItemLabel(item),
@@ -103,6 +106,14 @@ export function useOverlayMode(): void {
 
   const handleAction = useEffectEvent((action: DesktopOverlayAction) => {
     if (action.kind === "open-thread") {
+      const thread = threads.find(
+        (candidate) =>
+          candidate.environmentId === action.environmentId && candidate.id === action.threadId,
+      );
+      if (thread && opensOnFactoryPage(thread)) {
+        void navigate({ to: "/factory" });
+        return;
+      }
       void navigate({
         to: "/$environmentId/$threadId",
         params: buildThreadRouteParams({

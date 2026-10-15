@@ -141,6 +141,16 @@ export function factoryProgress(task: Pick<FactoryTask, "factory" | "pullRequest
   };
 }
 
+/** A factory task without its own sidebar row opens on the Factory page, where it lives. */
+export function opensOnFactoryPage(thread: Pick<EnvironmentThreadShell, "factory">): boolean {
+  return thread.factory != null && thread.factory.showInSidebar !== true;
+}
+
+/** The project line of a factory task in the overlay and in banners: says where it came from. */
+export function factoryProjectLine(projectTitle: string | null): string {
+  return projectTitle ? `Code factory · ${projectTitle}` : "Code factory";
+}
+
 /**
  * What the overlay says about a factory task that asks for attention. A task waiting on the
  * human says so; otherwise the stage name is more useful than "Finished".

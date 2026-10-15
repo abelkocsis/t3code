@@ -11,7 +11,23 @@ export type AttentionThreadShell = AwarenessThreadShell &
   Partial<Pick<OrchestrationThreadShell, "settledOverride" | "factory" | "snoozedUntil">>;
 
 /** Factory stages that wait on the human; they count like a finished turn. */
-const FACTORY_GATE_PHASES: ReadonlySet<string> = new Set(["ready-for-review", "ready-to-merge"]);
+const FACTORY_GATE_PHASES: ReadonlySet<string> = new Set([
+  "ready-for-review",
+  "ready-to-merge",
+  "human-gate",
+]);
+
+/**
+ * A factory task's agent finishes turns all the time without needing the human: only a turn
+ * that ends at a gate counts as finished.
+ */
+function isQuietFactoryTurn(thread: AttentionThreadShell, phase: AgentAwarenessPhase | null) {
+  return (
+    phase === "completed" &&
+    thread.factory != null &&
+    !FACTORY_GATE_PHASES.has(thread.factory.phase)
+  );
+}
 
 function isSnoozedNow(thread: AttentionThreadShell): boolean {
   if (thread.snoozedUntil == null) return false;
@@ -79,6 +95,7 @@ export function resolveThreadAttention(thread: AttentionThreadShell): ThreadAtte
         : factory.updatedAt;
     return { phase: "completed", at };
   }
+  if (isQuietFactoryTurn(thread, phase)) return null;
   if (isAttentionPhase(phase)) return { phase, at: attentionTimestamp(phase, thread) };
   return null;
 }
@@ -95,7 +112,8 @@ export function resolveNotifiableAwarenessPhase(
   thread: AttentionThreadShell,
 ): AgentAwarenessPhase | null {
   if (thread.settledOverride === "settled") return null;
-  return resolveThreadAwarenessPhase(thread);
+  const phase = resolveThreadAwarenessPhase(thread);
+  return isQuietFactoryTurn(thread, phase) ? null : phase;
 }
 
 function attentionTimestamp(phase: AttentionPhase, thread: AwarenessThreadShell): string {

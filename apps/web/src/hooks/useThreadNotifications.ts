@@ -9,6 +9,7 @@ import type { EnvironmentId, ThreadId } from "@t3tools/contracts";
 import { useEffect, useEffectEvent, useRef, useState } from "react";
 
 import { buildThreadRouteParams } from "../threadRoutes";
+import { factoryProjectLine, opensOnFactoryPage } from "../components/factory/factory.logic";
 import { useProjects, useThreadShells } from "../state/entities";
 import { useAttentionThreads } from "./useAttentionThreads";
 import { useClientSettings } from "./useSettings";
@@ -60,7 +61,11 @@ export function useThreadNotifications(): void {
         environmentId: thread.environmentId,
         threadId: thread.id,
         threadTitle: thread.title,
-        projectTitle: projectTitleByKey.get(`${thread.environmentId}:${thread.projectId}`) ?? null,
+        projectTitle: thread.factory
+          ? factoryProjectLine(
+              projectTitleByKey.get(`${thread.environmentId}:${thread.projectId}`) ?? null,
+            )
+          : (projectTitleByKey.get(`${thread.environmentId}:${thread.projectId}`) ?? null),
       } satisfies NotifiableThread,
     }));
 
@@ -108,6 +113,26 @@ export function useThreadNotifications(): void {
     void window.desktopBridge?.setAttentionBadgeCount?.(unseen.length);
   });
 
+  // A factory task without its own sidebar row opens on the Factory page.
+  const openNotificationTarget = useEffectEvent(
+    (target: { readonly environmentId: string; readonly threadId: string }) => {
+      const thread = threads.find(
+        (candidate) =>
+          candidate.environmentId === target.environmentId && candidate.id === target.threadId,
+      );
+      if (thread && opensOnFactoryPage(thread)) {
+        void navigate({ to: "/factory" });
+        return;
+      }
+      void navigate({
+        to: "/$environmentId/$threadId",
+        params: buildThreadRouteParams(
+          scopeThreadRef(target.environmentId as EnvironmentId, target.threadId as ThreadId),
+        ),
+      });
+    },
+  );
+
   useEffect(() => {
     syncNotifications();
   }, [threads, projects, unseen, settings, appFocused, flushTick]);
@@ -124,15 +149,8 @@ export function useThreadNotifications(): void {
   useEffect(() => {
     const subscribe = window.desktopBridge?.onThreadNotificationActivated;
     if (subscribe === undefined) return;
-    return subscribe((target) => {
-      void navigate({
-        to: "/$environmentId/$threadId",
-        params: buildThreadRouteParams(
-          scopeThreadRef(target.environmentId as EnvironmentId, target.threadId as ThreadId),
-        ),
-      });
-    });
-  }, [navigate]);
+    return subscribe((target) => openNotificationTarget(target));
+  }, []);
 }
 
 function selectNotificationSettings(settings: {

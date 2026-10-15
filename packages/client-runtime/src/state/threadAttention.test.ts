@@ -74,12 +74,29 @@ describe("resolveThreadAttention", () => {
     expect(
       resolveThreadAttention({
         ...makeThread({ sessionStatus: "idle" }),
-        factory: { ...factory, phase: "under-review" as const },
+        factory: { ...factory, phase: "human-gate" as const },
       }),
-    ).toEqual({ phase: "completed", at: expect.any(String) });
+    ).toEqual({ phase: "completed", at: "2026-10-14T13:00:00.000Z" });
     expect(
       resolveThreadAttention({ ...makeThread({ sessionStatus: "running" }), factory }),
     ).toBeNull();
+  });
+
+  it("stays quiet when a factory task's agent finishes a turn away from a gate", () => {
+    const factory = {
+      input: { kind: "free-text" as const, value: "x" },
+      phase: "under-review" as const,
+      summary: null,
+      startedAt: THREAD_UPDATED_AT,
+      updatedAt: "2026-10-14T13:00:00.000Z",
+    };
+    const thread = { ...makeThread({ sessionStatus: "idle", turnState: "completed" }), factory };
+    expect(resolveThreadAttention(thread)).toBeNull();
+    expect(resolveNotifiableAwarenessPhase(thread)).toBeNull();
+    // A question still asks for the human, whatever the stage.
+    expect(resolveThreadAttention({ ...makeThread({ pending: "approval" }), factory })?.phase).toBe(
+      "waiting_for_approval",
+    );
   });
 
   it("stamps a turn finished at a factory gate with its own completion", () => {
