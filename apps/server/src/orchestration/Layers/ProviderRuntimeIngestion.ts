@@ -1806,6 +1806,10 @@ const make = Effect.gen(function* () {
         phase: marker.phase,
         summary: marker.summary,
         updatedAt: input.updatedAt,
+        // The Factory page keeps the progress bar where the task stood before the gate.
+        ...(marker.phase === "human-gate" && input.factory.phase !== "human-gate"
+          ? { gatedFrom: input.factory.phase }
+          : {}),
       },
     });
   });

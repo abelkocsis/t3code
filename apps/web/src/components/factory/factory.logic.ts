@@ -80,6 +80,67 @@ export function factoryTaskState(
   return phase === "under-review" ? "idle" : "working";
 }
 
+/** The stages of the progress bar under each task. */
+export const FACTORY_PROGRESS_STAGES = [
+  "Spec",
+  "Build",
+  "Agent review",
+  "Pull request ready",
+  "Human review",
+  "Merge",
+] as const;
+
+function progressStage(
+  phase: ThreadFactory["phase"],
+  factory: ThreadFactory,
+  hasPullRequest: boolean,
+): number | null {
+  switch (phase) {
+    case "requirements":
+    case "product-spec":
+    case "implementation-spec":
+      return 0;
+    case "implementation":
+      return 1;
+    case "review":
+    case "converged":
+      return 2;
+    case "fix":
+      // A fix belongs to the review it answers.
+      if ((factory.reviewRound ?? 0) > 0) return 4;
+      return hasPullRequest ? 3 : 2;
+    case "done":
+    case "ready-for-review":
+      return 3;
+    case "under-review":
+      return 4;
+    case "ready-to-merge":
+    case "merged":
+      return 5;
+    case "human-gate":
+      return factory.gatedFrom && factory.gatedFrom !== "human-gate"
+        ? progressStage(factory.gatedFrom, factory, hasPullRequest)
+        : null;
+  }
+}
+
+/**
+ * Where a task stands on the progress bar. A human gate keeps the stage it interrupted; a gate
+ * recorded before the stage was stored has no position.
+ */
+export function factoryProgress(task: Pick<FactoryTask, "factory" | "pullRequest">): {
+  readonly stage: number | null;
+  readonly gated: boolean;
+  readonly complete: boolean;
+} {
+  const { factory } = task;
+  return {
+    stage: progressStage(factory.phase, factory, task.pullRequest !== null),
+    gated: factory.phase === "human-gate",
+    complete: factory.phase === "merged",
+  };
+}
+
 /**
  * What the overlay says about a factory task that asks for attention. A task waiting on the
  * human says so; otherwise the stage name is more useful than "Finished".

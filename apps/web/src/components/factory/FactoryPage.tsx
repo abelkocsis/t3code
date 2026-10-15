@@ -126,7 +126,9 @@ import {
   buildReviewRequestMessage,
   collectFactoryTasks,
   isReReviewRequest,
+  FACTORY_PROGRESS_STAGES,
   FACTORY_TASK_STATE_LABELS,
+  factoryProgress,
   factoryTaskKey,
   formatElapsed,
   orderFactoryTasks,
@@ -730,6 +732,7 @@ function TaskRow({
           {project?.title ?? "Unknown project"}
           {task.factory.summary ? ` · ${task.factory.summary}` : ""}
         </span>
+        <TaskProgress task={task} />
       </div>
       <span
         className="shrink-0 text-xs text-muted-foreground tabular-nums"
@@ -768,6 +771,46 @@ function TaskRow({
         <TaskMenu task={task} />
       </div>
     </div>
+  );
+}
+
+/**
+ * One segment per stage on a fixed width, so the end of the track always shows. Done stages
+ * are grey and the current one is tinted. A human gate turns the current segment amber, or
+ * the whole bar when the gate predates the stored stage. Colors ease once per change and never
+ * animate on their own.
+ */
+function TaskProgress({ task }: { task: FactoryTask }) {
+  const { stage, gated, complete } = factoryProgress(task);
+  const label =
+    stage === null
+      ? "Waiting on you"
+      : `${FACTORY_PROGRESS_STAGES[stage]}, stage ${stage + 1} of ${FACTORY_PROGRESS_STAGES.length}${gated ? ", waiting on you" : ""}`;
+  return (
+    <Tooltip>
+      <TooltipTrigger
+        render={<div className="mt-1.5 flex w-36 gap-0.5" role="img" aria-label={label} />}
+      >
+        {FACTORY_PROGRESS_STAGES.map((name, index) => (
+          <span
+            key={name}
+            className={cn(
+              "h-1 flex-1 rounded-full transition-colors duration-500",
+              stage === null
+                ? "bg-warning/30"
+                : index < stage || complete
+                  ? "bg-foreground/35"
+                  : index === stage
+                    ? gated
+                      ? "bg-warning/80"
+                      : "bg-primary/70"
+                    : "bg-foreground/10",
+            )}
+          />
+        ))}
+      </TooltipTrigger>
+      <TooltipPopup>{label}</TooltipPopup>
+    </Tooltip>
   );
 }
 

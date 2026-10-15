@@ -13,6 +13,7 @@ import {
   factoryJoinState,
   factoryTaskKey,
   factoryAttentionLabel,
+  factoryProgress,
   factoryTaskState,
   formatElapsed,
   moveFactoryTask,
@@ -92,6 +93,45 @@ describe("factoryAttentionLabel", () => {
       waiting: false,
     });
     expect(factoryAttentionLabel(thread({ factory: null }))).toBeNull();
+  });
+});
+
+describe("factoryProgress", () => {
+  const stageOf = (overrides: Partial<ThreadFactory>, hasPullRequest = false) =>
+    factoryProgress({
+      factory: factory(overrides),
+      pullRequest: hasPullRequest
+        ? {
+            host: "github.com",
+            repository: "acme/web",
+            number: 7,
+            url: "https://github.com/acme/web/pull/7",
+            source: "created",
+            linkedAt: NOW,
+            snapshot: null,
+            stack: null,
+          }
+        : null,
+    });
+
+  it("places a fix in the review it answers", () => {
+    expect(stageOf({ phase: "fix" }).stage).toBe(2);
+    expect(stageOf({ phase: "fix" }, true).stage).toBe(3);
+    expect(stageOf({ phase: "fix", reviewRound: 1 }, true).stage).toBe(4);
+  });
+
+  it("keeps the stage a human gate interrupted", () => {
+    expect(stageOf({ phase: "human-gate", gatedFrom: "implementation" })).toEqual({
+      stage: 1,
+      gated: true,
+      complete: false,
+    });
+    expect(stageOf({ phase: "human-gate" }).stage).toBeNull();
+  });
+
+  it("fills the bar only once merged", () => {
+    expect(stageOf({ phase: "ready-to-merge" })).toMatchObject({ stage: 5, complete: false });
+    expect(stageOf({ phase: "merged" })).toMatchObject({ stage: 5, complete: true });
   });
 });
 

@@ -115,6 +115,8 @@ export const ThreadFactory = Schema.Struct({
   startedAt: IsoDateTime,
   /** When the phase last changed. */
   updatedAt: IsoDateTime,
+  /** The phase the task was in when it last stopped at a human gate. */
+  gatedFrom: Schema.optional(FactoryPhase),
   review: Schema.optional(Schema.NullOr(FactoryReviewMemo)),
   /** The Factory page folder, or null when the task sits below the folders. */
   folderId: Schema.optional(Schema.NullOr(TrimmedNonEmptyString)),

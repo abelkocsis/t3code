@@ -1514,6 +1514,27 @@ describe("ProviderRuntimeIngestion", () => {
       ),
     );
     expect(unchanged.factory?.phase).toBe("review");
+
+    // A human gate remembers the phase it interrupted.
+    harness.emit({
+      type: "item.completed",
+      eventId: asEventId("evt-factory-completed-3"),
+      provider: ProviderDriverKind.make("codex"),
+      createdAt: now,
+      threadId: asThreadId("thread-1"),
+      turnId: asTurnId("turn-factory-3"),
+      itemId: asItemId("item-factory-3"),
+      payload: {
+        itemType: "assistant_message",
+        status: "completed",
+        detail: "FACTORY PHASE: human-gate Keep the old endpoint?",
+      },
+    });
+    const gated = await waitForThread(
+      harness.readModel,
+      (entry) => entry.factory?.phase === "human-gate",
+    );
+    expect(gated.factory?.gatedFrom).toBe("review");
   });
 
   it("streams reasoning deltas into a finalized reasoning message", async () => {
