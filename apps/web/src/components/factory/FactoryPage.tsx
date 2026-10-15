@@ -42,16 +42,26 @@ import {
   CopyIcon,
   EllipsisIcon,
   ExternalLinkIcon,
+  EyeIcon,
   FolderIcon,
   FolderPlusIcon,
   GripVerticalIcon,
   MessageSquareIcon,
+  MilestoneIcon,
   PencilIcon,
   PlayIcon,
   SendIcon,
   Trash2Icon,
 } from "lucide-react";
-import { useEffect, useMemo, useState, type ReactNode } from "react";
+import {
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ReactNode,
+  type RefObject,
+} from "react";
 
 import { isElectron } from "../../env";
 import { writeTextToClipboard } from "../../hooks/useCopyToClipboard";
@@ -82,6 +92,7 @@ import { buildThreadRouteParams } from "../../threadRoutes";
 import { useRightPanelStore } from "../../rightPanelStore";
 import { useUiStateStore } from "../../uiStateStore";
 import { requestCustomSnooze } from "../CustomSnoozeDialog";
+import { SlackIcon } from "../Icons";
 import { resolveSnoozePresets, snoozeWakeDescription } from "../Sidebar.snooze";
 import { requestFolderName } from "../FolderNameDialog";
 import {
@@ -151,6 +162,59 @@ const STATE_BADGE: Record<
   error: "error",
   done: "success",
 };
+
+/** The task state folded to a dot; the word lives in its tooltip. */
+const STATE_DOT: Record<FactoryTaskState, string> = {
+  waiting: "bg-warning",
+  working: "bg-info",
+  idle: "bg-muted-foreground/40",
+  snoozed: "bg-muted-foreground/40",
+  error: "bg-destructive",
+  done: "bg-success",
+};
+
+/** Below this, the title column is too narrow to read, so the row folds its next label. */
+const TITLE_MIN_WIDTH = 200;
+/** How far the row must grow past the width where a label folded before it unfolds again. */
+const UNFOLD_SLACK = 24;
+
+/**
+ * How many labels a task row folds into icons, in order: the phase, the review buttons, then
+ * the state. Folds one more while the title column is too narrow, and unfolds once the row is
+ * wider than where that label folded. Starts over when the row's content changes.
+ */
+function useRowFoldLevel(
+  row: RefObject<HTMLElement | null>,
+  title: RefObject<HTMLElement | null>,
+  contentKey: string,
+): number {
+  const [fold, setFold] = useState({ key: contentKey, level: 0 });
+  useLayoutEffect(() => {
+    const rowElement = row.current;
+    const titleElement = title.current;
+    if (!rowElement || !titleElement) return;
+    let level = 0;
+    const foldedAt: number[] = [];
+    const check = () => {
+      const rowWidth = rowElement.clientWidth;
+      let next = level;
+      if (titleElement.clientWidth < TITLE_MIN_WIDTH && level < 3) {
+        foldedAt[level] = rowWidth;
+        next = level + 1;
+      } else if (level > 0 && rowWidth > (foldedAt[level - 1] ?? 0) + UNFOLD_SLACK) {
+        next = level - 1;
+      }
+      if (next === level) return;
+      level = next;
+      setFold({ key: contentKey, level });
+    };
+    const observer = new ResizeObserver(check);
+    observer.observe(rowElement);
+    observer.observe(titleElement);
+    return () => observer.disconnect();
+  }, [row, title, contentKey]);
+  return fold.key === contentKey ? fold.level : 0;
+}
 
 const FOLDER_DROP_PREFIX = "folder:";
 const COLLAPSED_KEY = "t3code:factory-collapsed-folders:v1";
@@ -609,6 +673,16 @@ function TaskRow({
     id: key,
   });
   const [draftTitle, setDraftTitle] = useState<string | null>(null);
+  // The full title shows on hover only when the row cuts it short.
+  const titleRef = useRef<HTMLButtonElement>(null);
+  const rowRef = useRef<HTMLDivElement | null>(null);
+  const titleColumnRef = useRef<HTMLDivElement>(null);
+  const foldLevel = useRowFoldLevel(
+    rowRef,
+    titleColumnRef,
+    `${task.factory.phase}:${task.state}:${task.thread.slackThread ? "slack" : ""}`,
+  );
+  const [titleTooltipOpen, setTitleTooltipOpen] = useState(false);
 
   // The pull request opens in the thread's own panel, unless the setting sends it to the browser.
   const openPullRequest = () => {
@@ -644,7 +718,10 @@ function TaskRow({
 
   return (
     <div
-      ref={setNodeRef}
+      ref={(element) => {
+        setNodeRef(element);
+        rowRef.current = element;
+      }}
       style={{ transform: CSS.Translate.toString(transform), transition }}
       role="button"
       tabIndex={0}
@@ -687,7 +764,7 @@ function TaskRow({
           />
         </span>
       ) : null}
-      <div className="flex min-w-0 flex-1 flex-col">
+      <div ref={titleColumnRef} className="flex min-w-36 flex-1 flex-col">
         {draftTitle !== null ? (
           <Input
             size="compact"
@@ -705,16 +782,32 @@ function TaskRow({
           />
         ) : (
           <span className="flex min-w-0 items-center gap-1">
-            <button
-              type="button"
-              className="truncate text-start text-sm text-foreground hover:underline"
-              onClick={(event) => {
-                event.stopPropagation();
-                onOpen();
+            <Tooltip
+              open={titleTooltipOpen}
+              onOpenChange={(open) => {
+                const title = titleRef.current;
+                setTitleTooltipOpen(
+                  open && title !== null && title.scrollWidth > title.clientWidth,
+                );
               }}
             >
-              {task.thread.title}
-            </button>
+              <TooltipTrigger
+                render={
+                  <button
+                    ref={titleRef}
+                    type="button"
+                    className="truncate text-start text-sm text-foreground hover:underline"
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      onOpen();
+                    }}
+                  />
+                }
+              >
+                {task.thread.title}
+              </TooltipTrigger>
+              <TooltipPopup>{task.thread.title}</TooltipPopup>
+            </Tooltip>
             <button
               type="button"
               aria-label="Rename task"
@@ -747,14 +840,46 @@ function TaskRow({
       >
         {formatElapsed(task.factory.updatedAt, now)}
       </span>
-      <Badge variant="outline">{FACTORY_PHASE_LABELS[task.factory.phase]}</Badge>
-      <Badge variant={STATE_BADGE[task.state]}>{FACTORY_TASK_STATE_LABELS[task.state]}</Badge>
+      {foldLevel >= 1 ? (
+        <Tooltip>
+          <TooltipTrigger
+            render={
+              <span
+                role="img"
+                aria-label={FACTORY_PHASE_LABELS[task.factory.phase]}
+                className="flex shrink-0 text-muted-foreground"
+              />
+            }
+          >
+            <MilestoneIcon aria-hidden className="size-3.5" />
+          </TooltipTrigger>
+          <TooltipPopup>{FACTORY_PHASE_LABELS[task.factory.phase]}</TooltipPopup>
+        </Tooltip>
+      ) : (
+        <Badge variant="outline">{FACTORY_PHASE_LABELS[task.factory.phase]}</Badge>
+      )}
+      {foldLevel >= 3 ? (
+        <Tooltip>
+          <TooltipTrigger
+            render={
+              <span
+                role="img"
+                aria-label={FACTORY_TASK_STATE_LABELS[task.state]}
+                className={cn("size-2 shrink-0 rounded-full", STATE_DOT[task.state])}
+              />
+            }
+          />
+          <TooltipPopup>{FACTORY_TASK_STATE_LABELS[task.state]}</TooltipPopup>
+        </Tooltip>
+      ) : (
+        <Badge variant={STATE_BADGE[task.state]}>{FACTORY_TASK_STATE_LABELS[task.state]}</Badge>
+      )}
       <div
         className="flex shrink-0 items-center gap-1"
         onClick={(event) => event.stopPropagation()}
         onKeyDown={(event) => event.stopPropagation()}
       >
-        <ReviewActions task={task} />
+        <ReviewActions task={task} compact={foldLevel >= 2} />
         {task.pullRequest ? (
           <Tooltip>
             <TooltipTrigger
@@ -772,9 +897,16 @@ function TaskRow({
             <TooltipPopup>Pull request #{task.pullRequest.number}</TooltipPopup>
           </Tooltip>
         ) : null}
-        <Button size="icon-sm" variant="ghost" aria-label="Open as thread" onClick={onOpen}>
-          <MessageSquareIcon aria-hidden className="size-4" />
-        </Button>
+        <Tooltip>
+          <TooltipTrigger
+            render={
+              <Button size="icon-sm" variant="ghost" aria-label="Open as thread" onClick={onOpen} />
+            }
+          >
+            <MessageSquareIcon aria-hidden className="size-4" />
+          </TooltipTrigger>
+          <TooltipPopup>Open the task as a chat thread</TooltipPopup>
+        </Tooltip>
         <TaskMenu task={task} />
       </div>
     </div>
@@ -1033,7 +1165,7 @@ function BlockingPullRequestDialog({
  * task under review. Under review: copy the same request again to nudge reviewers. Ready to
  * merge: merge. The server moves the task between the stages.
  */
-function ReviewActions({ task }: { task: FactoryTask }) {
+function ReviewActions({ task, compact }: { task: FactoryTask; compact: boolean }) {
   const setFactory = useAtomCommand(threadEnvironment.setFactory, { reportFailure: false });
   const phase = task.factory.phase;
   const pullRequest = task.pullRequest;
@@ -1095,11 +1227,24 @@ function ReviewActions({ task }: { task: FactoryTask }) {
     }
   };
 
+  const copyLabel = reReview ? "Copy re-review message" : "Copy Slack message";
   const copyButton = (
-    <Button size="xs" variant="outline" onClick={() => void copyRequest()}>
-      <CopyIcon aria-hidden className="size-3.5" />
-      {reReview ? "Copy re-review message" : "Copy Slack message"}
-    </Button>
+    <Tooltip>
+      <TooltipTrigger
+        render={
+          <Button
+            size="xs"
+            variant="outline"
+            aria-label={copyLabel}
+            onClick={() => void copyRequest()}
+          />
+        }
+      >
+        <CopyIcon aria-hidden className="size-3.5" />
+        <SlackIcon aria-hidden className="size-3.5" />
+      </TooltipTrigger>
+      <TooltipPopup>{copyLabel} for the reviewers</TooltipPopup>
+    </Tooltip>
   );
 
   if (phase === "ready-for-review") {
@@ -1112,11 +1257,25 @@ function ReviewActions({ task }: { task: FactoryTask }) {
             slackThread={task.thread.slackThread}
             urls={[pullRequest.url]}
             reReview={isReReviewRequest([task])}
+            compact={compact}
           />
         ) : null}
-        <Button size="xs" onClick={() => void markUnderReview()}>
-          Mark under review
-        </Button>
+        <Tooltip>
+          <TooltipTrigger
+            render={
+              <Button
+                size="xs"
+                aria-label="Mark under review"
+                onClick={() => void markUnderReview()}
+              />
+            }
+          >
+            {compact ? <EyeIcon aria-hidden className="size-3.5" /> : "Mark under review"}
+          </TooltipTrigger>
+          <TooltipPopup>
+            Mark under review: the agent reads the reviews and answers new ones
+          </TooltipPopup>
+        </Tooltip>
       </>
     );
   }
@@ -1190,12 +1349,15 @@ function SendToSlackButton({
   slackThread,
   urls,
   reReview,
+  compact = false,
   onSent,
 }: {
   environmentId: FactoryTask["thread"]["environmentId"];
   slackThread: SlackThreadRef;
   urls: ReadonlyArray<string>;
   reReview: boolean;
+  /** Icon only, for a task row that ran out of room. */
+  compact?: boolean;
   onSent?: () => void;
 }) {
   const reply = useAtomCommand(serverEnvironment.replyInSlackThread, { reportFailure: false });
@@ -1222,10 +1384,23 @@ function SendToSlackButton({
     onSent?.();
   };
   return (
-    <Button size="xs" variant="outline" disabled={sending} onClick={() => void send()}>
-      <SendIcon aria-hidden className="size-3.5" />
-      {sending ? "Sending..." : "Send to Slack"}
-    </Button>
+    <Tooltip>
+      <TooltipTrigger
+        render={
+          <Button
+            size="xs"
+            variant="outline"
+            aria-label="Send to Slack"
+            disabled={sending}
+            onClick={() => void send()}
+          />
+        }
+      >
+        <SendIcon aria-hidden className="size-3.5" />
+        {compact ? null : sending ? "Sending..." : "Send to Slack"}
+      </TooltipTrigger>
+      <TooltipPopup>Post the review request in the linked Slack thread</TooltipPopup>
+    </Tooltip>
   );
 }
 

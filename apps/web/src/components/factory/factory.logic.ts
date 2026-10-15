@@ -320,7 +320,7 @@ export function formatElapsed(fromIso: string, now: number): string {
   const minutes = Math.max(0, Math.floor((now - started) / 60_000));
   if (minutes < 60) return `${minutes}m`;
   const hours = Math.floor(minutes / 60);
-  if (hours < 48) return `${hours}h ${minutes % 60}m`;
+  if (hours < 48) return `${hours}h`;
   return `${Math.floor(hours / 24)}d`;
 }
 

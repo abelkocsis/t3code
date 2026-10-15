@@ -385,7 +385,7 @@ describe("formatElapsed", () => {
   it("formats minutes, hours, and days", () => {
     const start = Date.parse(NOW);
     expect(formatElapsed(NOW, start + 5 * 60_000)).toBe("5m");
-    expect(formatElapsed(NOW, start + 3 * 3_600_000 + 60_000)).toBe("3h 1m");
+    expect(formatElapsed(NOW, start + 3 * 3_600_000 + 60_000)).toBe("3h");
     expect(formatElapsed(NOW, start + 72 * 3_600_000)).toBe("3d");
   });
 });
