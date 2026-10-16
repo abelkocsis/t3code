@@ -110,6 +110,15 @@ export const PULL_REQUESTS_PANEL_REF = scopeThreadRef(
 );
 
 /**
+ * The Factory page's panel: it belongs to no thread, so it gets a fixed ref like the
+ * pull-request list's, and holds only the environment-wide surfaces (summary, to-dos).
+ */
+export const FACTORY_PANEL_REF = scopeThreadRef(
+  EnvironmentId.make("factory-panel"),
+  ThreadId.make("factory-panel"),
+);
+
+/**
  * The pull-request list's shared panel is session
  * state: reopening the app should show the list, not last session's tabs and detail fetches.
  */

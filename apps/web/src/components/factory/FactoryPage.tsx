@@ -55,6 +55,7 @@ import {
 } from "lucide-react";
 import {
   useEffect,
+  useEffectEvent,
   useLayoutEffect,
   useMemo,
   useRef,
@@ -89,7 +90,23 @@ import { serverEnvironment } from "../../state/server";
 import { threadEnvironment } from "../../state/threads";
 import { useAtomCommand } from "../../state/use-atom-command";
 import { buildThreadRouteParams } from "../../threadRoutes";
-import { useRightPanelStore } from "../../rightPanelStore";
+import { useAtomValue } from "@effect/atom-react";
+
+import { isCommandPaletteOpen } from "../../commandPaletteBus";
+import { resolveShortcutCommand, shortcutLabelForCommand } from "../../keybindings";
+import { isTerminalFocused } from "../../lib/terminalFocus";
+import { usePanelAnimationSettings, usePanelPresence } from "../../panelAnimations";
+import {
+  FACTORY_PANEL_REF,
+  selectSelectedRightPanelSurface,
+  selectThreadRightPanelState,
+  useRightPanelStore,
+} from "../../rightPanelStore";
+import { primaryServerKeybindingsAtom } from "../../state/server";
+import { PanelLayoutControls } from "../chat/PanelLayoutControls";
+import { RightPanelTabs } from "../RightPanelTabs";
+import { StandupPanel } from "../StandupPanel";
+import { TodoPanel } from "../TodoPanel";
 import { useUiStateStore } from "../../uiStateStore";
 import { requestCustomSnooze } from "../CustomSnoozeDialog";
 import { SlackIcon } from "../Icons";
@@ -239,8 +256,164 @@ function readCollapsed(): ReadonlySet<string> {
  * folders and the tasks: a folder dropped on a folder reorders them, a task dropped on a
  * folder or on one of its rows files it there.
  */
+const EMPTY_PREVIEW_SESSIONS = {};
+const EMPTY_PREVIEW_DESKTOP_STATE = {};
+const EMPTY_TERMINAL_LABELS = new Map<string, string>();
+const EMPTY_PENDING_SURFACES = new Set<string>();
+
+function getShortcutContext() {
+  return {
+    terminalFocus: isTerminalFocused(),
+    terminalOpen: false,
+    previewFocus: false,
+    previewOpen: false,
+    modelPickerOpen: false,
+    isWeb: !isElectron,
+  };
+}
+
+/**
+ * The daily summary and the to-do list beside the task list. Both span the whole
+ * environment, so the page's own panel holds them rather than any thread's.
+ */
+function useFactoryPanel() {
+  const environmentId = usePrimaryEnvironmentId();
+  const keybindings = useAtomValue(primaryServerKeybindingsAtom);
+  const panelState = useRightPanelStore((state) =>
+    selectThreadRightPanelState(state.byThreadKey, FACTORY_PANEL_REF),
+  );
+  const activeSurface = useRightPanelStore((state) =>
+    selectSelectedRightPanelSurface(state.byThreadKey, FACTORY_PANEL_REF),
+  );
+  const { active: animationsActive, durationMs } = usePanelAnimationSettings();
+  const presenceValue = useMemo(
+    () => ({ activeSurface, surfaces: panelState.surfaces }),
+    [activeSurface, panelState.surfaces],
+  );
+  const presence = usePanelPresence(
+    panelState.isOpen && activeSurface !== null,
+    presenceValue,
+    animationsActive,
+    FACTORY_PANEL_REF.threadId,
+    durationMs,
+  );
+  const open = panelState.isOpen && activeSurface !== null;
+  // The toggle brings back whichever of the two was open last.
+  const toggleAvailable = panelState.surfaces.length > 0;
+  const toggle = () => {
+    if (!toggleAvailable) return;
+    useRightPanelStore.getState().toggleVisibility(FACTORY_PANEL_REF);
+  };
+  const closeActive = () => {
+    if (!activeSurface) return;
+    useRightPanelStore.getState().closeSurface(FACTORY_PANEL_REF, activeSurface.id);
+  };
+
+  // This page has no ChatView, so it handles the panel shortcuts itself.
+  const onShortcut = useEffectEvent((event: KeyboardEvent) => {
+    if (event.defaultPrevented || isCommandPaletteOpen()) return;
+    const command = resolveShortcutCommand(event, keybindings, { context: getShortcutContext() });
+    if (command === "rightPanel.toggle" && toggleAvailable) {
+      event.preventDefault();
+      event.stopPropagation();
+      if (!event.repeat) toggle();
+    }
+    if (command === "rightPanel.close" && open) {
+      event.preventDefault();
+      event.stopPropagation();
+      if (!event.repeat) closeActive();
+    }
+  });
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => onShortcut(event);
+    document.addEventListener("keydown", onKeyDown);
+    return () => document.removeEventListener("keydown", onKeyDown);
+  }, []);
+
+  const controls = (
+    <div
+      className="absolute top-[var(--workspace-controls-top)] right-[var(--workspace-controls-right)] z-50 mr-px flex h-[var(--workspace-topbar-height)] items-center gap-1 [-webkit-app-region:no-drag]"
+      data-workspace-titlebar-controls
+    >
+      <PanelLayoutControls
+        showTerminalControl={false}
+        terminalAvailable={false}
+        terminalOpen={false}
+        terminalShortcutLabel={null}
+        rightPanelAvailable={toggleAvailable}
+        rightPanelOpen={open}
+        rightPanelShortcutLabel={shortcutLabelForCommand(keybindings, "rightPanel.toggle")}
+        rightPanelUnavailableLabel="Open the daily summary or the to-do list first"
+        liveAgentCount={0}
+        onOpenStandup={() => useRightPanelStore.getState().toggle(FACTORY_PANEL_REF, "standup")}
+        standupOpen={open && activeSurface?.kind === "standup"}
+        onOpenTodos={() => useRightPanelStore.getState().toggle(FACTORY_PANEL_REF, "todos")}
+        todosOpen={open && activeSurface?.kind === "todos"}
+        onToggleTerminal={() => undefined}
+        onToggleRightPanel={toggle}
+      />
+    </div>
+  );
+  const rendered = presence.value?.activeSurface ?? null;
+  const panel =
+    presence.present && rendered ? (
+      <RightPanelTabs
+        mode="inline"
+        open={open}
+        widthStorageKey="t3code:factory-panel-width"
+        surfaces={presence.value?.surfaces ?? []}
+        environmentId={environmentId}
+        activeSurfaceId={rendered.id}
+        pendingSurfaceIds={EMPTY_PENDING_SURFACES}
+        previewSessions={EMPTY_PREVIEW_SESSIONS}
+        desktopByTabId={EMPTY_PREVIEW_DESKTOP_STATE}
+        terminalLabelsById={EMPTY_TERMINAL_LABELS}
+        onActivate={(surface) =>
+          useRightPanelStore.getState().activateSurface(FACTORY_PANEL_REF, surface.id)
+        }
+        onCloseSurface={(surface) =>
+          useRightPanelStore.getState().closeSurface(FACTORY_PANEL_REF, surface.id)
+        }
+        onCloseOtherSurfaces={(surface) =>
+          useRightPanelStore.getState().closeOtherSurfaces(FACTORY_PANEL_REF, surface.id)
+        }
+        onCloseSurfacesToRight={(surface) =>
+          useRightPanelStore.getState().closeSurfacesToRight(FACTORY_PANEL_REF, surface.id)
+        }
+        onCloseAllSurfaces={() => useRightPanelStore.getState().closeAllSurfaces(FACTORY_PANEL_REF)}
+        onCopyFilePath={() => undefined}
+        onAddBrowser={() => undefined}
+        onAddBrowserInProfile={() => undefined}
+        onAddTerminal={() => undefined}
+        onAddDiff={() => undefined}
+        onAddFiles={() => undefined}
+        onAddPullRequest={() => undefined}
+        onAddPullRequests={() => undefined}
+        onAddAgents={() => undefined}
+        onAddDevice={() => undefined}
+        browserAvailable={false}
+        terminalAvailable={false}
+        diffAvailable={false}
+        filesAvailable={false}
+        pullRequestAvailable={false}
+        pullRequestsAvailable={false}
+        agentsAvailable={false}
+        deviceAvailable={false}
+        liveAgentCount={0}
+      >
+        {rendered.kind === "standup" ? (
+          <StandupPanel environmentId={environmentId} />
+        ) : rendered.kind === "todos" ? (
+          <TodoPanel environmentId={environmentId} />
+        ) : null}
+      </RightPanelTabs>
+    ) : null;
+  return { present: presence.present, controls, panel };
+}
+
 export function FactoryPage() {
   useEscapeToGoBack();
+  const sidePanel = useFactoryPanel();
   const navigate = useNavigate();
   const threads = useThreadShells();
   const folders = useFactoryFolders();
@@ -438,7 +611,7 @@ export function FactoryPage() {
   return (
     <SidebarInset className="h-dvh min-h-0 overflow-hidden overscroll-y-none isolate">
       <div className="flex min-h-0 min-w-0 flex-1 flex-col bg-background text-foreground">
-        <WorkspacePageHeader electron={isElectron}>
+        <WorkspacePageHeader electron={isElectron} className="relative">
           <div className="flex w-full min-w-0 items-center gap-3">
             <WorkspaceBreadcrumb ariaLabel="Factory breadcrumb" className="min-w-0 flex-1">
               <WorkspaceBreadcrumbItem current>
@@ -454,87 +627,99 @@ export function FactoryPage() {
                 New folder
               </Button>
             ) : null}
+            {/* Room for the panel toggles, which sit at the fixed titlebar inset. */}
+            <span aria-hidden className={cn("shrink-0", sidePanel.present ? "w-0" : "w-32")} />
           </div>
+          {/* Inside the header while the panel is closed: a no-drag descendant beats the
+              desktop drag-region, where a floating sibling loses. */}
+          {sidePanel.present ? null : sidePanel.controls}
         </WorkspacePageHeader>
 
-        <ScrollArea className="min-h-0 flex-1">
-          <WorkspacePageContainer>
-            <div className="flex flex-col gap-6">
-              <StartTaskForm />
-              {tasks.length === 0 ? (
-                <p className="text-sm text-muted-foreground">No factory tasks yet.</p>
-              ) : null}
-              <DndContext
-                sensors={sensors}
-                collisionDetection={closestCenter}
-                modifiers={[restrictToVerticalAxis]}
-                onDragStart={onDragStart}
-                onDragOver={onDragOver}
-                onDragEnd={onDragEnd}
-                onDragCancel={() => {
-                  setDraggingKey(null);
-                  setDragLayout(null);
-                }}
-              >
-                {/* One sortable list per container: rows shift only inside their own folder,
+        <div className="relative flex min-h-0 flex-1">
+          {sidePanel.present ? sidePanel.controls : null}
+          <ScrollArea className="min-h-0 flex-1">
+            <WorkspacePageContainer>
+              <div className="flex flex-col gap-6">
+                <StartTaskForm />
+                {tasks.length === 0 ? (
+                  <p className="text-sm text-muted-foreground">No factory tasks yet.</p>
+                ) : null}
+                <DndContext
+                  sensors={sensors}
+                  collisionDetection={closestCenter}
+                  modifiers={[restrictToVerticalAxis]}
+                  onDragStart={onDragStart}
+                  onDragOver={onDragOver}
+                  onDragEnd={onDragEnd}
+                  onDragCancel={() => {
+                    setDraggingKey(null);
+                    setDragLayout(null);
+                  }}
+                >
+                  {/* One sortable list per container: rows shift only inside their own folder,
                     and a row dragged onto another folder's header or rows files it there. */}
-                <div className="flex flex-col gap-4">
-                  {folders.folders.map((folder, index) => {
-                    const members = tasksByFolder.get(folder.id) ?? [];
-                    return (
-                      <FolderSection
-                        key={folder.id}
-                        id={folder.id}
-                        name={folder.name}
-                        tasks={members}
-                        expanded={!collapsed.has(folder.id)}
-                        canMoveUp={index > 0}
-                        canMoveDown={index < folders.folders.length - 1}
-                        onToggle={() => toggleFolder(folder.id)}
-                        onMove={(direction) =>
-                          void folders.moveFolder(folder.id, index + (direction === "up" ? -1 : 1))
-                        }
-                        onRename={() => void renameFolder(folder.id, folder.name)}
-                        onDelete={() => void folders.deleteFolder(folder.id)}
-                      >
-                        <SortableContext
-                          items={members.map(factoryTaskKey)}
-                          strategy={verticalListSortingStrategy}
+                  <div className="flex flex-col gap-4">
+                    {folders.folders.map((folder, index) => {
+                      const members = tasksByFolder.get(folder.id) ?? [];
+                      return (
+                        <FolderSection
+                          key={folder.id}
+                          id={folder.id}
+                          name={folder.name}
+                          tasks={members}
+                          expanded={!collapsed.has(folder.id)}
+                          canMoveUp={index > 0}
+                          canMoveDown={index < folders.folders.length - 1}
+                          onToggle={() => toggleFolder(folder.id)}
+                          onMove={(direction) =>
+                            void folders.moveFolder(
+                              folder.id,
+                              index + (direction === "up" ? -1 : 1),
+                            )
+                          }
+                          onRename={() => void renameFolder(folder.id, folder.name)}
+                          onDelete={() => void folders.deleteFolder(folder.id)}
                         >
-                          {members.map(renderRow)}
-                        </SortableContext>
-                      </FolderSection>
-                    );
-                  })}
-                  {unfiled.length > 0 ? (
-                    <SortableContext
-                      items={unfiled.map(factoryTaskKey)}
-                      strategy={verticalListSortingStrategy}
-                    >
-                      <div className="flex flex-col gap-2">{unfiled.map(renderRow)}</div>
-                    </SortableContext>
-                  ) : null}
-                </div>
-                <DragOverlay dropAnimation={null}>
-                  {draggingTask ? (
-                    <div className="pointer-events-none w-fit max-w-md cursor-grabbing select-none truncate rounded-md border border-border bg-background px-3 py-2 text-sm shadow-md">
-                      {draggingTask.thread.title}
-                    </div>
-                  ) : null}
-                </DragOverlay>
-              </DndContext>
-              {completed.length > 0 ? (
-                <section className="flex flex-col gap-2">
-                  <h2 className="text-sm font-medium text-foreground">
-                    Completed{" "}
-                    <span className="text-muted-foreground tabular-nums">{completed.length}</span>
-                  </h2>
-                  <div className="flex flex-col gap-2">{completed.map(renderRow)}</div>
-                </section>
-              ) : null}
-            </div>
-          </WorkspacePageContainer>
-        </ScrollArea>
+                          <SortableContext
+                            items={members.map(factoryTaskKey)}
+                            strategy={verticalListSortingStrategy}
+                          >
+                            {members.map(renderRow)}
+                          </SortableContext>
+                        </FolderSection>
+                      );
+                    })}
+                    {unfiled.length > 0 ? (
+                      <SortableContext
+                        items={unfiled.map(factoryTaskKey)}
+                        strategy={verticalListSortingStrategy}
+                      >
+                        <div className="flex flex-col gap-2">{unfiled.map(renderRow)}</div>
+                      </SortableContext>
+                    ) : null}
+                  </div>
+                  <DragOverlay dropAnimation={null}>
+                    {draggingTask ? (
+                      <div className="pointer-events-none w-fit max-w-md cursor-grabbing select-none truncate rounded-md border border-border bg-background px-3 py-2 text-sm shadow-md">
+                        {draggingTask.thread.title}
+                      </div>
+                    ) : null}
+                  </DragOverlay>
+                </DndContext>
+                {completed.length > 0 ? (
+                  <section className="flex flex-col gap-2">
+                    <h2 className="text-sm font-medium text-foreground">
+                      Completed{" "}
+                      <span className="text-muted-foreground tabular-nums">{completed.length}</span>
+                    </h2>
+                    <div className="flex flex-col gap-2">{completed.map(renderRow)}</div>
+                  </section>
+                ) : null}
+              </div>
+            </WorkspacePageContainer>
+          </ScrollArea>
+          {sidePanel.panel}
+        </div>
       </div>
     </SidebarInset>
   );
