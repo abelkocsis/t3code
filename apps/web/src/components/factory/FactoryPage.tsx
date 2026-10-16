@@ -2128,6 +2128,7 @@ function StartTaskForm() {
           onOpenChange={setPickerOpen}
           environmentId={environmentId}
           modelSelection={modelSelection}
+          onModelSelectionChange={setModelSelection}
         />
       ) : null}
     </section>

@@ -27,6 +27,7 @@ import { Select, SelectItem, SelectPopup, SelectTrigger, SelectValue } from "../
 import { Switch } from "../ui/switch";
 import { toastManager } from "../ui/toast";
 import { projectRepositorySlug, resolveFactoryProject } from "./factory.logic";
+import { TaskModelPicker } from "./TaskModelPicker";
 import { useStartFactoryTask } from "./useStartFactoryTask";
 
 const SEARCH_DEBOUNCE_MS = 350;
@@ -43,12 +44,14 @@ export function FactoryIssuePicker({
   onOpenChange,
   environmentId,
   modelSelection,
+  onModelSelectionChange,
 }: {
   readonly open: boolean;
   readonly onOpenChange: (open: boolean) => void;
   readonly environmentId: EnvironmentId;
   /** The model and effort picked on the Factory page; null uses the project default. */
   readonly modelSelection: ModelSelection | null;
+  readonly onModelSelectionChange: (selection: ModelSelection) => void;
 }) {
   const projects = useProjects();
   const searchIssues = useAtomQueryRunner(sourceControlEnvironment.issues, {
@@ -376,6 +379,15 @@ export function FactoryIssuePicker({
           </div>
         </DialogPanel>
         <DialogFooter>
+          {/* Shared with the start form, so a pick made in either place holds in both. */}
+          <div className="me-auto">
+            <TaskModelPicker
+              environmentId={environmentId}
+              project={selected[0] ? projectFor(selected[0].repository) : null}
+              value={modelSelection}
+              onChange={onModelSelectionChange}
+            />
+          </div>
           <Button variant="outline" size="sm" onClick={close} disabled={starting}>
             Cancel
           </Button>
