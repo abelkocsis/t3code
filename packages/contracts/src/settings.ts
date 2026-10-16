@@ -1371,6 +1371,11 @@ export const ServerSettings = Schema.Struct({
     Schema.withDecodingDefault(Effect.succeed(DEFAULT_FACTORY_PROMPT_TEMPLATE)),
   ),
   /**
+   * Token saving for every factory task. The server still watches pull requests and CI, but
+   * holds fixes, review replies, and rebases until the human starts them.
+   */
+  factoryTokenSaving: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(false))),
+  /**
    * The merge method pull requests start with; `null` reuses the method
    * last chosen on this device. Server-side so a project can override it
    * like any other project setting.
@@ -1667,6 +1672,7 @@ export const ServerSettingsPatch = Schema.Struct({
   ),
   sourceControlWriterModelSelection: Schema.optionalKey(Schema.NullOr(ModelSelection)),
   factoryPromptTemplate: Schema.optionalKey(TrimmedString),
+  factoryTokenSaving: Schema.optionalKey(Schema.Boolean),
   pullRequestMergeMethod: Schema.optionalKey(Schema.NullOr(PullRequestMergeMethod)),
   observability: Schema.optionalKey(
     Schema.Struct({

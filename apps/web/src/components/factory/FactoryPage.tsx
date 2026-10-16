@@ -75,6 +75,7 @@ import { writeTextToClipboard } from "../../hooks/useCopyToClipboard";
 import { useEscapeToGoBack } from "../../hooks/useNavigateBack";
 import { useThreadActions } from "../../hooks/useThreadActions";
 import { useFactoryFolders } from "../../hooks/useFactoryFolders";
+import { useFactoryTokenSaving } from "../../hooks/useFactoryTokenSaving";
 import { useClientSettings } from "../../hooks/useSettings";
 import { usePrimaryEnvironmentId } from "../../state/environments";
 import { getLocalStorageItem, setLocalStorageItem } from "../../hooks/useLocalStorage";
@@ -154,6 +155,7 @@ import {
 import { ScrollArea } from "../ui/scroll-area";
 import { Select, SelectItem, SelectPopup, SelectTrigger, SelectValue } from "../ui/select";
 import { SidebarInset } from "../ui/sidebar";
+import { Switch } from "../ui/switch";
 import { Textarea } from "../ui/textarea";
 import { toastManager } from "../ui/toast";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
@@ -631,6 +633,7 @@ export function FactoryPage() {
             {checked.length > 0 ? (
               <CombinedReviewRequest tasks={checked} onDone={() => setCheckedKeys(new Set())} />
             ) : null}
+            <TokenSavingSwitch />
             {folders.supported ? (
               <Button size="xs" variant="ghost" onClick={() => void newFolder()}>
                 <FolderPlusIcon aria-hidden className="size-3.5" />
@@ -1078,6 +1081,7 @@ function TaskRow({
         onClick={(event) => event.stopPropagation()}
         onKeyDown={(event) => event.stopPropagation()}
       >
+        <StartWorkButton task={task} />
         <ReviewActions task={task} compact={foldLevel >= 2} />
         {task.pullRequest ? (
           <Tooltip>
@@ -1426,6 +1430,96 @@ function BlockingPullRequestDialog({
         </AlertDialogFooter>
       </AlertDialogPopup>
     </AlertDialog>
+  );
+}
+
+/** Token saving on every task: the server watches pull requests but starts no work. */
+function TokenSavingSwitch() {
+  const tokenSaving = useFactoryTokenSaving();
+  if (!tokenSaving.supported) return null;
+  return (
+    <Tooltip>
+      <TooltipTrigger
+        render={
+          <label className="flex shrink-0 cursor-pointer items-center gap-1.5 text-xs text-muted-foreground [-webkit-app-region:no-drag]" />
+        }
+      >
+        <Switch
+          checked={tokenSaving.enabled}
+          onCheckedChange={(checked) =>
+            void tokenSaving
+              .setEnabled(Boolean(checked))
+              .catch(() =>
+                toastManager.add({ type: "error", title: "Could not change token saving" }),
+              )
+          }
+        />
+        Token saving
+      </TooltipTrigger>
+      <TooltipPopup>
+        Pull requests and CI are still watched. CI fixes, review replies, and rebases wait for you
+        to start them.
+      </TooltipPopup>
+    </Tooltip>
+  );
+}
+
+/** Starts review work the server held back because token saving is on. */
+function StartWorkButton({ task }: { task: FactoryTask }) {
+  const setFactory = useAtomCommand(threadEnvironment.setFactory, { reportFailure: false });
+  const startTurn = useAtomCommand(threadEnvironment.startTurn, { reportFailure: false });
+  const [busy, setBusy] = useState(false);
+  const pending = task.factory.pendingWork ?? null;
+  if (pending === null) return null;
+
+  const start = async () => {
+    setBusy(true);
+    const flagged = await setFactory({
+      environmentId: task.thread.environmentId,
+      input: {
+        threadId: task.thread.id,
+        factory: {
+          ...task.factory,
+          phase: "fix",
+          summary: pending.summary,
+          updatedAt: new Date().toISOString(),
+          pendingWork: null,
+        },
+      },
+    });
+    if (flagged._tag === "Failure") {
+      setBusy(false);
+      toastManager.add({ type: "error", title: "Could not start the work" });
+      return;
+    }
+    const sent = await startTurn({
+      environmentId: task.thread.environmentId,
+      input: {
+        threadId: task.thread.id,
+        message: {
+          messageId: newMessageId(),
+          role: "user",
+          text: pending.message,
+          attachments: [],
+        },
+        runtimeMode: task.thread.runtimeMode,
+        interactionMode: task.thread.interactionMode,
+      },
+    });
+    setBusy(false);
+    if (sent._tag === "Failure") {
+      toastManager.add({ type: "error", title: "Could not send the work to the agent" });
+    }
+  };
+
+  return (
+    <Tooltip>
+      <TooltipTrigger render={<Button size="xs" disabled={busy} onClick={() => void start()} />}>
+        <PlayIcon aria-hidden className="size-3.5" />
+        Start work
+      </TooltipTrigger>
+      <TooltipPopup>{pending.summary}</TooltipPopup>
+    </Tooltip>
   );
 }
 

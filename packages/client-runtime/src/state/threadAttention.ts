@@ -84,7 +84,8 @@ export function resolveThreadAttention(thread: AttentionThreadShell): ThreadAtte
   const factory = thread.factory;
   if (
     factory &&
-    FACTORY_GATE_PHASES.has(factory.phase) &&
+    // Work held back by token saving waits on the user the same way.
+    (FACTORY_GATE_PHASES.has(factory.phase) || factory.pendingWork != null) &&
     phase !== "starting" &&
     phase !== "running"
   ) {

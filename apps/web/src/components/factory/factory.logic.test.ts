@@ -174,6 +174,15 @@ describe("factoryTaskState", () => {
     expect(factoryTaskState(thread())).toBe("working");
   });
 
+  it("waits on the human when token saving held review work", () => {
+    const held = factory({
+      phase: "under-review",
+      pendingWork: { summary: "CI failed.", message: "Fix CI." },
+    });
+    expect(factoryTaskState(thread({ factory: held }))).toBe("waiting");
+    expect(factoryTaskState(thread({ factory: factory({ phase: "under-review" }) }))).toBe("idle");
+  });
+
   it("treats a snoozed task as parked, not waiting", () => {
     const wake = new Date(Date.parse(NOW) + 3_600_000).toISOString();
     expect(

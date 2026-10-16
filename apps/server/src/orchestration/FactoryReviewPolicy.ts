@@ -125,10 +125,13 @@ function behindMessage(link: ThreadPullRequestLink, snapshot: ThreadPullRequestS
  *   check, or a stale base become a message to the agent and the phase goes to "fix". Each
  *   cause fires once, and again only after it cleared.
  * - Ready to merge falls back to the under-review rules when the pull request changes.
+ * - Token saving holds each message as `pendingWork` instead of sending it, and leaves the
+ *   phase alone, so the task waits on the human. Turning token saving off sends held work.
  */
 export function decideFactoryReview(
   thread: OrchestrationThreadShell,
   now: string,
+  options: { readonly tokenSaving: boolean } = { tokenSaving: false },
 ): FactoryReviewDecision | null {
   if (thread.archivedAt !== null) return null;
   const link = factoryPullRequest(thread);
@@ -148,12 +151,53 @@ export function decideFactoryReview(
       message: null,
     }) satisfies FactoryReviewDecision;
 
+  // Held work ends with the task, and is moot once the pull request is approved and green.
+  const dropHeld = (decision: FactoryReviewDecision): FactoryReviewDecision =>
+    decision.factory?.pendingWork != null
+      ? { ...decision, factory: { ...decision.factory, pendingWork: null } }
+      : decision;
+
   if (snapshot.state === "merged") {
-    return factory.phase === "merged" ? null : stage("merged", "Pull request merged.");
+    return factory.phase === "merged" ? null : dropHeld(stage("merged", "Pull request merged."));
   }
   if (snapshot.state === "closed") {
-    return factory.phase === "done" ? null : stage("done", "Pull request closed without a merge.");
+    return factory.phase === "done"
+      ? null
+      : dropHeld(stage("done", "Pull request closed without a merge."));
   }
+  const held = factory.pendingWork ?? null;
+  if (held !== null && !options.tokenSaving) {
+    if (!canMessageThread(thread, now)) return null;
+    return {
+      factory: {
+        ...factory,
+        phase: "fix",
+        summary: held.summary,
+        updatedAt: now,
+        pendingWork: null,
+      },
+      message: held.message,
+    };
+  }
+  // Holding replaces sending. Work already held is kept, so nothing found earlier is lost.
+  const send = (decision: FactoryReviewDecision): FactoryReviewDecision | null => {
+    if (!options.tokenSaving || decision.message === null || decision.factory === null) {
+      return canMessageThread(thread, now) ? decision : null;
+    }
+    const summary = decision.factory.summary ?? "Review work is waiting.";
+    return {
+      factory: {
+        ...decision.factory,
+        phase: factory.phase,
+        summary: `${summary} Waiting for you to start it.`,
+        pendingWork: {
+          summary,
+          message: held === null ? decision.message : `${held.message}\n\n${decision.message}`,
+        },
+      },
+      message: null,
+    };
+  };
   if (factory.phase === "done") {
     // A failure or stale base already there still counts, so the next sweep handles it, and
     // reviews already there go to the agent once the human marks the task under review.
@@ -205,16 +249,21 @@ export function decideFactoryReview(
 
   if (factory.phase === "ready-for-review") {
     if (!newFailure && !newStaleBase) return settled ? settle() : null;
-    if (!canMessageThread(thread, now)) return null;
-    return newFailure
-      ? {
-          ...stage("fix", "CI failed; the agent is looking.", memoOf(snapshot, memo.seenReviewId)),
-          message: ciMessage(link),
-        }
-      : {
-          ...stage("fix", "Rebasing onto the base branch.", memoOf(snapshot, memo.seenReviewId)),
-          message: behindMessage(link, snapshot),
-        };
+    return send(
+      newFailure
+        ? {
+            ...stage(
+              "fix",
+              "CI failed; the agent is looking.",
+              memoOf(snapshot, memo.seenReviewId),
+            ),
+            message: ciMessage(link),
+          }
+        : {
+            ...stage("fix", "Rebasing onto the base branch.", memoOf(snapshot, memo.seenReviewId)),
+            message: behindMessage(link, snapshot),
+          },
+    );
   }
 
   const approved = snapshot.reviewDecision === "approved";
@@ -227,7 +276,7 @@ export function decideFactoryReview(
   if (!newReview && approved && green && unblocked && unresolved === 0) {
     return factory.phase === "ready-to-merge"
       ? null
-      : stage("ready-to-merge", "Approved and green.", memoOf(snapshot, seenReviewId));
+      : dropHeld(stage("ready-to-merge", "Approved and green.", memoOf(snapshot, seenReviewId)));
   }
 
   if (!newReview && !newThreads && !newFailure && !newStaleBase) {
@@ -241,26 +290,24 @@ export function decideFactoryReview(
     }
     return settled ? settle() : null;
   }
-  if (!canMessageThread(thread, now)) return null;
-
   if (newFailure) {
-    return {
+    return send({
       ...stage("fix", "CI failed; the agent is looking.", memoOf(snapshot, seenReviewId)),
       message: ciMessage(link),
-    };
+    });
   }
   if (newStaleBase) {
-    return {
+    return send({
       ...stage("fix", "Rebasing onto the base branch.", memoOf(snapshot, seenReviewId)),
       message: behindMessage(link, snapshot),
-    };
+    });
   }
-  return {
+  return send({
     ...stage(
       "fix",
       "Reading new review comments.",
       memoOf(snapshot, snapshot.lastReviewId ?? seenReviewId),
     ),
     message: commentsMessage(link),
-  };
+  });
 }

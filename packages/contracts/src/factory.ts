@@ -112,6 +112,18 @@ export type FactoryBlockingPullRequest = typeof FactoryBlockingPullRequest.Type;
 /** How far ahead a task snoozes while it waits on another pull request: a year is "until woken". */
 export const FACTORY_BLOCKED_SNOOZE_MS = 365 * 24 * 60 * 60 * 1000;
 
+/**
+ * Review work the server found but did not start, because token saving is on. The human
+ * starts it from the Factory page, which sends `message` to the agent.
+ */
+export const FactoryPendingWork = Schema.Struct({
+  /** What needs doing, in one sentence for the task row. */
+  summary: TrimmedNonEmptyString,
+  /** The message the agent gets when the work starts. */
+  message: TrimmedNonEmptyString,
+});
+export type FactoryPendingWork = typeof FactoryPendingWork.Type;
+
 export const ThreadFactory = Schema.Struct({
   input: FactoryInput,
   phase: FactoryPhase,
@@ -134,6 +146,8 @@ export const ThreadFactory = Schema.Struct({
    * set; the server wakes it when that pull request merges.
    */
   blockedBy: Schema.optional(Schema.NullOr(FactoryBlockingPullRequest)),
+  /** Review work waiting for the human to start it. Set only while token saving is on. */
+  pendingWork: Schema.optional(Schema.NullOr(FactoryPendingWork)),
 });
 export type ThreadFactory = typeof ThreadFactory.Type;
 

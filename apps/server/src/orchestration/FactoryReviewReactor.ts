@@ -11,6 +11,7 @@ import type * as Scope from "effect/Scope";
 import * as Stream from "effect/Stream";
 
 import * as PullRequestService from "../pullRequest/PullRequestService.ts";
+import * as ServerSettings from "../serverSettings.ts";
 import { forkParked } from "../serverActivation.ts";
 import { decideFactoryReview } from "./FactoryReviewPolicy.ts";
 import * as OrchestrationEngine from "./Services/OrchestrationEngine.ts";
@@ -40,6 +41,7 @@ export const make = Effect.gen(function* () {
   const snapshots = yield* ProjectionSnapshotQuery.ProjectionSnapshotQuery;
   const pullRequests = yield* PullRequestService.PullRequestService;
   const crypto = yield* Crypto.Crypto;
+  const settingsService = yield* ServerSettings.ServerSettingsService;
 
   // Wakes every task that sleeps behind a pull request once that pull request merged.
   const wakeBlocked = Effect.fn("FactoryReviewReactor.wakeBlocked")(function* () {
@@ -99,11 +101,12 @@ export const make = Effect.gen(function* () {
   const sweep = Effect.fn("FactoryReviewReactor.sweep")(function* () {
     const snapshot = yield* snapshots.getShellSnapshot();
     const now = DateTime.formatIso(yield* DateTime.now);
+    const { factoryTokenSaving } = yield* settingsService.getSettings;
     yield* Effect.forEach(
       snapshot.threads,
       (thread) =>
         Effect.gen(function* () {
-          const decision = decideFactoryReview(thread, now);
+          const decision = decideFactoryReview(thread, now, { tokenSaving: factoryTokenSaving });
           if (decision === null) return;
           if (decision.factory !== null) {
             const uuid = yield* crypto.randomUUIDv4;

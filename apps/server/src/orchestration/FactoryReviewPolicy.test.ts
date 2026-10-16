@@ -395,3 +395,72 @@ describe("decideFactoryReview", () => {
     expect(decision?.message).toBeNull();
   });
 });
+
+describe("decideFactoryReview with token saving", () => {
+  const SAVING = { tokenSaving: true };
+
+  it("holds review work instead of messaging the agent, and keeps the phase", () => {
+    const decision = decideFactoryReview(
+      thread({ pullRequests: [link({ checksState: "failing" })] }),
+      NOW,
+      SAVING,
+    );
+    expect(decision?.message).toBeNull();
+    expect(decision?.factory?.phase).toBe("under-review");
+    expect(decision?.factory?.pendingWork?.message).toContain("CI is failing");
+    expect(decision?.factory?.review?.seenChecksState).toBe("failing");
+  });
+
+  it("holds work while the agent is busy, since nothing is sent", () => {
+    const decision = decideFactoryReview(
+      thread({ pullRequests: [link({ mergeState: "behind" })], hasPendingUserInput: true }),
+      NOW,
+      SAVING,
+    );
+    expect(decision?.factory?.pendingWork?.message).toContain("moved ahead");
+  });
+
+  it("adds new work to work already held", () => {
+    const held = factory({
+      pendingWork: { summary: "CI failed.", message: "CI is failing on the branch." },
+    });
+    const decision = decideFactoryReview(
+      thread({
+        factory: held,
+        pullRequests: [
+          link({ updatedAt: NOW, reviewDecision: "changes-requested", unresolvedReviewThreads: 1 }),
+        ],
+      }),
+      NOW,
+      SAVING,
+    );
+    expect(decision?.factory?.pendingWork?.message).toContain("CI is failing on the branch.");
+    expect(decision?.factory?.pendingWork?.message).toContain("New review activity");
+  });
+
+  it("sends held work once token saving is off and the agent is free", () => {
+    const held = factory({
+      pendingWork: { summary: "CI failed.", message: "CI is failing on the branch." },
+    });
+    const decision = decideFactoryReview(thread({ factory: held }), NOW);
+    expect(decision?.message).toBe("CI is failing on the branch.");
+    expect(decision?.factory?.phase).toBe("fix");
+    expect(decision?.factory?.pendingWork).toBeNull();
+
+    const busy = thread({ factory: held, hasPendingUserInput: true });
+    expect(decideFactoryReview(busy, NOW)).toBeNull();
+  });
+
+  it("drops held work when the pull request merges", () => {
+    const decision = decideFactoryReview(
+      thread({
+        factory: factory({ pendingWork: { summary: "CI failed.", message: "Fix CI." } }),
+        pullRequests: [link({ state: "merged" })],
+      }),
+      NOW,
+      SAVING,
+    );
+    expect(decision?.factory?.phase).toBe("merged");
+    expect(decision?.factory?.pendingWork).toBeNull();
+  });
+});
