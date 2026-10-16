@@ -10,6 +10,12 @@ const HOUR_MS = 60 * 60 * 1_000;
 export const SCHEDULE_FALLBACK_DELAY_MS = HOUR_MS;
 
 /**
+ * How long after a quota reset the picker opens. A message sent on the reset
+ * instant can still meet the old limit, so it waits a few minutes past it.
+ */
+export const SCHEDULE_RESET_MARGIN_MS = 5 * 60 * 1_000;
+
+/**
  * When the soonest exhausted quota window comes back.
  *
  * Session windows come first because they are the ones a user waits out. A
@@ -38,12 +44,12 @@ export function nextUsageLimitResetAt(
   return resolved === null ? null : new Date(resolved).toISOString();
 }
 
-/** The time the picker opens on: the next quota reset, else a short hop ahead. */
+/** The time the picker opens on: just after the next quota reset, else a short hop ahead. */
 export function defaultScheduleDueAt(report: UsageLimitsReport | null, nowMs: number): string {
-  return (
-    nextUsageLimitResetAt(report, nowMs) ??
-    new Date(nowMs + SCHEDULE_FALLBACK_DELAY_MS).toISOString()
-  );
+  const resetAt = nextUsageLimitResetAt(report, nowMs);
+  return resetAt === null
+    ? new Date(nowMs + SCHEDULE_FALLBACK_DELAY_MS).toISOString()
+    : new Date(Date.parse(resetAt) + SCHEDULE_RESET_MARGIN_MS).toISOString();
 }
 
 /** ISO instant to the local `YYYY-MM-DDTHH:mm` a datetime-local input takes. */

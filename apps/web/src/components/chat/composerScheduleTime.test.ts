@@ -67,12 +67,12 @@ describe("nextUsageLimitResetAt", () => {
 });
 
 describe("defaultScheduleDueAt", () => {
-  it("uses the quota reset when one is known", () => {
+  it("waits five minutes past the quota reset when one is known", () => {
     const result = defaultScheduleDueAt(
       report([{ id: "five_hour", kind: "session", resetsAt: "2026-09-15T13:00:00.000Z" }]),
       NOW,
     );
-    expect(result).toBe("2026-09-15T13:00:00.000Z");
+    expect(result).toBe("2026-09-15T13:05:00.000Z");
   });
 
   it("hops ahead when no reset is known", () => {
