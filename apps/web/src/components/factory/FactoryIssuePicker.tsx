@@ -1,6 +1,6 @@
 import type { EnvironmentProject } from "@t3tools/client-runtime/state/models";
 import { squashAtomCommandFailure } from "@t3tools/client-runtime/state/runtime";
-import type { EnvironmentId, SourceControlIssueSummary } from "@t3tools/contracts";
+import type { EnvironmentId, ModelSelection, SourceControlIssueSummary } from "@t3tools/contracts";
 import { CircleDotIcon, LoaderCircleIcon } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
@@ -42,10 +42,13 @@ export function FactoryIssuePicker({
   open,
   onOpenChange,
   environmentId,
+  modelSelection,
 }: {
   readonly open: boolean;
   readonly onOpenChange: (open: boolean) => void;
   readonly environmentId: EnvironmentId;
+  /** The model and effort picked on the Factory page; null uses the project default. */
+  readonly modelSelection: ModelSelection | null;
 }) {
   const projects = useProjects();
   const searchIssues = useAtomQueryRunner(sourceControlEnvironment.issues, {
@@ -188,6 +191,7 @@ export function FactoryIssuePicker({
       return batch.length === 1
         ? startTask({ kind: "github-issue", value: first.url }, project, {
             title: `#${first.number} ${first.title}`.slice(0, 80),
+            modelSelection,
           })
         : startTask(
             {
@@ -199,7 +203,10 @@ export function FactoryIssuePicker({
               ].join("\n"),
             },
             project,
-            { title: `${batch.length} issues in ${first.repository}`.slice(0, 80) },
+            {
+              title: `${batch.length} issues in ${first.repository}`.slice(0, 80),
+              modelSelection,
+            },
           );
     };
     setLastRepository(repository === ALL_REPOSITORIES ? null : repository);

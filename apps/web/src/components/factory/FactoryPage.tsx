@@ -13,6 +13,7 @@ import {
   FACTORY_BLOCKED_SNOOZE_MS,
   type FactoryInput,
   type FactoryPhase,
+  type ModelSelection,
   type PullRequestMergeMethod,
   type SlackThreadRef,
 } from "@t3tools/contracts";
@@ -177,6 +178,7 @@ import {
   type FactoryTaskState,
 } from "./factory.logic";
 import { FactoryIssuePicker } from "./FactoryIssuePicker";
+import { TaskModelPicker } from "./TaskModelPicker";
 import { useFactoryMembership } from "./useFactoryMembership";
 import { useStartFactoryTask } from "./useStartFactoryTask";
 
@@ -2031,6 +2033,7 @@ function StartTaskForm() {
   const [chosenProjectKey, setChosenProjectKey] = useState<string | null>(null);
   const [starting, setStarting] = useState(false);
   const [pickerOpen, setPickerOpen] = useState(false);
+  const [modelSelection, setModelSelection] = useState<ModelSelection | null>(null);
 
   const input = useMemo(() => classifyFactoryInput(text), [text]);
   const resolution = useMemo(
@@ -2046,7 +2049,7 @@ function StartTaskForm() {
 
   const start = async (input: FactoryInput, project: EnvironmentProject) => {
     setStarting(true);
-    const result = await startTask(input, project);
+    const result = await startTask(input, project, { modelSelection });
     setStarting(false);
     if (!result.ok) {
       toastManager.add({ type: "error", title: result.title, description: result.detail });
@@ -2100,6 +2103,14 @@ function StartTaskForm() {
           </Select>
         ) : null}
         <span className="flex-1" />
+        {(project?.environmentId ?? environmentId) !== null ? (
+          <TaskModelPicker
+            environmentId={(project?.environmentId ?? environmentId)!}
+            project={project}
+            value={modelSelection}
+            onChange={setModelSelection}
+          />
+        ) : null}
         <Button
           size="sm"
           disabled={starting || !input || !project}
@@ -2116,6 +2127,7 @@ function StartTaskForm() {
           open={pickerOpen}
           onOpenChange={setPickerOpen}
           environmentId={environmentId}
+          modelSelection={modelSelection}
         />
       ) : null}
     </section>

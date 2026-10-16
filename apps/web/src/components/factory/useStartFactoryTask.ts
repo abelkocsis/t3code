@@ -4,6 +4,7 @@ import {
   DEFAULT_SERVER_SETTINGS,
   renderFactoryPrompt,
   type FactoryInput,
+  type ModelSelection,
 } from "@t3tools/contracts";
 import { buildTemporaryWorktreeBranchName } from "@t3tools/shared/git";
 import { resolveProjectSettings } from "@t3tools/shared/projectSettings";
@@ -65,7 +66,11 @@ function readCurrentBranch(
 export function useStartFactoryTask(): (
   input: FactoryInput,
   project: EnvironmentProject,
-  options?: { readonly title?: string },
+  options?: {
+    readonly title?: string;
+    /** The model and effort picked for this task; absent uses the project default. */
+    readonly modelSelection?: ModelSelection | null;
+  },
 ) => Promise<StartFactoryTaskResult> {
   const configs = useServerConfigs();
   const startTurn = useAtomCommand(threadEnvironment.startTurn, { reportFailure: false });
@@ -79,7 +84,8 @@ export function useStartFactoryTask(): (
         project.id,
         project,
       ).settings;
-      const modelSelection = settings.defaultModelSelection ?? project.defaultModelSelection;
+      const modelSelection =
+        options?.modelSelection ?? settings.defaultModelSelection ?? project.defaultModelSelection;
       if (!modelSelection) {
         return { ok: false, title: "Pick a default model for the project first" };
       }
