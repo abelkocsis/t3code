@@ -118,6 +118,10 @@ import {
 } from "../pullRequest/pullRequestDetail.logic";
 import { PullRequestGlyph } from "../pullRequest/pullRequestIcons";
 import {
+  openOnHostLabel,
+  showPullRequestLinkContextMenu,
+} from "../pullRequest/pullRequestLinkContextMenu";
+import {
   AlertDialog,
   AlertDialogClose,
   AlertDialogDescription,
@@ -1079,6 +1083,16 @@ function TaskRow({
                   variant="ghost"
                   aria-label={`Open pull request #${task.pullRequest.number}`}
                   onClick={openPullRequest}
+                  // A right-click copies the link, as on the pull request number elsewhere.
+                  onContextMenu={(event) => {
+                    event.preventDefault();
+                    event.stopPropagation();
+                    void showPullRequestLinkContextMenu({
+                      url: task.pullRequest?.url ?? "",
+                      openLabel: openOnHostLabel(project?.repositoryIdentity?.provider ?? ""),
+                      position: { x: event.clientX, y: event.clientY },
+                    });
+                  }}
                 />
               }
             >
