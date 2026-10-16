@@ -5,9 +5,14 @@ import { squashAtomCommandFailure } from "@t3tools/client-runtime/state/runtime"
 import {
   classifyFactoryInput,
   DEFAULT_SERVER_SETTINGS,
+  FACTORY_COMPLETED_PHASES,
   FACTORY_PHASE_LABELS,
+  FACTORY_PHASE_MARKER,
+  FACTORY_PHASES,
+  FACTORY_REVIEW_PHASES,
   FACTORY_BLOCKED_SNOOZE_MS,
   type FactoryInput,
+  type FactoryPhase,
   type PullRequestMergeMethod,
   type SlackThreadRef,
 } from "@t3tools/contracts";
@@ -36,6 +41,7 @@ import {
   ArchiveIcon,
   ArrowDownIcon,
   ArrowUpIcon,
+  CheckIcon,
   ChevronDownIcon,
   CircleDotIcon,
   ChevronRightIcon,
@@ -632,15 +638,14 @@ export function FactoryPage() {
               </Button>
             ) : null}
             {/* Room for the panel toggles, which sit at the fixed titlebar inset. */}
-            <span aria-hidden className={cn("shrink-0", sidePanel.present ? "w-0" : "w-32")} />
+            <span aria-hidden className="w-32 shrink-0" />
           </div>
-          {/* Inside the header while the panel is closed: a no-drag descendant beats the
-              desktop drag-region, where a floating sibling loses. */}
-          {sidePanel.present ? null : sidePanel.controls}
+          {/* Inside the header, open or closed: the toggles never move, and a no-drag
+              descendant beats the desktop drag-region, where a floating sibling loses. */}
+          {sidePanel.controls}
         </WorkspacePageHeader>
 
         <div className="relative flex min-h-0 flex-1">
-          {sidePanel.present ? sidePanel.controls : null}
           <ScrollArea className="min-h-0 flex-1">
             <WorkspacePageContainer>
               <div className="flex flex-col gap-6">
@@ -1167,6 +1172,7 @@ function TaskMenu({ task }: { task: FactoryTask }) {
   const { archiveThread, snoozeThread, unsnoozeThread } = useThreadActions();
   const { removeFromFactory } = useFactoryMembership();
   const setFactory = useAtomCommand(threadEnvironment.setFactory, { reportFailure: false });
+  const startTurn = useAtomCommand(threadEnvironment.startTurn, { reportFailure: false });
   const timestampFormat = useClientSettings((s) => s.timestampFormat);
   const [blockDialogOpen, setBlockDialogOpen] = useState(false);
   const ref = scopeThreadRef(task.thread.environmentId, task.thread.id);
@@ -1232,6 +1238,43 @@ function TaskMenu({ task }: { task: FactoryTask }) {
       description: "The server checks once an hour.",
     });
   };
+  // Moves the task by hand when the agent lost track of it. The agent owns the phases up to
+  // "done", so those also get a message telling it where to pick up; the review phases and
+  // the finished ones are the server's and the human's, so the label alone is the change.
+  const setPhase = async (phase: FactoryPhase) => {
+    const result = await setFactory({
+      environmentId: ref.environmentId,
+      input: {
+        threadId: ref.threadId,
+        factory: {
+          ...task.factory,
+          phase,
+          summary: "Set by hand.",
+          updatedAt: new Date().toISOString(),
+        },
+      },
+    });
+    if (result._tag === "Failure") {
+      report(false, "Could not change the phase");
+      return;
+    }
+    if (FACTORY_REVIEW_PHASES.includes(phase) || FACTORY_COMPLETED_PHASES.includes(phase)) return;
+    const sent = await startTurn({
+      environmentId: ref.environmentId,
+      input: {
+        threadId: ref.threadId,
+        message: {
+          messageId: newMessageId(),
+          role: "user",
+          text: `I moved this task to the "${FACTORY_PHASE_LABELS[phase]}" phase by hand. Continue the code-factory flow from there. Print "${FACTORY_PHASE_MARKER} ${phase}" first.`,
+          attachments: [],
+        },
+        runtimeMode: task.thread.runtimeMode,
+        interactionMode: task.thread.interactionMode,
+      },
+    });
+    report(sent._tag === "Success", "Phase changed, but the agent could not be told");
+  };
   const showInSidebar = task.factory.showInSidebar === true;
   const toggleSidebar = async () => {
     const result = await setFactory({
@@ -1290,6 +1333,26 @@ function TaskMenu({ task }: { task: FactoryTask }) {
               </MenuSubPopup>
             </MenuSub>
           )}
+          <MenuSub>
+            <MenuSubTrigger>
+              <PlayIcon aria-hidden className="size-3.5" />
+              Set phase
+            </MenuSubTrigger>
+            <MenuSubPopup>
+              {FACTORY_PHASES.map((phase) => (
+                <MenuItem
+                  key={phase}
+                  disabled={phase === task.factory.phase}
+                  onClick={() => void setPhase(phase)}
+                >
+                  {FACTORY_PHASE_LABELS[phase]}
+                  {phase === task.factory.phase ? (
+                    <CheckIcon aria-hidden className="ms-auto size-3.5 ps-2" />
+                  ) : null}
+                </MenuItem>
+              ))}
+            </MenuSubPopup>
+          </MenuSub>
           <MenuSeparator />
           <MenuCheckboxItem checked={showInSidebar} onCheckedChange={() => void toggleSidebar()}>
             Show in sidebar
