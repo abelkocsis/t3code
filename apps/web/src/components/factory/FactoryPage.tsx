@@ -1339,7 +1339,9 @@ function TaskMenu({ task }: { task: FactoryTask }) {
               Set phase
             </MenuSubTrigger>
             <MenuSubPopup>
-              {FACTORY_PHASES.map((phase) => (
+              {/* "Done" is left out: the agent prints it when the flow ends, and the server
+                  moves the task on from there. Merged is the way to close a task by hand. */}
+              {FACTORY_PHASES.filter((phase) => phase !== "done").map((phase) => (
                 <MenuItem
                   key={phase}
                   disabled={phase === task.factory.phase}
