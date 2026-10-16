@@ -2,6 +2,7 @@ import { memo, type PointerEventHandler, useState } from "react";
 import { AlarmClockIcon } from "lucide-react";
 import type { ThreadScheduledMessage } from "@t3tools/contracts";
 
+import { useNowMinute } from "~/hooks/useNowMinute";
 import { useClientSettings } from "~/hooks/useSettings";
 import { cn } from "~/lib/utils";
 import { snoozeWakeDescription } from "../Sidebar.snooze";
@@ -57,6 +58,9 @@ export const ComposerScheduleAction = memo(function ComposerScheduleAction({
   const isDisabled = disabledReason !== null && pending === null;
   const pendingLabel =
     pending === null ? null : snoozeWakeDescription(pending.dueAt, new Date(), timestampFormat);
+  // The minute tick flips the pill to "waiting" once the due time passes.
+  const nowMinute = useNowMinute();
+  const overdue = pending !== null && Date.parse(pending.dueAt) <= Date.parse(`${nowMinute}Z`);
 
   const handleOpenChange = (nextOpen: boolean) => {
     if (nextOpen) {
@@ -103,7 +107,9 @@ export const ComposerScheduleAction = memo(function ComposerScheduleAction({
             >
               <AlarmClockIcon className="size-3.5" />
               {pending === null ? null : (
-                <span className="text-xs tabular-nums">{pendingLabel}</span>
+                <span className="text-xs tabular-nums">
+                  {overdue ? "Waiting to send" : pendingLabel}
+                </span>
               )}
             </PopoverTrigger>
           }
@@ -111,7 +117,9 @@ export const ComposerScheduleAction = memo(function ComposerScheduleAction({
         <TooltipPopup side="top">
           {pending === null
             ? (disabledReason ?? "Schedule this message")
-            : `Scheduled for ${pendingLabel}`}
+            : overdue
+              ? `Past due since ${pendingLabel}`
+              : `Scheduled for ${pendingLabel}`}
         </TooltipPopup>
       </Tooltip>
       <PopoverPopup align="end" side="top" className="w-72" {...composerFloatingLayerProps}>
@@ -121,9 +129,16 @@ export const ComposerScheduleAction = memo(function ComposerScheduleAction({
               {pending === null ? "Send later" : "Scheduled message"}
             </span>
             <span className="text-muted-foreground text-xs">
-              T3 Code sends it at this time, as long as this server is running.
+              {overdue
+                ? "Past due. It goes out once the agent is idle, nothing waits on you, and no background work runs."
+                : "T3 Code sends it at this time, as long as this server is running."}
             </span>
           </div>
+          {pending === null ? null : (
+            <p className="max-h-40 overflow-y-auto whitespace-pre-wrap rounded-md border border-border/60 px-2 py-1.5 text-xs">
+              {pending.text}
+            </p>
+          )}
           <Input
             type="datetime-local"
             size="sm"
