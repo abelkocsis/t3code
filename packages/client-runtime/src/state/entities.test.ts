@@ -243,6 +243,28 @@ describe("environment entity projections", () => {
     expect(merged?.messages).toBe(messages);
   });
 
+  it("takes the factory stage from the shell, so reading a task stamps the current gate", () => {
+    const factory = {
+      input: { kind: "free-text" as const, value: "Add a range cap" },
+      phase: "ready-to-merge" as const,
+      summary: "Approved and green.",
+      startedAt: "2026-03-09T10:00:00.000Z",
+      updatedAt: "2026-03-09T12:00:00.000Z",
+    };
+    const detail = {
+      ...THREAD_SHELL,
+      environmentId: ENVIRONMENT_ID,
+      deletedAt: null,
+      messages: [],
+      proposedPlans: [],
+      activities: [],
+      checkpoints: [],
+    } satisfies OrchestrationThread & { readonly environmentId: EnvironmentId };
+    const shell = { ...THREAD_SHELL, environmentId: ENVIRONMENT_ID, factory };
+
+    expect(mergeEnvironmentThread(detail, shell)?.factory).toEqual(factory);
+  });
+
   it("preserves untouched project and thread identities across unrelated shell updates", () => {
     const harness = makeHarness();
     const projectRefsAtom = harness.projects.environmentProjectRefsAtom(ENVIRONMENT_ID);
