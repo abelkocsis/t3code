@@ -159,6 +159,14 @@ describe("factoryTaskState", () => {
     ).toBe("working");
   });
 
+  it("reads background work as working, also under review", () => {
+    expect(
+      factoryTaskState(
+        thread({ factory: factory({ phase: "under-review" }), backgroundLiveness: "monitoring" }),
+      ),
+    ).toBe("working");
+  });
+
   it("reads working, done, and error", () => {
     expect(
       factoryTaskState(

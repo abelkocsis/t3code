@@ -70,6 +70,8 @@ export function factoryTaskState(
   // A running agent is working at every stage, also when the user messaged it at a gate.
   const session = thread.session;
   if (session?.status === "running" || session?.status === "starting") return "working";
+  // Background work the agent left running, such as watching CI, is the agent still at it.
+  if (thread.backgroundLiveness != null) return "working";
   // Token saving held review work back; it waits for the human to start it.
   if (thread.factory?.pendingWork != null) return "waiting";
   const phase = thread.factory?.phase;
