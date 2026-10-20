@@ -605,6 +605,51 @@ const RawRepositoryAccessSchema = Schema.Struct({
   viewerPermission: Schema.optional(Schema.NullOr(Schema.String)),
 });
 
+/**
+ * The rulesets on the base branch. A pull request rule can narrow the merge methods below what
+ * the repository settings allow, and GitHub refuses a merge that uses one it leaves out.
+ * Optional so that an install without rulesets keeps the repository settings as they are.
+ */
+const RawBaseRefRulesSchema = Schema.optional(
+  Schema.NullOr(
+    Schema.Struct({
+      nodes: Schema.Array(
+        Schema.NullOr(
+          Schema.Struct({
+            parameters: Schema.optional(
+              Schema.NullOr(
+                Schema.Struct({
+                  allowedMergeMethods: Schema.optional(Schema.NullOr(Schema.Array(Schema.String))),
+                }),
+              ),
+            ),
+          }),
+        ),
+      ),
+    }),
+  ),
+);
+
+const BASE_REF_RULES_SELECTION =
+  "rules(first: 100) { nodes { parameters { ... on PullRequestParameters { allowedMergeMethods } } } }";
+
+/** Every pull request rule on the base branch applies at once, so only their common methods merge. */
+function toMergeCapabilities(
+  repository: typeof RawRepositoryAccessSchema.Type,
+  rules: typeof RawBaseRefRulesSchema.Type,
+): PullRequestMergeCapabilities {
+  const allowedByRules = (method: string) =>
+    (rules?.nodes ?? []).every((rule) => {
+      const allowed = rule?.parameters?.allowedMergeMethods;
+      return allowed == null || allowed.includes(method);
+    });
+  return {
+    merge: repository.mergeCommitAllowed && allowedByRules("MERGE"),
+    squash: repository.squashMergeAllowed && allowedByRules("SQUASH"),
+    rebase: repository.rebaseMergeAllowed && allowedByRules("REBASE"),
+  };
+}
+
 const RawCoreSchema = Schema.Struct({
   data: Schema.Struct({
     repository: Schema.Struct({
@@ -616,6 +661,7 @@ const RawCoreSchema = Schema.Struct({
         baseRef: Schema.NullOr(
           Schema.Struct({
             compare: Schema.NullOr(Schema.Struct({ behindBy: Schema.Int })),
+            rules: RawBaseRefRulesSchema,
           }),
         ),
         reviewRequests: Schema.Struct({
@@ -722,7 +768,7 @@ export const PULL_REQUEST_CORE_GRAPHQL_QUERY = `query($owner: String!, $name: St
       author { login avatarUrl ... on User { id name } }
       autoMergeRequest { mergeMethod }
       viewerCanUpdate viewerDidAuthor viewerCanUpdateBranch
-      baseRef { compare(headRef: $headRef) { behindBy } }
+      baseRef { compare(headRef: $headRef) { behindBy } ${BASE_REF_RULES_SELECTION} }
       reviewRequests(first: 100) {
         nodes { requestedReviewer { ... on User { login name } ... on Bot { login } ... on Team { slug name } } }
       }
@@ -2118,11 +2164,7 @@ export function decodePullRequestCoreJson(
       canWrite: toCanWrite(repository.viewerPermission),
       canTriage: toCanTriage(repository.viewerPermission),
       ...toPullRequestViewerFields(pr),
-      mergeCapabilities: {
-        merge: repository.mergeCommitAllowed,
-        squash: repository.squashMergeAllowed,
-        rebase: repository.rebaseMergeAllowed,
-      },
+      mergeCapabilities: toMergeCapabilities(repository, pr.baseRef?.rules),
     },
     comparison:
       pr.state !== "OPEN" || pr.baseRef?.compare == null
@@ -2943,7 +2985,7 @@ export interface GitHubViewerAccess {
 export const VIEWER_PERMISSIONS_GRAPHQL_QUERY = `query($owner: String!, $name: String!, $number: Int!) {
   repository(owner: $owner, name: $name) {
     mergeCommitAllowed squashMergeAllowed rebaseMergeAllowed viewerPermission
-    pullRequest(number: $number) { viewerCanUpdate viewerDidAuthor }
+    pullRequest(number: $number) { viewerCanUpdate viewerDidAuthor baseRef { ${BASE_REF_RULES_SELECTION} } }
   }
 }`;
 
@@ -2952,7 +2994,12 @@ const RawViewerPermissionsSchema = Schema.Struct({
     repository: Schema.Struct({
       ...RawRepositoryAccessSchema.fields,
       /** Null for a number that names no pull request the viewer can see. */
-      pullRequest: Schema.NullOr(RawViewerFieldsSchema),
+      pullRequest: Schema.NullOr(
+        Schema.Struct({
+          ...RawViewerFieldsSchema.fields,
+          baseRef: Schema.optional(Schema.NullOr(Schema.Struct({ rules: RawBaseRefRulesSchema }))),
+        }),
+      ),
     }),
   }),
 });
@@ -2968,11 +3015,7 @@ export function decodeViewerPermissionsJson(
   }
   const repository = decoded.success.data.repository;
   return Result.succeed({
-    mergeCapabilities: {
-      merge: repository.mergeCommitAllowed,
-      squash: repository.squashMergeAllowed,
-      rebase: repository.rebaseMergeAllowed,
-    },
+    mergeCapabilities: toMergeCapabilities(repository, repository.pullRequest?.baseRef?.rules),
     canWrite: toCanWrite(repository.viewerPermission),
     canTriage: toCanTriage(repository.viewerPermission),
     ...toPullRequestViewerFields(repository.pullRequest),

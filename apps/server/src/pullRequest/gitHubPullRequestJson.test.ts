@@ -882,6 +882,37 @@ describe("repository access decoding", () => {
     ).toEqual({ merge: true, squash: false, rebase: true });
   });
 
+  it("keeps only the merge methods every base branch rule allows", () => {
+    const decoded = decodeViewerPermissionsJson(
+      JSON.stringify({
+        data: {
+          repository: {
+            mergeCommitAllowed: true,
+            squashMergeAllowed: true,
+            rebaseMergeAllowed: true,
+            pullRequest: {
+              baseRef: {
+                rules: {
+                  nodes: [
+                    { parameters: { allowedMergeMethods: ["MERGE", "SQUASH", "REBASE"] } },
+                    { parameters: null },
+                    { parameters: {} },
+                    { parameters: { allowedMergeMethods: ["SQUASH"] } },
+                  ],
+                },
+              },
+            },
+          },
+        },
+      }),
+    );
+    expect(expectSuccess(decoded).mergeCapabilities).toEqual({
+      merge: false,
+      squash: true,
+      rebase: false,
+    });
+  });
+
   it("fails rather than defaulting open when a setting is missing", () => {
     const decoded = decodeViewerPermissionsJson(
       JSON.stringify({ data: { repository: { pullRequest: null, mergeCommitAllowed: true } } }),
