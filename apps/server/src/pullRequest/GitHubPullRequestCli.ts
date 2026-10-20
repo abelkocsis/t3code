@@ -75,6 +75,8 @@ import {
   decodeReviewThreadsJson,
   buildPullRequestStatsGraphQlQuery,
   buildPullRequestSummariesGraphQlQuery,
+  buildBaseComparisonsGraphQlQuery,
+  decodeBaseComparisonsJson,
   buildPullRequestStackMembershipsGraphQlQuery,
   decodePullRequestStackMembershipsJson,
   encodeGraphQlRequestJson,
@@ -1806,6 +1808,60 @@ export const make = Effect.gen(function* () {
       );
 
   /**
+   * GitHub's `viewerCanUpdateBranch` stays false on some repositories while the branch is
+   * behind, so an open pull request's "base moved ahead" comes from counting commits, the same
+   * number GitHub's out-of-date banner shows. One extra aliased read covers the whole batch.
+   * Where the count cannot be read, GitHub's own flag stands.
+   */
+  const withBaseComparisons = (
+    request: PullRequestSummaryRead,
+    batchable: ReadonlyArray<{ readonly request: PullRequestSummaryRead }>,
+    summaries: ReadonlyMap<number, GitHubPullRequestSummary>,
+  ) => {
+    const open = [...summaries.entries()].flatMap(([index, summary]) => {
+      const entry = batchable[index];
+      return entry !== undefined && summary.state === "open" && summary.headOwner !== undefined
+        ? [{ index, summary, entry, headOwner: summary.headOwner }]
+        : [];
+    });
+    const comparison = buildBaseComparisonsGraphQlQuery(
+      open.map(({ entry, summary, headOwner }) => ({
+        repository: entry.request.repository,
+        number: entry.request.number,
+        headOwner,
+        headBranch: summary.headBranch,
+      })),
+    );
+    if (comparison === null) return Effect.succeed(summaries);
+    return graphqlRead({
+      cwd: request.cwd,
+      host: request.host,
+      operation: "getPullRequestBaseComparisons",
+      query: comparison.query,
+      // Over stdin: a `-f` value that starts with "@" would be read as a file name.
+      privateVariables: Object.fromEntries(comparison.variables),
+      decode: decodeBaseComparisonsJson,
+    }).pipe(
+      Effect.map((behind) => {
+        const merged = new Map(summaries);
+        for (const [position, { index, summary }] of open.entries()) {
+          const behindBy = behind.get(position);
+          if (behindBy === undefined) continue;
+          merged.set(index, { ...summary, canUpdateBranch: behindBy > 0 });
+        }
+        return merged;
+      }),
+      Effect.catchCauseIf(
+        (cause) => !Cause.hasInterruptsOnly(cause),
+        (cause) =>
+          Effect.logDebug("batched base comparison read failed", { cause }).pipe(
+            Effect.as(summaries),
+          ),
+      ),
+    );
+  };
+
+  /**
    * Summaries asked for together, on one host under one credential, share aliased GraphQL reads
    * of twenty-five: the background sync reads every linked pull request each minute, and one
    * `gh pr view` apiece is most of what it spends. Whatever the batch cannot answer — a selector
@@ -1855,6 +1911,7 @@ export const make = Effect.gen(function* () {
               Effect.as(new Map<number, GitHubPullRequestSummary>()),
             ),
         ),
+        Effect.flatMap((summaries) => withBaseComparisons(first.request, batchable, summaries)),
         Effect.flatMap((summaries) => {
           const unanswered = entries.filter((entry) => {
             const summary = summaries.get(batchable.indexOf(entry));

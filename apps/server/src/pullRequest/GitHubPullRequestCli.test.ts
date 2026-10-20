@@ -532,6 +532,76 @@ layer("GitHubPullRequestCli.layer", (it) => {
     }),
   );
 
+  it.effect("counts commits behind the base for open pull requests in one more batched read", () =>
+    Effect.gen(function* () {
+      const node = (number: number) => ({
+        number,
+        title: `Change ${number}`,
+        url: `https://github.com/acme/web/pull/${number}`,
+        author: { __typename: "User", login: "octocat", name: "Octo Cat", avatarUrl: null },
+        baseRefName: "main",
+        headRefName: `feat/${number}`,
+        headRepositoryOwner: { login: "acme" },
+        state: "OPEN",
+        isDraft: false,
+        mergeable: "MERGEABLE",
+        mergeStateStatus: "BLOCKED",
+        // GitHub says false here even for a branch that is behind.
+        viewerCanUpdateBranch: false,
+        reviewDecision: null,
+        additions: 1,
+        deletions: 1,
+        changedFiles: 1,
+        updatedAt: "2026-08-24T12:34:56.000Z",
+        mergedAt: null,
+        closedAt: null,
+      });
+      mockedExecute
+        .mockReturnValueOnce(
+          Effect.succeed(
+            output(
+              // @effect-diagnostics-next-line preferSchemaOverJson:off
+              JSON.stringify({
+                data: { s0: { pullRequest: node(7) }, s1: { pullRequest: node(8) } },
+              }),
+            ),
+          ),
+        )
+        .mockReturnValueOnce(
+          Effect.succeed(
+            output(
+              // @effect-diagnostics-next-line preferSchemaOverJson:off
+              JSON.stringify({
+                data: {
+                  c0: { pullRequest: { baseRef: { compare: { behindBy: 1 } } } },
+                  c1: { pullRequest: { baseRef: { compare: { behindBy: 0 } } } },
+                },
+              }),
+            ),
+          ),
+        );
+      const cli = yield* GitHubPullRequestCli.GitHubPullRequestCli;
+
+      const reads = yield* Effect.forEach(
+        [7, 8],
+        (number) =>
+          cli.getPullRequestSummary({
+            cwd: "/w",
+            repository: "acme/web",
+            host: "github.com",
+            number,
+          }),
+        { concurrency: "unbounded" },
+      ).pipe(Effect.forkChild);
+      yield* TestClock.adjust("10 millis");
+      const [seven, eight] = yield* Fiber.join(reads);
+
+      assert.strictEqual(seven?.canUpdateBranch, true);
+      assert.strictEqual(eight?.canUpdateBranch, false);
+      assert.strictEqual(mockedExecute.mock.calls.length, 2);
+    }),
+  );
+
   it.effect("reads a pull request the batch said nothing about on its own", () =>
     Effect.gen(function* () {
       mockedExecute

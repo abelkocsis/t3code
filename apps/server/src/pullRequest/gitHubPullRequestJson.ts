@@ -1932,7 +1932,7 @@ const PULL_REQUEST_SUMMARY_SELECTION =
   "number title url state isDraft mergeable reviewDecision additions deletions changedFiles " +
   "updatedAt mergedAt closedAt headRefName baseRefName " +
   "author { __typename login avatarUrl ... on User { name } } " +
-  "mergeStateStatus viewerDidAuthor viewerCanUpdateBranch " +
+  "mergeStateStatus viewerDidAuthor viewerCanUpdateBranch headRepositoryOwner { login } " +
   "latestReviews(first: 20) { nodes { id state submittedAt author { __typename login avatarUrl ... on User { name } } } } " +
   "reviewThreads(first: 100) { nodes { isResolved } } " +
   "commits(last: 1) { nodes { commit { statusCheckRollup { state } } } }";
@@ -1964,6 +1964,7 @@ const RawSummarySchema = Schema.Struct({
   mergeStateStatus: Schema.optional(Schema.NullOr(Schema.String)),
   viewerDidAuthor: Schema.optional(Schema.Boolean),
   viewerCanUpdateBranch: Schema.optional(Schema.NullOr(Schema.Boolean)),
+  headRepositoryOwner: Schema.optional(Schema.NullOr(Schema.Struct({ login: Schema.String }))),
   reviewThreads: Schema.optional(
     Schema.NullOr(
       Schema.Struct({
@@ -2017,6 +2018,8 @@ export interface GitHubPullRequestSummary {
   readonly unresolvedReviewThreads?: number;
   readonly viewerDidAuthor?: boolean;
   readonly canUpdateBranch?: boolean;
+  /** Owner of the head repository, which a base comparison names; absent once it is gone. */
+  readonly headOwner?: string;
   /** Null when GitHub says the pull request is in no stack; absent when the read did not ask. */
   readonly stack?: PullRequestStackMembership | null;
 }
@@ -2077,6 +2080,7 @@ export function decodePullRequestSummariesJson(
           }),
       ...(pr.viewerDidAuthor === undefined ? {} : { viewerDidAuthor: pr.viewerDidAuthor }),
       ...(pr.viewerCanUpdateBranch == null ? {} : { canUpdateBranch: pr.viewerCanUpdateBranch }),
+      ...(pr.headRepositoryOwner?.login ? { headOwner: pr.headRepositoryOwner.login } : {}),
       ...(pr.stack === undefined ? {} : { stack: toStackMembership(pr) ?? null }),
     });
   }
@@ -2587,6 +2591,87 @@ const RawBaseComparisonSchema = Schema.Struct({
 });
 
 const decodeBaseComparison = decodeJsonResult(RawBaseComparisonSchema);
+
+/**
+ * How far each pull request's branch is behind its base, for many in one aliased read. The
+ * batched summary cannot ask this itself, because the comparison names the head branch, which
+ * only the summary returns. Head refs travel as variables, `h0`, `h1`, and so on.
+ */
+export function buildBaseComparisonsGraphQlQuery(
+  changeRequests: ReadonlyArray<{
+    readonly repository: string;
+    readonly number: number;
+    readonly headOwner: string;
+    readonly headBranch: string;
+  }>,
+): { readonly query: string; readonly variables: ReadonlyArray<readonly [string, string]> } | null {
+  if (changeRequests.length === 0) return null;
+  const declarations: string[] = [];
+  const selections: string[] = [];
+  const variables: Array<readonly [string, string]> = [];
+  for (const [index, changeRequest] of changeRequests.entries()) {
+    const [owner, name, ...rest] = changeRequest.repository.trim().split("/");
+    if (rest.length > 0 || owner === undefined || name === undefined) return null;
+    if (!REPOSITORY_PART.test(owner) || !REPOSITORY_PART.test(name)) return null;
+    if (!Number.isSafeInteger(changeRequest.number) || changeRequest.number <= 0) return null;
+    declarations.push(`$h${index}: String!`);
+    variables.push([`h${index}`, `${changeRequest.headOwner}:${changeRequest.headBranch}`]);
+    selections.push(
+      `  c${index}: repository(owner: "${owner}", name: "${name}") { pullRequest(number: ${changeRequest.number}) { baseRef { compare(headRef: $h${index}) { behindBy } } } }`,
+    );
+  }
+  return {
+    query: `query BaseComparisons(${declarations.join(", ")}) {\n${selections.join("\n")}\n}`,
+    variables,
+  };
+}
+
+const decodeBaseComparisons = decodeJsonResult(
+  Schema.Struct({
+    data: Schema.optional(
+      Schema.NullOr(
+        Schema.Record(
+          Schema.String,
+          Schema.NullOr(
+            Schema.Struct({
+              pullRequest: Schema.optional(
+                Schema.NullOr(
+                  Schema.Struct({
+                    baseRef: Schema.optional(
+                      Schema.NullOr(
+                        Schema.Struct({
+                          compare: Schema.optional(
+                            Schema.NullOr(Schema.Struct({ behindBy: Schema.Number })),
+                          ),
+                        }),
+                      ),
+                    ),
+                  }),
+                ),
+              ),
+            }),
+          ),
+        ),
+      ),
+    ),
+  }),
+);
+
+/** Commits behind the base by the position they were asked in; absent where GitHub could not say. */
+export function decodeBaseComparisonsJson(
+  raw: string,
+): Result.Result<ReadonlyMap<number, number>, DecodeFailure> {
+  const decoded = decodeBaseComparisons(raw);
+  if (!Result.isSuccess(decoded)) return Result.fail(decoded.failure);
+  const behind = new Map<number, number>();
+  for (const [alias, value] of Object.entries(decoded.success.data ?? {})) {
+    const index = /^c(\d+)$/.exec(alias)?.[1];
+    const behindBy = value?.pullRequest?.baseRef?.compare?.behindBy;
+    if (index === undefined || typeof behindBy !== "number" || behindBy < 0) continue;
+    behind.set(Number(index), behindBy);
+  }
+  return Result.succeed(behind);
+}
 
 export interface GitHubBaseComparison {
   /** Null where the host could not compare, which the page reads as "unknown". */
