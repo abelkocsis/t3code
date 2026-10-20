@@ -20,6 +20,7 @@ import {
   type SourceControlIssueRef,
   type SourceControlRepositoryVisibility,
   type VcsError,
+  VcsProcessExitError,
 } from "@t3tools/contracts";
 import { normalizeGitRemoteUrl } from "@t3tools/shared/git";
 import { decodeJsonResult } from "@t3tools/shared/schemaJson";
@@ -150,12 +151,15 @@ export class GitHubPullRequestNotFoundError extends Schema.TaggedError<GitHubPul
   }
 }
 
+const isVcsProcessExitError = Schema.is(VcsProcessExitError);
+
 export class GitHubCliCommandError extends Schema.TaggedError<GitHubCliCommandError>()(
   "GitHubCliCommandError",
   gitHubCliFailureFields,
 ) {
   get detail(): string {
-    return "GitHub CLI command failed.";
+    const hostMessage = isVcsProcessExitError(this.cause) ? this.cause.hostMessage : undefined;
+    return hostMessage ?? "GitHub CLI command failed.";
   }
 
   override get message(): string {
@@ -339,6 +343,8 @@ export class GitHubCli extends Context.Service<
       readonly maxOutputBytes?: number;
       readonly rateLimitHost?: string;
       readonly allowReserve?: boolean;
+      /** Keep the first stderr line on failure, for a command whose stderr is GitHub's reason. */
+      readonly exposeStderrLine?: boolean;
     }) => Effect.Effect<VcsProcess.VcsProcessOutput, GitHubCliError>;
 
     readonly listOpenPullRequests: (input: {
@@ -652,6 +658,7 @@ export const make = Effect.gen(function* () {
           ...(input.stdin !== undefined ? { stdin: input.stdin } : {}),
           ...(env !== undefined ? { env } : {}),
           ...(input.maxOutputBytes !== undefined ? { maxOutputBytes: input.maxOutputBytes } : {}),
+          ...(input.exposeStderrLine === true ? { exposeStderrLine: true } : {}),
         })
         .pipe(Effect.mapError((error) => fromVcsError({ command: "gh", cwd: input.cwd }, error)));
     },

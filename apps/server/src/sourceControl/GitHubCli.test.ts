@@ -546,6 +546,25 @@ describe("GitHubCli.layer", () => {
     }).pipe(Effect.provide(layer)),
   );
 
+  it("says GitHub's own reason for a failed command when the process kept it", () => {
+    const context = { command: "gh", cwd: "/repo" } as const;
+    const exit = (hostMessage?: string) =>
+      new VcsProcessExitError({
+        operation: "GitHubCli.execute",
+        command: "gh",
+        cwd: context.cwd,
+        exitCode: 1,
+        detail: "Process exited with a non-zero status.",
+        failureKind: "command-failed",
+        ...(hostMessage === undefined ? {} : { hostMessage }),
+      });
+
+    expect(GitHubCli.fromVcsError(context, exit("Merge method not allowed")).detail).toBe(
+      "Merge method not allowed",
+    );
+    expect(GitHubCli.fromVcsError(context, exit()).detail).toBe("GitHub CLI command failed.");
+  });
+
   it("does not classify a missing cwd as an unavailable gh executable", () => {
     const context = { command: "gh", cwd: "/repo" } as const;
     const missingCwd = new VcsProcessSpawnError({

@@ -30,6 +30,8 @@ export interface VcsProcessInput {
   readonly onStdoutChunk?: (chunk: Uint8Array) => void;
   readonly env?: NodeJS.ProcessEnv;
   readonly allowNonZeroExit?: boolean;
+  /** Keep the first stderr line on a failed exit, for a command whose stderr says why. */
+  readonly exposeStderrLine?: boolean;
   readonly timeoutMs?: number;
   readonly maxOutputBytes?: number;
   readonly outputMode?: ProcessRunner.ProcessRunInput["outputMode"];
@@ -106,6 +108,17 @@ const classifyNonZeroExit = (command: string, stderr: string): VcsProcessExitFai
   }
 
   return "command-failed";
+};
+
+/** Long enough for any one sentence a CLI prints, short enough to stay a sentence. */
+const STDERR_LINE_MAX_LENGTH = 300;
+
+const firstStderrLine = (stderr: string) => {
+  const line = stderr
+    .split(/\r?\n/u)
+    .map((entry) => entry.trim())
+    .find((entry) => entry.length > 0);
+  return line === undefined ? undefined : line.slice(0, STDERR_LINE_MAX_LENGTH);
 };
 
 // Classify before discarding stderr; keep paths and process output out of errors.
@@ -188,6 +201,9 @@ export const make = Effect.gen(function* () {
         input.command === "git" &&
           failureKind === "command-failed" &&
           isTransientGitExit(result.stderr),
+        input.exposeStderrLine === true && failureKind === "command-failed"
+          ? firstStderrLine(result.stderr)
+          : undefined,
       );
     }
 

@@ -123,6 +123,11 @@ export class VcsProcessExitError extends Schema.TaggedError<VcsProcessExitError>
     retryable: Schema.optional(Schema.Boolean),
     stderrLength: Schema.optional(NonNegativeInt),
     stderrTruncated: Schema.optional(Schema.Boolean),
+    /**
+     * The first line of stderr, kept only for a command whose caller asked for it: stderr is
+     * otherwise left out because it can carry argv and paths.
+     */
+    hostMessage: Schema.optional(Schema.String),
   },
 ) {
   override get message(): string {
@@ -134,6 +139,7 @@ export class VcsProcessExitError extends Schema.TaggedError<VcsProcessExitError>
     error: VcsProcessExitFailure,
     failureKind: VcsProcessExitFailureKind,
     retryable?: boolean,
+    hostMessage?: string,
   ) {
     const detail =
       failureKind === "authentication"
@@ -156,6 +162,7 @@ export class VcsProcessExitError extends Schema.TaggedError<VcsProcessExitError>
       ...(retryable === true ? { retryable: true } : {}),
       stderrLength: error.stderr.length,
       stderrTruncated: error.stderrTruncated,
+      ...(hostMessage === undefined ? {} : { hostMessage }),
     });
   }
 }

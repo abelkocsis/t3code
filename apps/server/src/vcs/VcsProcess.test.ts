@@ -346,6 +346,27 @@ describe("VcsProcess.run", () => {
     }).pipe(provideLive),
   );
 
+  it.effect("keeps the first stderr line only when the caller asks for it", () =>
+    Effect.gen(function* () {
+      const error = yield* run({
+        operation: "test.exit",
+        command: "node",
+        args: [
+          "-e",
+          "process.stderr.write('\\n  Merge method not allowed  \\nsecond line'); process.exit(1)",
+        ],
+        cwd: process.cwd(),
+        exposeStderrLine: true,
+      }).pipe(Effect.flip);
+
+      expect(error).toBeInstanceOf(VcsProcessExitError);
+      expect(error).toMatchObject({
+        failureKind: "command-failed",
+        hostMessage: "Merge method not allowed",
+      });
+    }).pipe(provideLive),
+  );
+
   it.effect("classifies authentication failures without retaining stderr", () =>
     Effect.gen(function* () {
       const secretStderr = "authentication failed for token super-secret-token";

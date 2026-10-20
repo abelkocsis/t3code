@@ -2711,6 +2711,9 @@ export const make = Effect.gen(function* () {
         .execute({
           cwd: input.cwd,
           args: ["pr", subcommand!, String(input.number), ...repositoryArgs(input), ...flags],
+          // A refused merge is only explained in gh's stderr: a ruleset, a pending check, a
+          // conflict. The page has no other way to say which.
+          ...(input.action === "merge" ? { exposeStderrLine: true } : {}),
         })
         .pipe(Effect.asVoid);
     },
