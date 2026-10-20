@@ -103,7 +103,10 @@ export const buildOverlayDataUrl = (): string => {
         font-size: 12.5px; font-weight: 500;
         white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
       }
-      .item .project { font-size: 10.5px; color: var(--muted); margin-top: 2px; }
+      .item .project {
+        font-size: 10.5px; color: var(--muted); margin-top: 2px;
+        white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+      }
       .item .phase { font-size: 10.5px; font-weight: 700; white-space: nowrap; }
       .section {
         font-size: 10px; font-weight: 700; letter-spacing: 0.07em; text-transform: uppercase;
@@ -347,8 +350,10 @@ export const buildOverlayDataUrl = (): string => {
         // The window is sized to whatever the document actually needs, so a
         // single row never gets a scrollbar and a long list never gets cut off.
         var MENU_GAP = 6;
-        var lastWidth = 0;
-        var lastHeight = 0;
+        // Every measurement is sent, also an unchanged one. The main process
+        // resets the window to an estimate each time it shows it again, so a
+        // page that skipped a repeat left the window at the estimate and cut
+        // off the rows. The main process drops a size that matches its bounds.
         function measureAndReport() {
           var rect = document.getElementById("shell").getBoundingClientRect();
           var width = Math.ceil(rect.width);
@@ -361,9 +366,6 @@ export const buildOverlayDataUrl = (): string => {
             height = height + Math.ceil(menuRect.height) + MENU_GAP;
           }
           if (width <= 0 || height <= 0) return;
-          if (width === lastWidth && height === lastHeight) return;
-          lastWidth = width;
-          lastHeight = height;
           bridge.reportSize(width, height);
         }
         function reportHeight() {
