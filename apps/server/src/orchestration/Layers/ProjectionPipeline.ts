@@ -159,8 +159,14 @@ function shouldRefreshThreadShellSummary(event: OrchestrationEvent): boolean {
   }
 }
 
+/**
+ * Questions the agent asked that nobody answered yet. A user message sent after a question
+ * answers it too: the agent took the message instead (a provider can fold it into the running
+ * turn), so the question can no longer get a reply and must not hold the thread at "waiting".
+ */
 function derivePendingUserInputCountFromActivities(
   activities: ReadonlyArray<ProjectionThreadActivity>,
+  latestUserMessageAt: string | null,
 ): number {
   const openRequestIds = new Set<string>();
   const ordered = [...activities].toSorted(
@@ -181,7 +187,9 @@ function derivePendingUserInputCountFromActivities(
     const detail = typeof payload?.detail === "string" ? payload.detail.toLowerCase() : null;
 
     if (activity.kind === "user-input.requested") {
-      openRequestIds.add(requestId);
+      if (latestUserMessageAt === null || activity.createdAt >= latestUserMessageAt) {
+        openRequestIds.add(requestId);
+      }
       continue;
     }
 
@@ -591,7 +599,10 @@ const makeOrchestrationProjectionPipeline = Effect.fn("makeOrchestrationProjecti
           projectionPendingApprovalRepository.countPendingByThreadId({ threadId }),
         ]);
 
-      const pendingUserInputCount = derivePendingUserInputCountFromActivities(activities);
+      const pendingUserInputCount = derivePendingUserInputCountFromActivities(
+        activities,
+        latestUserMessageAt,
+      );
 
       yield* projectionThreadRepository.upsert({
         ...existingRow.value,
@@ -1088,9 +1099,10 @@ const makeOrchestrationProjectionPipeline = Effect.fn("makeOrchestrationProjecti
           return;
         }
 
-        // A message cannot change any summary field except latestUserMessageAt,
-        // which is a monotonic maximum that folds in directly. The full refresh
-        // would re-read every message body in the thread per user message.
+        // A message changes only latestUserMessageAt, a monotonic maximum that
+        // folds in directly, and the open question count, which a user message
+        // can lower. The full refresh would re-read every message body in the
+        // thread per user message.
         case "thread.message-sent": {
           const existingRow = yield* projectionThreadRepository.getById({
             threadId: event.payload.threadId,
@@ -1099,15 +1111,26 @@ const makeOrchestrationProjectionPipeline = Effect.fn("makeOrchestrationProjecti
             return;
           }
           const previousLatest = existingRow.value.latestUserMessageAt;
+          const latestUserMessageAt =
+            event.payload.role === "user" &&
+            !isImportedAgentSessionMessageId(event.payload.messageId) &&
+            (previousLatest === null || event.payload.createdAt > previousLatest)
+              ? event.payload.createdAt
+              : previousLatest;
+          const pendingUserInputCount =
+            latestUserMessageAt !== previousLatest && existingRow.value.pendingUserInputCount > 0
+              ? derivePendingUserInputCountFromActivities(
+                  yield* projectionThreadActivityRepository.listUserInputLifecycleByThreadId({
+                    threadId: event.payload.threadId,
+                  }),
+                  latestUserMessageAt,
+                )
+              : existingRow.value.pendingUserInputCount;
           yield* projectionThreadRepository.upsert({
             ...existingRow.value,
             updatedAt: event.occurredAt,
-            latestUserMessageAt:
-              event.payload.role === "user" &&
-              !isImportedAgentSessionMessageId(event.payload.messageId) &&
-              (previousLatest === null || event.payload.createdAt > previousLatest)
-                ? event.payload.createdAt
-                : previousLatest,
+            latestUserMessageAt,
+            pendingUserInputCount,
           });
           return;
         }

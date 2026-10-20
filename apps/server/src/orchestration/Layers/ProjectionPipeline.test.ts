@@ -3252,6 +3252,105 @@ it.layer(BaseTestLayer)("OrchestrationProjectionPipeline", (it) => {
     }),
   );
 
+  it.effect("counts a question as answered once the user sends a message after it", () =>
+    Effect.gen(function* () {
+      const projectionPipeline = yield* OrchestrationProjectionPipeline;
+      const eventStore = yield* OrchestrationEventStore;
+      const sql = yield* SqlClient.SqlClient;
+      const appendAndProject = (event: Parameters<typeof eventStore.append>[0]) =>
+        eventStore
+          .append(event)
+          .pipe(Effect.flatMap((savedEvent) => projectionPipeline.projectEvent(savedEvent)));
+      const threadId = ThreadId.make("thread-answered-by-message");
+      const base = (n: number, occurredAt: string) => ({
+        eventId: EventId.make(`evt-answered-by-message-${n}`),
+        occurredAt,
+        commandId: CommandId.make(`cmd-answered-by-message-${n}`),
+        causationEventId: null,
+        correlationId: CorrelationId.make(`cmd-answered-by-message-${n}`),
+        metadata: {},
+      });
+      const pendingCount = () =>
+        sql<{ readonly pendingUserInputCount: number }>`
+          SELECT pending_user_input_count AS "pendingUserInputCount"
+          FROM projection_threads
+          WHERE thread_id = ${threadId}
+        `;
+
+      yield* appendAndProject({
+        ...base(1, "2026-02-26T12:40:00.000Z"),
+        type: "project.created",
+        aggregateKind: "project",
+        aggregateId: ProjectId.make("project-answered-by-message"),
+        payload: {
+          projectId: ProjectId.make("project-answered-by-message"),
+          title: "Project",
+          workspaceRoot: "/tmp/project-answered-by-message",
+          defaultModelSelection: null,
+          scripts: [],
+          createdAt: "2026-02-26T12:40:00.000Z",
+          updatedAt: "2026-02-26T12:40:00.000Z",
+        },
+      });
+      yield* appendAndProject({
+        ...base(2, "2026-02-26T12:40:01.000Z"),
+        type: "thread.created",
+        aggregateKind: "thread",
+        aggregateId: threadId,
+        payload: {
+          threadId,
+          projectId: ProjectId.make("project-answered-by-message"),
+          title: "Thread",
+          modelSelection: { instanceId: ProviderInstanceId.make("codex"), model: "gpt-5-codex" },
+          runtimeMode: "approval-required",
+          interactionMode: "default",
+          branch: null,
+          worktreePath: null,
+          createdAt: "2026-02-26T12:40:01.000Z",
+          updatedAt: "2026-02-26T12:40:01.000Z",
+        },
+      });
+      yield* appendAndProject({
+        ...base(3, "2026-02-26T12:40:02.000Z"),
+        type: "thread.activity-appended",
+        aggregateKind: "thread",
+        aggregateId: threadId,
+        payload: {
+          threadId,
+          activity: {
+            id: EventId.make("activity-answered-by-message-requested"),
+            tone: "info",
+            kind: "user-input.requested",
+            summary: "User input requested",
+            payload: { requestId: "user-input-answered-by-message" },
+            turnId: null,
+            createdAt: "2026-02-26T12:40:02.000Z",
+          },
+        },
+      });
+      assert.deepEqual(yield* pendingCount(), [{ pendingUserInputCount: 1 }]);
+
+      yield* appendAndProject({
+        ...base(4, "2026-02-26T12:40:03.000Z"),
+        type: "thread.message-sent",
+        aggregateKind: "thread",
+        aggregateId: threadId,
+        payload: {
+          threadId,
+          messageId: MessageId.make("message-answered-by-message"),
+          role: "user",
+          text: "try again",
+          attachments: [],
+          turnId: null,
+          streaming: false,
+          createdAt: "2026-02-26T12:40:03.000Z",
+          updatedAt: "2026-02-26T12:40:03.000Z",
+        },
+      });
+      assert.deepEqual(yield* pendingCount(), [{ pendingUserInputCount: 0 }]);
+    }),
+  );
+
   it.effect("maintains shell summaries without decoding message or plan bodies", () =>
     Effect.gen(function* () {
       const projectionPipeline = yield* OrchestrationProjectionPipeline;
