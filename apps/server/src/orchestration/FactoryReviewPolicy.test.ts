@@ -142,6 +142,34 @@ describe("decideFactoryReview", () => {
     expect(decision?.message).toBeNull();
   });
 
+  it("sends a stale base together with new review comments, so the rebase is not lost", () => {
+    const decision = decideFactoryReview(
+      thread({
+        pullRequests: [link({ lastReviewId: "PRR_2", canUpdateBranch: true })],
+      }),
+      NOW,
+    );
+    expect(decision?.message).toContain("Several things need work");
+    expect(decision?.message).toContain("New review activity");
+    expect(decision?.message).toContain("Rebase this branch onto the base branch");
+    expect(decision?.factory?.summary).toBe(
+      "Rebasing onto the base branch. Reading new review comments.",
+    );
+  });
+
+  it("holds a stale base and new comments as one piece of work under token saving", () => {
+    const decision = decideFactoryReview(
+      thread({
+        pullRequests: [link({ lastReviewId: "PRR_2", canUpdateBranch: true })],
+      }),
+      NOW,
+      { tokenSaving: true },
+    );
+    expect(decision?.message).toBeNull();
+    expect(decision?.factory?.pendingWork?.message).toContain("Rebase this branch");
+    expect(decision?.factory?.pendingWork?.message).toContain("New review activity");
+  });
+
   it("asks the agent to handle a new human review once", () => {
     const changed = thread({
       pullRequests: [

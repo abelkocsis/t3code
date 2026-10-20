@@ -1562,16 +1562,17 @@ function ReviewActions({ task, compact }: { task: FactoryTask; compact: boolean 
           summary: "Waiting on reviewers.",
           updatedAt: now,
           reviewRound: (task.factory.reviewRound ?? 0) + 1,
-          // Open threads, checks, and the base state start from what the pull request shows
-          // now: an open thread is one the agent declined. A human review the agent was never
-          // sent still counts as new. Without a stored review id, a first round sends every
-          // review, and a later round leaves the id out so the server counts the current
-          // review as sent once the sync reports it.
+          // Open threads and checks start from what the pull request shows now: an open thread
+          // is one the agent declined. The base state starts unseen, so a branch that is
+          // already behind gets its rebase. A human review the agent was never sent still
+          // counts as new. Without a stored review id, a first round sends every review, and a
+          // later round leaves the id out so the server counts the current review as sent once
+          // the sync reports it.
           review: {
             seenUpdatedAt: snapshot?.updatedAt ?? null,
             seenUnresolved: snapshot?.unresolvedReviewThreads ?? 0,
             seenChecksState: snapshot?.checksState ?? null,
-            seenMergeState: snapshot?.mergeState ?? null,
+            seenMergeState: null,
             ...(task.factory.review?.seenReviewId !== undefined
               ? { seenReviewId: task.factory.review.seenReviewId }
               : (task.factory.reviewRound ?? 0) === 0

@@ -247,23 +247,43 @@ export function decideFactoryReview(
     message: null,
   });
 
+  // Every new cause goes out in one message. The memo marks them all as seen, so a cause left
+  // out of the message would never be sent.
+  const work = (input: {
+    readonly comments: boolean;
+    readonly seenReviewId: string | null | undefined;
+  }) => {
+    const parts = [
+      ...(newFailure
+        ? [{ summary: "CI failed; the agent is looking.", message: ciMessage(link) }]
+        : []),
+      ...(newStaleBase
+        ? [{ summary: "Rebasing onto the base branch.", message: behindMessage(link, snapshot) }]
+        : []),
+      ...(input.comments
+        ? [{ summary: "Reading new review comments.", message: commentsMessage(link) }]
+        : []),
+    ];
+    const message =
+      parts.length === 1
+        ? parts[0]!.message
+        : [
+            "Several things need work on this pull request. Do all of them, then print one phase marker for the whole set.",
+            ...parts.map((part, index) => `${index + 1}. ${part.message}`),
+          ].join("\n\n");
+    return send({
+      ...stage(
+        "fix",
+        parts.map((part) => part.summary).join(" "),
+        memoOf(snapshot, input.seenReviewId),
+      ),
+      message,
+    });
+  };
+
   if (factory.phase === "ready-for-review") {
     if (!newFailure && !newStaleBase) return settled ? settle() : null;
-    return send(
-      newFailure
-        ? {
-            ...stage(
-              "fix",
-              "CI failed; the agent is looking.",
-              memoOf(snapshot, memo.seenReviewId),
-            ),
-            message: ciMessage(link),
-          }
-        : {
-            ...stage("fix", "Rebasing onto the base branch.", memoOf(snapshot, memo.seenReviewId)),
-            message: behindMessage(link, snapshot),
-          },
-    );
+    return work({ comments: false, seenReviewId: memo.seenReviewId });
   }
 
   const approved = snapshot.reviewDecision === "approved";
@@ -290,24 +310,9 @@ export function decideFactoryReview(
     }
     return settled ? settle() : null;
   }
-  if (newFailure) {
-    return send({
-      ...stage("fix", "CI failed; the agent is looking.", memoOf(snapshot, seenReviewId)),
-      message: ciMessage(link),
-    });
-  }
-  if (newStaleBase) {
-    return send({
-      ...stage("fix", "Rebasing onto the base branch.", memoOf(snapshot, seenReviewId)),
-      message: behindMessage(link, snapshot),
-    });
-  }
-  return send({
-    ...stage(
-      "fix",
-      "Reading new review comments.",
-      memoOf(snapshot, snapshot.lastReviewId ?? seenReviewId),
-    ),
-    message: commentsMessage(link),
+  const comments = newReview || newThreads;
+  return work({
+    comments,
+    seenReviewId: comments ? (snapshot.lastReviewId ?? seenReviewId) : seenReviewId,
   });
 }
