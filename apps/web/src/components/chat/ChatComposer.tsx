@@ -248,6 +248,7 @@ import { useEnvironmentQuery } from "~/state/query";
 import { useDebouncedValue } from "~/state/queries";
 import { ProviderModelPicker } from "./ProviderModelPicker";
 import { resolveModelPickerSelectedModel } from "./ModelPickerContent";
+import { openProviderSwitchDialog } from "../ProviderSwitchDialog";
 import {
   type ComposerCommandItem,
   ComposerCommandMenu,
@@ -5131,6 +5132,16 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
         }
         lockedProvider={lockedProvider}
         lockedContinuationGroupKey={lockedContinuationGroupKey}
+        {...(routeKind === "server" && lockedProvider !== null
+          ? {
+              onRequestProviderSwitch: (instanceId: ProviderInstanceId) =>
+                openProviderSwitchDialog({
+                  threadRef: routeThreadRef,
+                  surface: "thread",
+                  initialInstanceId: instanceId,
+                }),
+            }
+          : {})}
         instanceEntries={providerInstanceEntries}
         keybindings={keybindings}
         modelOptionsByInstance={modelOptionsByInstance}

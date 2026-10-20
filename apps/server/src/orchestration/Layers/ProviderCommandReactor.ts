@@ -67,6 +67,7 @@ import { VcsStatusBroadcaster } from "../../vcs/VcsStatusBroadcaster.ts";
 import { GitWorkflowService } from "../../git/GitWorkflowService.ts";
 import * as TerminalManager from "../../terminal/Manager.ts";
 import { appendSlackThreadTurnContext } from "../../slack/slackThreadTurnContext.ts";
+import { makeHandoffStore } from "../providerSwitchHandoff.ts";
 const isProviderAdapterProcessError = Schema.is(ProviderAdapterProcessError);
 const isProviderAdapterRequestError = Schema.is(ProviderAdapterRequestError);
 const isProviderAdapterValidationError = Schema.is(ProviderAdapterValidationError);
@@ -225,6 +226,7 @@ const make = Effect.gen(function* () {
   const textGeneration = yield* TextGeneration;
   const serverSettingsService = yield* ServerSettingsService;
   const terminalManager = yield* TerminalManager.TerminalManager;
+  const handoffStore = yield* makeHandoffStore;
   /** Environment settings with the thread's project overrides applied. */
   const projectSettingsForThread = Effect.fnUntraced(function* (threadId: ThreadId) {
     const settings = yield* serverSettingsService.getSettings;
@@ -1494,12 +1496,16 @@ const make = Effect.gen(function* () {
       turnsAfterCompaction.set(event.payload.threadId, queued);
       return;
     }
+    // A provider switch leaves the conversation for the new provider's first
+    // turn. Only the provider sees it; the stored message keeps the user's text.
+    const handoffPrefix = yield* handoffStore.readPendingPrefix(event.payload.threadId);
+    const composedText = projectComposerContextForProvider({
+      text: message.text,
+      records: message.context?.records ?? [],
+    });
     const sendTurnRequest = yield* buildSendTurnRequestForThread({
       threadId: event.payload.threadId,
-      messageText: projectComposerContextForProvider({
-        text: message.text,
-        records: message.context?.records ?? [],
-      }),
+      messageText: handoffPrefix === null ? composedText : `${handoffPrefix}${composedText}`,
       ...(message.attachments !== undefined ? { attachments: message.attachments } : {}),
       ...(event.payload.modelSelection !== undefined
         ? { modelSelection: event.payload.modelSelection }
@@ -1520,9 +1526,15 @@ const make = Effect.gen(function* () {
       return;
     }
 
-    const send = providerService
-      .sendTurn(sendTurnRequest.value)
-      .pipe(Effect.asVoid, Effect.catchCause(recoverTurnStartFailure));
+    const send = providerService.sendTurn(sendTurnRequest.value).pipe(
+      Effect.tap(() =>
+        handoffPrefix === null
+          ? Effect.void
+          : handoffStore.clearPendingPrefix(event.payload.threadId),
+      ),
+      Effect.asVoid,
+      Effect.catchCause(recoverTurnStartFailure),
+    );
     // The forked send settles `sent` from here on, so drop the entry the post-processing hook uses.
     if (resumed && event.commandId !== null) resumedTurnStarts.delete(event.commandId);
     yield* send.pipe(

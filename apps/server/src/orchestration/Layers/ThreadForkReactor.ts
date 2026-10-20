@@ -1,8 +1,10 @@
 import {
   CommandId,
+  PROVIDER_SWITCH_DRIVER_KINDS,
   EventId,
   MessageId,
   ThreadId,
+  type OrchestrationCommand,
   type OrchestrationEvent,
   type OrchestrationThread,
   type OrchestrationThreadActivity,
@@ -24,6 +26,11 @@ import * as ProjectSetupScriptRunner from "../../project/ProjectSetupScriptRunne
 import * as ProviderWorkspaceStateService from "../../provider/ProviderWorkspaceStateService.ts";
 import { ProviderService } from "../../provider/Services/ProviderService.ts";
 import { forkParked } from "../../serverActivation.ts";
+import {
+  buildHandoffPrefix,
+  buildHandoffTranscript,
+  makeHandoffStore,
+} from "../providerSwitchHandoff.ts";
 import { OrchestrationEngineService } from "../Services/OrchestrationEngine.ts";
 import { ProjectionSnapshotQuery } from "../Services/ProjectionSnapshotQuery.ts";
 import { RuntimeReceiptBus } from "../Services/RuntimeReceiptBus.ts";
@@ -62,6 +69,7 @@ const make = Effect.gen(function* () {
   const providerWorkspaceState = yield* ProviderWorkspaceStateService.ProviderWorkspaceStateService;
   const setupScriptRunner = yield* ProjectSetupScriptRunner.ProjectSetupScriptRunner;
   const receiptBus = yield* RuntimeReceiptBus;
+  const handoffStore = yield* makeHandoffStore;
 
   const appendForkFailureActivity = (input: {
     readonly threadId: ThreadId;
@@ -94,6 +102,36 @@ const make = Effect.gen(function* () {
         }),
       ),
     );
+
+  /** Copies of a history slice, with fresh ids, for a hydrate command. */
+  const copyHistory = Effect.fn("copyHistory")(function* (slice: {
+    readonly messages: OrchestrationThread["messages"];
+    readonly activities: ReadonlyArray<OrchestrationThreadActivity>;
+  }) {
+    const activities = yield* Effect.forEach(slice.activities, (activity) =>
+      // The copies are new rows in the target's own event log, so they cannot
+      // reuse the source event ids.
+      serverEventId.pipe(Effect.map((id) => ({ ...activity, id }))),
+    );
+    // A message id is unique across the environment, not inside a thread, so
+    // a copy that reuses the source id moves the source's row into the target
+    // instead of duplicating it.
+    const messages = yield* Effect.forEach(slice.messages, (message) =>
+      randomUUID.pipe(
+        Effect.map((uuid) => {
+          const role = message.role === "assistant" ? ("assistant" as const) : ("user" as const);
+          return {
+            messageId: MessageId.make(role === "assistant" ? `assistant:${uuid}` : uuid),
+            role,
+            text: message.text,
+            turnId: message.turnId,
+            createdAt: message.createdAt,
+          };
+        }),
+      ),
+    );
+    return { messages, activities };
+  });
 
   const handleForkRequested = Effect.fn("handleForkRequested")(function* (
     event: Extract<OrchestrationEvent, { type: "thread.fork-requested" }>,
@@ -206,28 +244,7 @@ const make = Effect.gen(function* () {
 
     const slice = sliceAtCheckpoint({ thread, completedAt: checkpoint.completedAt });
     if (slice.messages.length > 0) {
-      const activities = yield* Effect.forEach(slice.activities, (activity) =>
-        // The copies are new rows in the fork's own event log, so they cannot
-        // reuse the source event ids.
-        serverEventId.pipe(Effect.map((id) => ({ ...activity, id }))),
-      );
-      // A message id is unique across the environment, not inside a thread, so
-      // a copy that reuses the source id moves the source's row into the fork
-      // instead of duplicating it.
-      const messages = yield* Effect.forEach(slice.messages, (message) =>
-        randomUUID.pipe(
-          Effect.map((uuid) => {
-            const role = message.role === "assistant" ? ("assistant" as const) : ("user" as const);
-            return {
-              messageId: MessageId.make(role === "assistant" ? `assistant:${uuid}` : uuid),
-              role,
-              text: message.text,
-              turnId: message.turnId,
-              createdAt: message.createdAt,
-            };
-          }),
-        ),
-      );
+      const { messages, activities } = yield* copyHistory(slice);
       yield* orchestrationEngine.dispatch({
         type: "thread.fork.hydrate",
         commandId: yield* serverCommandId("thread-fork-hydrate"),
@@ -268,21 +285,297 @@ const make = Effect.gen(function* () {
     });
   });
 
+  const appendActivity = (input: {
+    readonly threadId: ThreadId;
+    readonly tone: OrchestrationThreadActivity["tone"];
+    readonly kind: string;
+    readonly summary: string;
+    readonly payload: unknown;
+    readonly createdAt: string;
+  }) =>
+    Effect.all({
+      commandId: serverCommandId("thread-provider-switch-activity"),
+      activityId: serverEventId,
+    }).pipe(
+      Effect.flatMap(({ commandId, activityId }) =>
+        orchestrationEngine.dispatch({
+          type: "thread.activity.append",
+          commandId,
+          threadId: input.threadId,
+          activity: {
+            id: activityId,
+            tone: input.tone,
+            kind: input.kind,
+            summary: input.summary,
+            payload: input.payload,
+            turnId: null,
+            createdAt: input.createdAt,
+          },
+          createdAt: input.createdAt,
+        }),
+      ),
+    );
+
+  const appendSwitchFailureActivity = (input: {
+    readonly threadId: ThreadId;
+    readonly detail: string;
+    readonly createdAt: string;
+  }) =>
+    appendActivity({
+      threadId: input.threadId,
+      tone: "error",
+      kind: "thread.provider-switch.failed",
+      summary: "Provider switch failed",
+      payload: { detail: input.detail },
+      createdAt: input.createdAt,
+    });
+
+  const providerLabel = (info: {
+    readonly displayName: string | undefined;
+    readonly driverKind: string;
+  }) =>
+    info.displayName ??
+    (info.driverKind === "claudeAgent"
+      ? "Claude"
+      : info.driverKind === "codex"
+        ? "Codex"
+        : info.driverKind);
+
+  const handleProviderSwitchRequested = Effect.fn("handleProviderSwitchRequested")(function* (
+    event: Extract<OrchestrationEvent, { type: "thread.provider-switch-requested" }>,
+  ) {
+    const { threadId, newThreadId, modelSelection, title, settleSource } = event.payload;
+    const now = yield* nowIso;
+
+    const thread = yield* projectionSnapshotQuery
+      .getThreadDetailById(threadId)
+      .pipe(Effect.map(Option.getOrUndefined));
+    if (!thread) {
+      return yield* appendSwitchFailureActivity({
+        threadId,
+        detail: "Thread was not found in read model.",
+        createdAt: now,
+      });
+    }
+    const sourceInfo = yield* providerService.getInstanceInfo(thread.modelSelection.instanceId);
+    const targetInfo = yield* providerService.getInstanceInfo(modelSelection.instanceId);
+    if (
+      !PROVIDER_SWITCH_DRIVER_KINDS.includes(sourceInfo.driverKind) ||
+      !PROVIDER_SWITCH_DRIVER_KINDS.includes(targetInfo.driverKind)
+    ) {
+      return yield* appendSwitchFailureActivity({
+        threadId,
+        detail: "A provider switch supports Claude and Codex only.",
+        createdAt: now,
+      });
+    }
+    const sourceProvider = providerLabel(sourceInfo);
+    const targetProvider = providerLabel(targetInfo);
+
+    const history = {
+      messages: thread.messages.filter((message) => message.role !== "system"),
+      activities: thread.activities,
+    };
+    const transcriptPath = yield* handoffStore.write({
+      threadId: newThreadId,
+      transcript: buildHandoffTranscript({
+        title: thread.title,
+        sourceProvider,
+        messages: history.messages,
+        activities: history.activities,
+      }),
+      prefix: (path) =>
+        buildHandoffPrefix({ sourceProvider, transcriptPath: path, messages: history.messages }),
+    });
+
+    yield* orchestrationEngine.dispatch({
+      type: "thread.create",
+      commandId: yield* serverCommandId("thread-provider-switch-create"),
+      threadId: newThreadId,
+      projectId: thread.projectId,
+      title,
+      modelSelection,
+      runtimeMode: thread.runtimeMode,
+      interactionMode: thread.interactionMode,
+      branch: thread.branch,
+      worktreePath: thread.worktreePath,
+      createdAt: now,
+      historyImport: true,
+    });
+
+    const scheduledMessage = thread.scheduledMessage ?? undefined;
+    if (history.messages.length > 0) {
+      const copies = yield* copyHistory(history);
+      yield* orchestrationEngine.dispatch({
+        type: "thread.fork.hydrate",
+        commandId: yield* serverCommandId("thread-provider-switch-hydrate"),
+        threadId: newThreadId,
+        sourceThreadId: threadId,
+        turnCount: Math.max(1, thread.checkpoints.length),
+        messages: copies.messages,
+        activities: copies.activities,
+        ...(scheduledMessage !== undefined ? { scheduledMessage } : {}),
+        createdAt: now,
+      });
+    }
+
+    yield* appendActivity({
+      threadId: newThreadId,
+      tone: "info",
+      kind: "thread.provider-switch.continued-from",
+      summary: `Continued from ${sourceProvider}`,
+      payload: { threadId, title: thread.title, provider: sourceProvider, transcriptPath },
+      createdAt: now,
+    });
+    yield* appendActivity({
+      threadId,
+      tone: "info",
+      kind: "thread.provider-switch.continued-in",
+      summary: `Continued in ${targetProvider}`,
+      payload: { threadId: newThreadId, title, provider: targetProvider },
+      createdAt: now,
+    });
+
+    // The new thread takes over everything that points at the task. Each move
+    // is best effort: the new thread exists by now, and one failed link must
+    // not hide it.
+    const dispatchTagged = (tag: string, command: (commandId: CommandId) => OrchestrationCommand) =>
+      serverCommandId(`thread-provider-switch-${tag}`).pipe(
+        Effect.flatMap((commandId) => orchestrationEngine.dispatch(command(commandId))),
+        Effect.asVoid,
+        Effect.catchCauseIf(
+          (cause) => !Cause.hasInterruptsOnly(cause),
+          (cause) =>
+            Effect.logWarning("provider switch step failed", {
+              step: tag,
+              threadId,
+              newThreadId,
+              cause: Cause.pretty(cause),
+            }),
+        ),
+      );
+
+    if (thread.folderId) {
+      const folderId = thread.folderId;
+      yield* dispatchTagged("folder", (commandId) => ({
+        type: "thread.folder.set",
+        commandId,
+        threadId: newThreadId,
+        folderId,
+      }));
+    }
+    if (thread.slackThread) {
+      const slackThread = thread.slackThread;
+      yield* dispatchTagged("slack", (commandId) => ({
+        type: "thread.slack-thread.set",
+        commandId,
+        threadId: newThreadId,
+        slackThread,
+      }));
+    }
+    for (const link of thread.pullRequests) {
+      yield* dispatchTagged("pull-request", (commandId) => ({
+        type: "thread.pull-request.link",
+        commandId,
+        threadId: newThreadId,
+        host: link.host,
+        repository: link.repository,
+        number: link.number,
+        url: link.url,
+        source: link.source,
+      }));
+    }
+    if (thread.snoozedUntil && compareDateTimeStrings(thread.snoozedUntil, now) > 0) {
+      const snoozedUntil = thread.snoozedUntil;
+      yield* dispatchTagged("snooze", (commandId) => ({
+        type: "thread.snooze",
+        commandId,
+        threadId: newThreadId,
+        snoozedUntil,
+      }));
+    }
+    if (thread.factory) {
+      const factory = thread.factory;
+      yield* dispatchTagged("factory", (commandId) => ({
+        type: "thread.factory.set",
+        commandId,
+        threadId: newThreadId,
+        factory,
+      }));
+      yield* dispatchTagged("factory-clear", (commandId) => ({
+        type: "thread.factory.set",
+        commandId,
+        threadId,
+        factory: null,
+      }));
+    }
+    if (scheduledMessage !== undefined && history.messages.length > 0) {
+      yield* dispatchTagged("unschedule", (commandId) => ({
+        type: "thread.message.unschedule",
+        commandId,
+        threadId,
+      }));
+    }
+
+    if (settleSource) {
+      yield* dispatchTagged("settle", (commandId) => ({
+        type: "thread.settle",
+        commandId,
+        threadId,
+      }));
+    } else {
+      const messageId = MessageId.make(yield* randomUUID);
+      yield* dispatchTagged("check-in", (commandId) => ({
+        type: "thread.turn.start",
+        commandId,
+        threadId,
+        message: {
+          messageId,
+          role: "user",
+          text: `A ${targetProvider} session now continues this task in a new thread, "${title}", in the same worktree. Before you do any more work in this thread, check in with the user and look at what that session changed.`,
+          attachments: [],
+        },
+        runtimeMode: thread.runtimeMode,
+        interactionMode: thread.interactionMode,
+        createdAt: now,
+      }));
+    }
+
+    yield* receiptBus.publish({
+      type: "thread.provider-switched",
+      threadId,
+      newThreadId,
+      createdAt: now,
+    });
+  });
+
   const processEvent = (event: OrchestrationEvent) =>
-    event.type === "thread.fork-requested"
-      ? handleForkRequested(event).pipe(
+    event.type === "thread.provider-switch-requested"
+      ? handleProviderSwitchRequested(event).pipe(
           Effect.catch((error) =>
             Effect.flatMap(nowIso, (createdAt) =>
-              appendForkFailureActivity({
+              appendSwitchFailureActivity({
                 threadId: event.payload.threadId,
-                turnCount: event.payload.turnCount,
                 detail: error.message,
                 createdAt,
               }).pipe(Effect.catch(() => Effect.void)),
             ),
           ),
         )
-      : Effect.void;
+      : event.type === "thread.fork-requested"
+        ? handleForkRequested(event).pipe(
+            Effect.catch((error) =>
+              Effect.flatMap(nowIso, (createdAt) =>
+                appendForkFailureActivity({
+                  threadId: event.payload.threadId,
+                  turnCount: event.payload.turnCount,
+                  detail: error.message,
+                  createdAt,
+                }).pipe(Effect.catch(() => Effect.void)),
+              ),
+            ),
+          )
+        : Effect.void;
 
   const processEventSafely = (event: OrchestrationEvent) =>
     processEvent(event).pipe(
@@ -302,7 +595,9 @@ const make = Effect.gen(function* () {
   const start: ThreadForkReactorShape["start"] = Effect.fn("start")(function* () {
     yield* forkParked(
       Stream.runForEach(orchestrationEngine.streamDomainEvents, (event) =>
-        event.type === "thread.fork-requested" ? worker.enqueue(event) : Effect.void,
+        event.type === "thread.fork-requested" || event.type === "thread.provider-switch-requested"
+          ? worker.enqueue(event)
+          : Effect.void,
       ),
     );
   });

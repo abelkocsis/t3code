@@ -108,6 +108,14 @@ function makeHarness(options?: { readonly forkBindingFails?: boolean }) {
   const createdWorktrees: Array<{ readonly refName: string; readonly path: string }> = [];
 
   const providerLayer = Layer.succeed(ProviderService, {
+    getInstanceInfo: (instanceId: ProviderInstanceId) =>
+      Effect.succeed({
+        instanceId,
+        driverKind:
+          instanceId === "codex" ? "codex" : instanceId === "claude" ? "claudeAgent" : instanceId,
+        displayName: undefined,
+        enabled: true,
+      }),
     prepareForkBinding: (input: ForkBindingCall) =>
       options?.forkBindingFails === true
         ? Effect.fail(
@@ -364,5 +372,130 @@ describe("ThreadForkReactor", () => {
         payload: { detail: expect.stringContaining("does not support forking") },
       });
     }).pipe(Effect.scoped, Effect.provide(harness.layer));
+  });
+
+  describe("provider switch", () => {
+    const newThreadId = ThreadId.make("thread-switched");
+    const switchCommand = (settleSource: boolean) => ({
+      type: "thread.provider.switch" as const,
+      commandId: CommandId.make(`cmd-switch-${settleSource}`),
+      threadId: sourceThreadId,
+      newThreadId,
+      modelSelection: { instanceId: ProviderInstanceId.make("codex"), model: "gpt-5.5" },
+      title: "Source thread",
+      settleSource,
+      createdAt,
+    });
+
+    it.effect("continues the thread with the new provider in the same worktree", () => {
+      const harness = makeHarness();
+      return Effect.gen(function* () {
+        const reactor = yield* ThreadForkReactor;
+        const snapshotQuery = yield* ProjectionSnapshotQuery;
+        const config = yield* ServerConfig;
+        yield* reactor.start();
+
+        const engine = yield* seedSourceThread(harness.cwd);
+        yield* engine.dispatch({
+          type: "thread.factory.set",
+          commandId: CommandId.make("cmd-factory"),
+          threadId: sourceThreadId,
+          factory: {
+            input: { kind: "free-text", value: "Edit the README" },
+            phase: "implementation",
+            summary: null,
+            startedAt: createdAt,
+            updatedAt: createdAt,
+          },
+        });
+        yield* engine.dispatch(switchCommand(false));
+        yield* reactor.drain;
+
+        const readModel = yield* snapshotQuery.getSnapshot();
+        const switched = readModel.threads.find((thread) => thread.id === newThreadId);
+        expect(switched).toMatchObject({
+          modelSelection: { instanceId: "codex", model: "gpt-5.5" },
+          worktreePath: harness.cwd,
+          branch: "main",
+          factory: { phase: "implementation" },
+        });
+        // No new worktree: the switch continues the work where it is.
+        expect(harness.createdWorktrees).toEqual([]);
+        expect(switched?.messages.map((message) => message.text)).toEqual([
+          "Please edit the README",
+        ]);
+        expect(
+          switched?.activities.find(
+            (activity) => activity.kind === "thread.provider-switch.continued-from",
+          ),
+        ).toMatchObject({ payload: { threadId: sourceThreadId, provider: "Claude" } });
+
+        const source = readModel.threads.find((thread) => thread.id === sourceThreadId);
+        // The factory task moves, so the Factory page shows one row.
+        expect(source?.factory ?? null).toBeNull();
+        expect(
+          source?.activities.find(
+            (activity) => activity.kind === "thread.provider-switch.continued-in",
+          ),
+        ).toMatchObject({ payload: { threadId: newThreadId, provider: "Codex" } });
+        expect(source?.settledOverride).not.toBe("settled");
+        expect(source?.messages.map((message) => message.text)).toContainEqual(
+          expect.stringContaining("Codex session now continues this task"),
+        );
+
+        const handoffDirectory = NodePath.join(config.stateDir, "handoffs", newThreadId);
+        const prefix = NodeFS.readFileSync(
+          NodePath.join(handoffDirectory, "pending-prefix.md"),
+          "utf8",
+        );
+        expect(prefix).toContain("Please edit the README");
+        expect(prefix).toContain(NodePath.join(handoffDirectory, "transcript.md"));
+        expect(
+          NodeFS.readFileSync(NodePath.join(handoffDirectory, "transcript.md"), "utf8"),
+        ).toContain("Edited README.md");
+      }).pipe(Effect.scoped, Effect.provide(harness.layer));
+    });
+
+    it.effect("settles the source thread instead of messaging it when asked", () => {
+      const harness = makeHarness();
+      return Effect.gen(function* () {
+        const reactor = yield* ThreadForkReactor;
+        const snapshotQuery = yield* ProjectionSnapshotQuery;
+        yield* reactor.start();
+
+        const engine = yield* seedSourceThread(harness.cwd);
+        yield* engine.dispatch(switchCommand(true));
+        yield* reactor.drain;
+
+        const readModel = yield* snapshotQuery.getSnapshot();
+        const source = readModel.threads.find((thread) => thread.id === sourceThreadId);
+        expect(source?.settledOverride).toBe("settled");
+        expect(source?.messages.map((message) => message.text)).toEqual(["Please edit the README"]);
+      }).pipe(Effect.scoped, Effect.provide(harness.layer));
+    });
+
+    it.effect("refuses a switch while the source thread runs a turn", () => {
+      const harness = makeHarness();
+      return Effect.gen(function* () {
+        const engine = yield* seedSourceThread(harness.cwd);
+        yield* engine.dispatch({
+          type: "thread.session.set",
+          commandId: CommandId.make("cmd-session-running"),
+          threadId: sourceThreadId,
+          session: {
+            threadId: sourceThreadId,
+            status: "running",
+            providerName: "claudeAgent",
+            runtimeMode: "approval-required",
+            activeTurnId: turnId,
+            lastError: null,
+            updatedAt: createdAt,
+          },
+          createdAt,
+        });
+        const result = yield* Effect.exit(engine.dispatch(switchCommand(false)));
+        expect(result._tag).toBe("Failure");
+      }).pipe(Effect.scoped, Effect.provide(harness.layer));
+    });
   });
 });

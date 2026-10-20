@@ -59,11 +59,20 @@ export const ThreadForkedReceipt = Schema.Struct({
 });
 export type ThreadForkedReceipt = typeof ThreadForkedReceipt.Type;
 
+export const ThreadProviderSwitchedReceipt = Schema.Struct({
+  type: Schema.Literal("thread.provider-switched"),
+  threadId: ThreadId,
+  newThreadId: ThreadId,
+  createdAt: IsoDateTime,
+});
+export type ThreadProviderSwitchedReceipt = typeof ThreadProviderSwitchedReceipt.Type;
+
 export const OrchestrationRuntimeReceipt = Schema.Union([
   CheckpointBaselineCapturedReceipt,
   CheckpointDiffFinalizedReceipt,
   TurnProcessingQuiescedReceipt,
   ThreadForkedReceipt,
+  ThreadProviderSwitchedReceipt,
 ]);
 export type OrchestrationRuntimeReceipt = typeof OrchestrationRuntimeReceipt.Type;
 

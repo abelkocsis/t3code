@@ -223,6 +223,7 @@ import { PullRequestsUnavailableState } from "./pullRequest/PullRequestsUnavaila
 import { RightPanelTabs } from "./RightPanelTabs";
 import { AgentsPanel } from "./AgentsPanel";
 import { LinkPullRequestDialogHost } from "./pullRequest/LinkPullRequestDialog";
+import { latestProviderSwitchLink } from "./ProviderSwitchDialog";
 import { ThreadPullRequestsPanel } from "./pullRequest/ThreadPullRequestsPanel";
 import { useDeviceState } from "~/state/device";
 import { DeviceSetup } from "./device/DeviceSetup";
@@ -238,6 +239,7 @@ import { isEditableFocused } from "../lib/editableFocus";
 import ThreadTerminalDrawer from "./ThreadTerminalDrawer";
 import {
   AlarmClockIcon,
+  ArrowRightLeftIcon,
   CheckCircle2Icon,
   ChevronDownIcon,
   DownloadIcon,
@@ -6502,6 +6504,48 @@ export default function ChatView(props: ChatViewProps) {
       onDismiss: acknowledgeActiveThreadWoke,
     };
   }, [acknowledgeActiveThreadWoke, activeThread?.id, activeThreadWokeVisible]);
+  const providerSwitchLink = useMemo(
+    () => latestProviderSwitchLink(threadActivities),
+    [threadActivities],
+  );
+  // The old thread always points at its successor. The new thread points back
+  // only until its own first turn, after which the history row is enough.
+  const providerSwitchBannerItem = useMemo<ComposerBannerStackItem | null>(() => {
+    if (
+      providerSwitchLink === null ||
+      (providerSwitchLink.direction === "from" && activeThread?.latestTurn != null)
+    ) {
+      return null;
+    }
+    const target = scopeThreadRef(environmentId, providerSwitchLink.threadId);
+    return {
+      id: `provider-switch:${activeThread?.id ?? "unknown"}:${providerSwitchLink.threadId}`,
+      variant: "info",
+      icon: <ArrowRightLeftIcon />,
+      title:
+        providerSwitchLink.direction === "in"
+          ? `Continued in ${providerSwitchLink.provider}`
+          : `Continued from ${providerSwitchLink.provider}`,
+      description:
+        providerSwitchLink.direction === "in"
+          ? "Another thread now does this task"
+          : "Your next message carries the earlier conversation",
+      actions: (
+        <Button
+          size="xs"
+          variant="ghost"
+          onClick={() =>
+            void navigate({
+              to: "/$environmentId/$threadId",
+              params: buildThreadRouteParams(target),
+            })
+          }
+        >
+          {providerSwitchLink.direction === "in" ? "Open new thread" : "Open old thread"}
+        </Button>
+      ),
+    };
+  }, [activeThread?.id, activeThread?.latestTurn, environmentId, navigate, providerSwitchLink]);
   const parkedThreadBannerItem = useMemo<ComposerBannerStackItem | null>(() => {
     if (!activeThreadSnoozed && !activeThreadSettled) {
       return null;
@@ -6673,6 +6717,7 @@ export default function ChatView(props: ChatViewProps) {
       resumeCompactionBannerItem === null ? [] : [resumeCompactionBannerItem];
     const wokeThreadItems = wokeThreadBannerItem === null ? [] : [wokeThreadBannerItem];
     const parkedThreadItems = parkedThreadBannerItem === null ? [] : [parkedThreadBannerItem];
+    const providerSwitchItems = providerSwitchBannerItem === null ? [] : [providerSwitchBannerItem];
     // The user asked for this one, so it leads the notice tier instead of trailing it.
     const usageLimitsItems = usageLimitsBanner === null ? [] : [usageLimitsBanner];
     const projectCloneItems = projectCloneBannerItem === null ? [] : [projectCloneBannerItem];
@@ -6685,6 +6730,7 @@ export default function ChatView(props: ChatViewProps) {
         ...backgroundLivenessItems,
         ...resumeCompactionItems,
         ...wokeThreadItems,
+        ...providerSwitchItems,
         ...parkedThreadItems,
       ];
     }
@@ -6734,10 +6780,12 @@ export default function ChatView(props: ChatViewProps) {
           setBranchMismatchDismissTick((tick) => tick + 1);
         },
       },
+      ...providerSwitchItems,
       ...parkedThreadItems,
     ];
   }, [
     activeBranchMismatchKey,
+    providerSwitchBannerItem,
     backgroundLivenessBannerItem,
     feedbackBannerItems,
     handleRestoreThreadBranch,

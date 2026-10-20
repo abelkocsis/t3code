@@ -1,5 +1,6 @@
 import {
   ANTIGRAVITY_DEFAULT_MODEL,
+  PROVIDER_SWITCH_DRIVER_KINDS,
   type ProviderInstanceId,
   type ProviderDriverKind,
   type ResolvedKeybindingsConfig,
@@ -181,6 +182,11 @@ export const ModelPickerContent = memo(function ModelPickerContent(props: {
   onOpenProviderSetup?: (instanceId: ProviderInstanceId) => void;
   getModelDisabledReason?: (instanceId: ProviderInstanceId, model: string) => string | null;
   onInstanceModelChange: (instanceId: ProviderInstanceId, model: string) => void;
+  /**
+   * Set when the locked thread can continue with another provider. Picking
+   * such a provider asks for the switch instead of changing the model.
+   */
+  onRequestProviderSwitch?: (instanceId: ProviderInstanceId) => void;
 }) {
   const {
     keybindings: providedKeybindings,
@@ -189,6 +195,8 @@ export const ModelPickerContent = memo(function ModelPickerContent(props: {
     getModelDisabledReason,
     onInstanceModelChange,
     onToggleModel,
+    onRequestClose,
+    onRequestProviderSwitch,
   } = props;
   const [searchQuery, setSearchQuery] = useState("");
   const [showTopScrollFade, setShowTopScrollFade] = useState(false);
@@ -276,14 +284,37 @@ export const ModelPickerContent = memo(function ModelPickerContent(props: {
     searchInputRef.current?.focus({ preventScroll: true });
   }, []);
 
+  const isLocked = props.lockedProvider !== null;
+  // Other providers a locked thread can continue with through a provider switch.
+  const switchTargetInstanceIds = useMemo(() => {
+    if (props.lockedProvider === null || onRequestProviderSwitch === undefined) {
+      return undefined;
+    }
+    if (!PROVIDER_SWITCH_DRIVER_KINDS.includes(props.lockedProvider)) return undefined;
+    return new Set(
+      instanceEntries
+        .filter(
+          (entry) =>
+            entry.driverKind !== props.lockedProvider &&
+            PROVIDER_SWITCH_DRIVER_KINDS.includes(entry.driverKind),
+        )
+        .map((entry) => entry.instanceId),
+    );
+  }, [instanceEntries, props.lockedProvider, onRequestProviderSwitch]);
+
   const handleSelectInstance = useCallback(
     (instanceId: ProviderInstanceId | "favorites") => {
+      if (instanceId !== "favorites" && switchTargetInstanceIds?.has(instanceId)) {
+        onRequestProviderSwitch?.(instanceId);
+        onRequestClose?.();
+        return;
+      }
       setSelectedInstanceId(instanceId);
       window.requestAnimationFrame(() => {
         focusSearchInput();
       });
     },
-    [focusSearchInput],
+    [focusSearchInput, onRequestClose, onRequestProviderSwitch, switchTargetInstanceIds],
   );
 
   useLayoutEffect(() => {
@@ -396,7 +427,6 @@ export const ModelPickerContent = memo(function ModelPickerContent(props: {
     return out;
   }, [modelOptionsByInstance, entryByInstanceId, props.activeInstanceId, activeModelSlug]);
 
-  const isLocked = props.lockedProvider !== null;
   const isSearching = searchQuery.trim().length > 0;
   const lockedDisabledInstanceIds = useMemo(() => {
     if (!isLocked) {
@@ -404,12 +434,12 @@ export const ModelPickerContent = memo(function ModelPickerContent(props: {
     }
     const disabled = new Set<ProviderInstanceId>();
     for (const entry of instanceEntries) {
-      if (!matchesLockedProvider(entry)) {
+      if (!matchesLockedProvider(entry) && !switchTargetInstanceIds?.has(entry.instanceId)) {
         disabled.add(entry.instanceId);
       }
     }
     return disabled;
-  }, [instanceEntries, isLocked, matchesLockedProvider]);
+  }, [instanceEntries, isLocked, matchesLockedProvider, switchTargetInstanceIds]);
   const sidebarInstanceEntries = useMemo(() => {
     const enabledEntries = instanceEntries.filter(isProviderInstancePickerVisible);
     if (!isLocked) {

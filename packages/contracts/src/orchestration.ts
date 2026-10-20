@@ -1516,6 +1516,27 @@ const ThreadForkCommand = Schema.Struct({
   createdAt: IsoDateTime,
 });
 
+/** Providers a thread can switch from and to. Others are not checked yet. */
+export const PROVIDER_SWITCH_DRIVER_KINDS: ReadonlyArray<string> = ["claudeAgent", "codex"];
+
+/**
+ * Continues a thread with another provider. The new thread shares the source
+ * thread's worktree and branch and copies its full history. The new provider
+ * starts a fresh session and gets the history as a hidden prefix on its first
+ * turn. With `settleSource` false, the source thread is told that another
+ * session now does the task.
+ */
+const ThreadProviderSwitchCommand = Schema.Struct({
+  type: Schema.Literal("thread.provider.switch"),
+  commandId: CommandId,
+  threadId: ThreadId,
+  newThreadId: ThreadId,
+  modelSelection: ModelSelection,
+  title: TrimmedNonEmptyString,
+  settleSource: Schema.Boolean,
+  createdAt: IsoDateTime,
+});
+
 const ThreadSessionStopCommand = Schema.Struct({
   type: Schema.Literal("thread.session.stop"),
   commandId: CommandId,
@@ -1564,6 +1585,7 @@ const DispatchableClientOrchestrationCommand = Schema.Union([
   ThreadCheckpointRevertCommand,
   ThreadConversationRevertCommand,
   ThreadForkCommand,
+  ThreadProviderSwitchCommand,
   ThreadSessionStopCommand,
 ]);
 export type DispatchableClientOrchestrationCommand =
@@ -1604,6 +1626,7 @@ export const ClientOrchestrationCommand = Schema.Union([
   ThreadCheckpointRevertCommand,
   ThreadConversationRevertCommand,
   ThreadForkCommand,
+  ThreadProviderSwitchCommand,
   ThreadSessionStopCommand,
 ]);
 export type ClientOrchestrationCommand = typeof ClientOrchestrationCommand.Type;
@@ -1707,6 +1730,10 @@ const ThreadForkHydrateCommand = Schema.Struct({
     }),
   ).check(Schema.isNonEmpty()),
   activities: Schema.Array(OrchestrationThreadActivity),
+  // A provider switch moves the source's parked message here. The hydrated
+  // thread already has its worktree, so the first-turn rule of
+  // `thread.message.schedule` does not apply.
+  scheduledMessage: Schema.optional(ThreadScheduledMessage),
   createdAt: IsoDateTime,
 });
 
@@ -1864,6 +1891,7 @@ export const OrchestrationEventType = Schema.Literals([
   "thread.checkpoint-revert-requested",
   "thread.reverted",
   "thread.fork-requested",
+  "thread.provider-switch-requested",
   "thread.session-stop-requested",
   "thread.session-set",
   "thread.proposed-plan-upserted",
@@ -2153,6 +2181,15 @@ export const ThreadForkRequestedPayload = Schema.Struct({
   createdAt: IsoDateTime,
 });
 
+export const ThreadProviderSwitchRequestedPayload = Schema.Struct({
+  threadId: ThreadId,
+  newThreadId: ThreadId,
+  modelSelection: ModelSelection,
+  title: TrimmedNonEmptyString,
+  settleSource: Schema.Boolean,
+  createdAt: IsoDateTime,
+});
+
 export const ThreadRevertedPayload = Schema.Struct({
   threadId: ThreadId,
   turnCount: NonNegativeInt,
@@ -2400,6 +2437,11 @@ export const OrchestrationEvent = Schema.Union([
     ...EventBaseFields,
     type: Schema.Literal("thread.fork-requested"),
     payload: ThreadForkRequestedPayload,
+  }),
+  Schema.Struct({
+    ...EventBaseFields,
+    type: Schema.Literal("thread.provider-switch-requested"),
+    payload: ThreadProviderSwitchRequestedPayload,
   }),
   Schema.Struct({
     ...EventBaseFields,

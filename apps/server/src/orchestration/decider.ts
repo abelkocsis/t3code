@@ -2098,6 +2098,48 @@ export const decideOrchestrationCommand = Effect.fn("decideOrchestrationCommand"
       };
     }
 
+    case "thread.provider.switch": {
+      const thread = yield* requireThreadNotArchived({
+        readModel,
+        command,
+        threadId: command.threadId,
+      });
+      yield* requireThreadAbsent({
+        readModel,
+        command,
+        threadId: command.newThreadId,
+      });
+      // Two providers editing one worktree at once is the conflict the
+      // check-in message exists to avoid, so a busy thread cannot switch.
+      if (
+        thread.session?.status === "starting" ||
+        thread.session?.status === "running" ||
+        hasQueuedTurnStartForThread(thread, command.createdAt)
+      ) {
+        return yield* new OrchestrationCommandInvariantError({
+          commandType: command.type,
+          detail: `Thread '${command.threadId}' is running a turn. Stop it before you switch providers.`,
+        });
+      }
+      return {
+        ...(yield* withEventBase({
+          aggregateKind: "thread",
+          aggregateId: command.threadId,
+          occurredAt: command.createdAt,
+          commandId: command.commandId,
+        })),
+        type: "thread.provider-switch-requested",
+        payload: {
+          threadId: command.threadId,
+          newThreadId: command.newThreadId,
+          modelSelection: command.modelSelection,
+          title: command.title,
+          settleSource: command.settleSource,
+          createdAt: command.createdAt,
+        },
+      };
+    }
+
     case "thread.session.stop": {
       const thread = yield* requireThread({
         readModel,
@@ -2392,6 +2434,22 @@ export const decideOrchestrationCommand = Effect.fn("decideOrchestrationCommand"
           payload: {
             threadId: command.threadId,
             activity,
+          },
+        });
+      }
+      if (command.scheduledMessage !== undefined) {
+        events.push({
+          ...(yield* withEventBase({
+            aggregateKind: "thread",
+            aggregateId: command.threadId,
+            occurredAt: command.createdAt,
+            commandId: command.commandId,
+          })),
+          type: "thread.message-scheduled",
+          payload: {
+            threadId: command.threadId,
+            scheduledMessage: command.scheduledMessage,
+            updatedAt: command.createdAt,
           },
         });
       }

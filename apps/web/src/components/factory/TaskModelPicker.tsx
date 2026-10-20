@@ -25,12 +25,15 @@ export function TaskModelPicker({
   project,
   value,
   onChange,
+  driverKinds,
 }: {
   environmentId: EnvironmentId;
   project: EnvironmentProject | null;
   /** The user's pick; null follows the project default. */
   value: ModelSelection | null;
   onChange: (selection: ModelSelection) => void;
+  /** Limits the providers on offer; all enabled providers when absent. */
+  driverKinds?: ReadonlyArray<string>;
 }) {
   const settings = useEnvironmentSettings(environmentId);
   const { environments } = useEnvironments();
@@ -44,7 +47,7 @@ export function TaskModelPicker({
   const selection = resolveDefaultProviderModelSelection(providers, value ?? projectDefault);
   const entries = sortProviderInstanceEntries(
     applyProviderInstanceSettings(deriveProviderInstanceEntries(providers), settings),
-  );
+  ).filter((entry) => driverKinds === undefined || driverKinds.includes(entry.driverKind));
   const activeEntry = entries.find((entry) => entry.instanceId === selection?.instanceId);
   if (!selection || !activeEntry) return null;
   const modelOptions = getCustomModelOptionsByInstance(

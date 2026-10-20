@@ -56,6 +56,7 @@ export const ProviderModelPicker = memo(function ProviderModelPicker(props: {
   onOpenProviderSetup?: (instanceId: ProviderInstanceId) => void;
   getModelDisabledReason?: (instanceId: ProviderInstanceId, model: string) => string | null;
   onInstanceModelChange: (instanceId: ProviderInstanceId, model: string) => void;
+  onRequestProviderSwitch?: (instanceId: ProviderInstanceId) => void;
 }) {
   const composerFloatingLayerProps = useComposerMenuProps();
   const [uncontrolledIsMenuOpen, setUncontrolledIsMenuOpen] = useState(false);
@@ -308,6 +309,9 @@ export const ProviderModelPicker = memo(function ProviderModelPicker(props: {
             ? { getModelDisabledReason: props.getModelDisabledReason }
             : {})}
           onInstanceModelChange={handleInstanceModelChange}
+          {...(props.onRequestProviderSwitch
+            ? { onRequestProviderSwitch: props.onRequestProviderSwitch }
+            : {})}
         />
         {props.selectedModels === undefined ? (
           <ChatGptSharingControl provider={activeEntry?.snapshot ?? null} />

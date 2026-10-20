@@ -895,6 +895,45 @@ describe("ProviderCommandReactor", () => {
     expect(harness.startSession.mock.calls[0]?.[1]).not.toHaveProperty("title");
   });
 
+  it("carries a provider switch handoff on the first turn only", async () => {
+    const harness = await createHarness();
+    const handoffDirectory = NodePath.join(harness.stateDir, "handoffs", "thread-1");
+    const prefixPath = NodePath.join(handoffDirectory, "pending-prefix.md");
+    NodeFS.mkdirSync(handoffDirectory, { recursive: true });
+    NodeFS.writeFileSync(prefixPath, "<handoff>earlier conversation</handoff>\n", "utf8");
+    const startTurn = (index: number) =>
+      Effect.runPromise(
+        harness.engine.dispatch({
+          type: "thread.turn.start",
+          commandId: CommandId.make(`cmd-turn-start-handoff-${index}`),
+          threadId: ThreadId.make("thread-1"),
+          message: {
+            messageId: asMessageId(`user-message-handoff-${index}`),
+            role: "user",
+            text: `message ${index}`,
+            attachments: [],
+          },
+          interactionMode: DEFAULT_PROVIDER_INTERACTION_MODE,
+          runtimeMode: "approval-required",
+          createdAt: "2026-01-01T00:00:00.000Z",
+        }),
+      );
+
+    await startTurn(1);
+    await waitFor(() => harness.sendTurn.mock.calls.length === 1);
+    expect(harness.sendTurn.mock.calls[0]?.[0]).toMatchObject({
+      input: "<handoff>earlier conversation</handoff>\nmessage 1",
+    });
+    await waitFor(() => !NodeFS.existsSync(prefixPath));
+
+    // Only the provider sees the handoff; the stored message keeps the user's text.
+    const readModel = await harness.readModel();
+    const user = readModel.threads
+      .find((entry) => entry.id === ThreadId.make("thread-1"))
+      ?.messages.find((message) => message.id === "user-message-handoff-1");
+    expect(user?.text).toBe("message 1");
+  });
+
   effectIt.effect("forwards only a user-renamed title when starting a provider session", () =>
     Effect.gen(function* () {
       const harness = yield* Effect.promise(() =>

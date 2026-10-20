@@ -52,6 +52,25 @@ time. The files in the new worktree match the checkpoint at the fork point.
 The source thread does not change. Forking needs a provider that supports it:
 Claude and Codex do today, and the action is hidden for the others.
 
+## Switch provider
+
+A thread stays with the provider it started with. To continue the work with
+another provider, for example when Claude runs out of usage, open the model
+picker and choose the other provider's icon, or run **Switch provider…** from
+the command palette. On the Factory page, use **Change model and effort** in a
+task's menu.
+
+T3 Code starts a new thread with the full history, in the same worktree and
+branch. The new provider gets the conversation with your next message, and it
+can read a full transcript with every tool call. That first message costs more
+tokens than a normal turn, because the new provider has no cache of the
+conversation.
+
+You can settle the old thread. If you keep it open, T3 Code tells it that
+another session now does the task. A factory task moves to the new thread, and
+a task that is not in the sidebar settles its old thread automatically. Only
+Claude and Codex can switch, and a thread cannot switch while a turn runs.
+
 ## Pin and reorder threads
 
 Pin a thread from its menu to keep it above your active work.

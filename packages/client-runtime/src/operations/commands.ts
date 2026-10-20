@@ -63,6 +63,7 @@ export type RevertThreadCheckpointInput = CommandInput<"thread.checkpoint.revert
   readonly restoreFiles?: boolean;
 };
 export type ForkThreadInput = CommandInput<"thread.fork">;
+export type SwitchThreadProviderInput = CommandInput<"thread.provider.switch">;
 export type StopThreadSessionInput = CommandInput<"thread.session.stop">;
 
 type DispatchTag = typeof ORCHESTRATION_WS_METHODS.dispatchCommand;
@@ -440,6 +441,18 @@ export const forkThread: (input: ForkThreadInput) => CommandEffect = Effect.fn(
   return yield* dispatch({
     ...input,
     type: "thread.fork",
+    commandId: metadata.commandId,
+    createdAt: metadata.createdAt,
+  });
+});
+
+export const switchThreadProvider: (input: SwitchThreadProviderInput) => CommandEffect = Effect.fn(
+  "EnvironmentCommands.switchThreadProvider",
+)(function* (input) {
+  const metadata = yield* timestampedCommandMetadata(input);
+  return yield* dispatch({
+    ...input,
+    type: "thread.provider.switch",
     commandId: metadata.commandId,
     createdAt: metadata.createdAt,
   });

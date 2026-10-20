@@ -63,6 +63,7 @@ import {
   PaletteIcon,
   FactoryIcon,
   RotateCcwIcon,
+  ArrowRightLeftIcon,
   SettingsIcon,
   SquarePenIcon,
   SunIcon,
@@ -195,6 +196,7 @@ import {
 import { ThreadRowLeadingStatus, ThreadRowTrailingStatus } from "./ThreadStatusIndicators";
 import { primaryServerKeybindingsAtom, primaryServerProvidersAtom } from "../state/server";
 import { deriveProviderInstanceEntries, type ProviderInstanceEntry } from "../providerInstances";
+import { canSwitchProvider, openProviderSwitchDialog } from "./ProviderSwitchDialog";
 import { resolveShortcutCommand, threadJumpIndexFromCommand } from "../keybindings";
 import { CommandDialog, CommandDialogPopup, CommandFooterAction } from "./ui/command";
 import { Button } from "./ui/button";
@@ -2001,6 +2003,28 @@ function OpenCommandPaletteDialog(props: {
         useRightPanelStore
           .getState()
           .open(scopeThreadRef(activeThread.environmentId, activeThread.id), "todos");
+      },
+    });
+  }
+
+  if (
+    activeThread !== null &&
+    canSwitchProvider(
+      deriveProviderInstanceEntries(activeThreadServerConfig?.providers ?? []).find(
+        (entry) => entry.instanceId === activeThread.modelSelection.instanceId,
+      )?.driverKind,
+    )
+  ) {
+    const threadRef = scopeThreadRef(activeThread.environmentId, activeThread.id);
+    actionItems.push({
+      kind: "action",
+      value: "action:switch-provider",
+      searchTerms: ["switch", "provider", "claude", "codex", "model", "continue", "tokens"],
+      title: "Switch provider…",
+      description: "Continue this thread with another provider",
+      icon: <ArrowRightLeftIcon className={ITEM_ICON_CLASS} />,
+      run: async () => {
+        openProviderSwitchDialog({ threadRef, surface: "thread" });
       },
     });
   }

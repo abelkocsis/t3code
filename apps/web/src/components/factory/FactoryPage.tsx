@@ -47,6 +47,7 @@ import {
   CircleDotIcon,
   ChevronRightIcon,
   CopyIcon,
+  CpuIcon,
   EllipsisIcon,
   ExternalLinkIcon,
   EyeIcon,
@@ -120,6 +121,7 @@ import { requestCustomSnooze } from "../CustomSnoozeDialog";
 import { SlackIcon } from "../Icons";
 import { resolveSnoozePresets, snoozeWakeDescription } from "../Sidebar.snooze";
 import { requestFolderName } from "../FolderNameDialog";
+import { openProviderSwitchDialog } from "../ProviderSwitchDialog";
 import {
   PULL_REQUEST_MERGE_METHOD_LABELS,
   readableFailure,
@@ -1361,6 +1363,17 @@ function TaskMenu({ task }: { task: FactoryTask }) {
               ))}
             </MenuSubPopup>
           </MenuSub>
+          <MenuItem
+            onClick={() =>
+              openProviderSwitchDialog({
+                threadRef: scopeThreadRef(task.thread.environmentId, task.thread.id),
+                surface: "factory",
+              })
+            }
+          >
+            <CpuIcon aria-hidden className="size-3.5" />
+            Change model and effort
+          </MenuItem>
           <MenuSeparator />
           <MenuCheckboxItem checked={showInSidebar} onCheckedChange={() => void toggleSidebar()}>
             Show in sidebar
