@@ -328,7 +328,11 @@ export function resolveFactoryProject(
     );
   });
   if (matches.length === 1) return { kind: "resolved", project: matches[0]! };
-  return { kind: "ask", candidates: matches.length > 0 ? matches : projects };
+  // A word in free text is only a hint, so the guesses lead but every project stays pickable.
+  return {
+    kind: "ask",
+    candidates: [...matches, ...projects.filter((project) => !matches.includes(project))],
+  };
 }
 
 export function formatElapsed(fromIso: string, now: number): string {

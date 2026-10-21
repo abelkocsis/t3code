@@ -389,6 +389,17 @@ describe("resolveFactoryProject", () => {
     expect(ask.kind).toBe("ask");
     if (ask.kind === "ask") expect(ask.candidates).toHaveLength(2);
   });
+
+  it("lists every project when free text matches several, matches first", () => {
+    const omnibus = project();
+    const admin = project({ id: ProjectId.make("project-2"), title: "admin" });
+    const attestorAdmin = project({ id: ProjectId.make("project-3"), title: "attestor-admin" });
+    const result = resolveFactoryProject(
+      { kind: "free-text", value: "Add a health check to attestor-admin" },
+      [omnibus, admin, attestorAdmin],
+    );
+    expect(result).toEqual({ kind: "ask", candidates: [admin, attestorAdmin, omnibus] });
+  });
 });
 
 describe("buildReviewRequestMessage", () => {
