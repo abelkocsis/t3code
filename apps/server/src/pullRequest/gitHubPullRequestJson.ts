@@ -77,6 +77,13 @@ const RawLatestReviewSchema = Schema.Struct({
   submittedAt: Schema.optional(Schema.NullOr(Schema.String)),
 });
 
+/** A conversation comment as the summary read sees it: who wrote it and when. */
+const RawSummaryCommentSchema = Schema.Struct({
+  id: Schema.optional(Schema.NullOr(Schema.String)),
+  author: Schema.optional(Schema.NullOr(RawActorSchema)),
+  createdAt: Schema.optional(Schema.NullOr(Schema.String)),
+});
+
 const RawCheckSchema = Schema.Struct({
   __typename: Schema.optional(Schema.String),
   name: Schema.optional(Schema.NullOr(Schema.String)),
@@ -1464,6 +1471,28 @@ function toLastReview(
   return latest;
 }
 
+/**
+ * The newest conversation comment by someone other than the author, which is how a reviewer
+ * answers outside a review. The author's own reports and bot notices do not count.
+ */
+function toLastCommentId(
+  comments: ReadonlyArray<Schema.Schema.Type<typeof RawSummaryCommentSchema> | null>,
+  authorLogin: string | null | undefined,
+): string | null {
+  const author = trimmed(authorLogin)?.toLowerCase() ?? null;
+  let latest: { readonly at: string; readonly id: string } | null = null;
+  for (const comment of comments) {
+    const actor = toActor(comment?.author);
+    const at = trimmed(comment?.createdAt);
+    const id = trimmed(comment?.id);
+    if (actor === null || at === null || id === null || actor.isBot === true) continue;
+    const login = actor.login.toLowerCase();
+    if (login === author || login.endsWith("[bot]") || login.startsWith("copilot")) continue;
+    if (latest === null || at > latest.at) latest = { at, id };
+  }
+  return latest?.id ?? null;
+}
+
 function toLastReviewer(
   reviews: ReadonlyArray<Schema.Schema.Type<typeof RawLatestReviewSchema> | null>,
   authorLogin: string | null | undefined,
@@ -1981,6 +2010,7 @@ const PULL_REQUEST_SUMMARY_SELECTION =
   "mergeStateStatus viewerDidAuthor viewerCanUpdateBranch headRepositoryOwner { login } " +
   "latestReviews(first: 20) { nodes { id state submittedAt author { __typename login avatarUrl ... on User { name } } } } " +
   "reviewThreads(first: 100) { nodes { isResolved } } " +
+  "comments(last: 20) { nodes { id createdAt author { __typename login } } } " +
   "commits(last: 1) { nodes { commit { statusCheckRollup { state } } } }";
 
 /**
@@ -2019,6 +2049,9 @@ const RawSummarySchema = Schema.Struct({
         ),
       }),
     ),
+  ),
+  comments: Schema.optional(
+    Schema.NullOr(Schema.Struct({ nodes: Schema.Array(Schema.NullOr(RawSummaryCommentSchema)) })),
   ),
   changedFiles: Schema.optional(Schema.NullOr(Schema.Int)),
   additions: Schema.optional(Schema.NullOr(Schema.Int)),
@@ -2061,6 +2094,8 @@ export interface GitHubPullRequestSummary {
   readonly mergeState?: PullRequestMergeState;
   readonly lastReviewer: PullRequestActor | null;
   readonly lastReviewId: string | null;
+  /** Absent where the read did not ask for the conversation comments. */
+  readonly lastCommentId?: string | null;
   readonly unresolvedReviewThreads?: number;
   readonly viewerDidAuthor?: boolean;
   readonly canUpdateBranch?: boolean;
@@ -2117,6 +2152,9 @@ export function decodePullRequestSummariesJson(
       ...(mergeState === undefined ? {} : { mergeState }),
       lastReviewer: toLastReviewer(pr.latestReviews?.nodes ?? [], pr.author?.login),
       lastReviewId: toLastReview(pr.latestReviews?.nodes ?? [], pr.author?.login)?.id ?? null,
+      ...(pr.comments == null
+        ? {}
+        : { lastCommentId: toLastCommentId(pr.comments.nodes, pr.author?.login) }),
       ...(pr.reviewThreads == null
         ? {}
         : {

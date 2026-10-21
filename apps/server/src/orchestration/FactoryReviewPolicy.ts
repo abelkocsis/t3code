@@ -5,7 +5,7 @@ import type {
   ThreadPullRequestLink,
   ThreadPullRequestSnapshot,
 } from "@t3tools/contracts";
-import { FACTORY_PHASE_MARKER } from "@t3tools/contracts";
+import { FACTORY_PHASE_MARKER, factoryHeldWorkMessage } from "@t3tools/contracts";
 import { visibleThreadPullRequests } from "@t3tools/shared/threadPullRequests";
 
 import { threadHasQueuedTurnStart } from "./ThreadSettlementPolicy.ts";
@@ -25,6 +25,7 @@ const EMPTY_MEMO: FactoryReviewMemo = {
   seenChecksState: null,
   seenMergeState: null,
   seenReviewId: null,
+  seenCommentId: null,
 };
 
 /** The pull request a task follows: an open one first, then a merged one, then any. */
@@ -71,6 +72,7 @@ function baseState(snapshot: ThreadPullRequestSnapshot): FactoryReviewMemo["seen
 function memoOf(
   snapshot: ThreadPullRequestSnapshot,
   seenReviewId: string | null | undefined,
+  seenCommentId: string | null | undefined,
 ): FactoryReviewMemo {
   return {
     seenUpdatedAt: snapshot.updatedAt ?? null,
@@ -78,13 +80,14 @@ function memoOf(
     seenChecksState: snapshot.checksState ?? null,
     seenMergeState: baseState(snapshot),
     ...(seenReviewId === undefined ? {} : { seenReviewId }),
+    ...(seenCommentId === undefined ? {} : { seenCommentId }),
   };
 }
 
 function commentsMessage(link: ThreadPullRequestLink): string {
   return [
     `New review activity on ${link.url}.`,
-    "Read the new reviews, every open comment, and the review decision. Decide for each one yourself: fix it on this branch, or push back with a reason. Pushing back is fine when the comment is wrong or out of scope. Do not ask me which ones to fix.",
+    "Read the new reviews, every open comment, the conversation comments, and the review decision. Decide for each one yourself: fix it on this branch, or push back with a reason. Pushing back is fine when the comment is wrong or out of scope. Do not ask me which ones to fix.",
     'Push the fixes. Then answer every comment on the pull request: a fixed one gets a reply that says "Resolved in commit <short sha>" and its conversation gets resolved; a declined one gets your reason and stays open.',
     `If you changed code, post a short report under the pull request: what you changed, what you declined, and which agents and models ran. Then print "${FACTORY_PHASE_MARKER} ready-for-review" with one sentence.`,
     `If nothing needs a change, print "${FACTORY_PHASE_MARKER} under-review" with one sentence.`,
@@ -119,14 +122,15 @@ function behindMessage(link: ThreadPullRequestLink, snapshot: ThreadPullRequestS
  * - "done" with a pull request becomes "ready-for-review".
  * - Ready for review: nobody reviews yet, so only a failed check or a stale base (behind or
  *   in conflict) becomes a message to the agent, and the phase goes to "fix".
- * - Under review: a human review the agent was not sent yet comes first, even an approval,
- *   because an approval can carry notes. Then approval plus green checks on an unblocked
+ * - Under review: a human review or conversation comment the agent was not sent yet comes
+ *   first, even an approval, because an approval can carry notes. Then approval plus green checks on an unblocked
  *   branch gives "ready-to-merge". More open threads than before (a bot's review), a failed
  *   check, or a stale base become a message to the agent and the phase goes to "fix". Each
  *   cause fires once, and again only after it cleared.
  * - Ready to merge falls back to the under-review rules when the pull request changes.
  * - Token saving holds each message as `pendingWork` instead of sending it, and leaves the
- *   phase alone, so the task waits on the human. Turning token saving off sends held work.
+ *   phase alone, so the task waits on the human. Turning token saving off sends held work, and
+ *   the agent also checks the whole pull request, because it may have moved on meanwhile.
  */
 export function decideFactoryReview(
   thread: OrchestrationThreadShell,
@@ -176,7 +180,7 @@ export function decideFactoryReview(
         updatedAt: now,
         pendingWork: null,
       },
-      message: held.message,
+      message: factoryHeldWorkMessage(held),
     };
   }
   // Holding replaces sending. Work already held is kept, so nothing found earlier is lost.
@@ -202,7 +206,7 @@ export function decideFactoryReview(
     // A failure or stale base already there still counts, so the next sweep handles it, and
     // reviews already there go to the agent once the human marks the task under review.
     return stage("ready-for-review", snapshot.title, {
-      ...memoOf(snapshot, null),
+      ...memoOf(snapshot, null, null),
       seenChecksState: null,
       seenMergeState: null,
     });
@@ -221,6 +225,10 @@ export function decideFactoryReview(
   const seenReviewId =
     memo.seenReviewId === undefined ? (snapshot.lastReviewId ?? null) : memo.seenReviewId;
   const newReview = snapshot.lastReviewId != null && snapshot.lastReviewId !== seenReviewId;
+  // The same for the newest conversation comment by someone other than the author.
+  const seenCommentId =
+    memo.seenCommentId === undefined ? (snapshot.lastCommentId ?? null) : memo.seenCommentId;
+  const newComment = snapshot.lastCommentId != null && snapshot.lastCommentId !== seenCommentId;
   const unresolved = snapshot.unresolvedReviewThreads ?? 0;
   const newThreads = unresolved > memo.seenUnresolved;
   const newFailure = snapshot.checksState === "failing" && memo.seenChecksState !== "failing";
@@ -232,7 +240,8 @@ export function decideFactoryReview(
     (memo.seenChecksState === "failing" && snapshot.checksState !== "failing") ||
     (isStaleBase(memo.seenMergeState) && !isStaleBase(baseState(snapshot))) ||
     unresolved < memo.seenUnresolved ||
-    (memo.seenReviewId === undefined && snapshot.lastReviewId !== undefined);
+    (memo.seenReviewId === undefined && snapshot.lastReviewId !== undefined) ||
+    (memo.seenCommentId === undefined && snapshot.lastCommentId !== undefined);
   const settle = (): FactoryReviewDecision => ({
     factory: {
       ...factory,
@@ -242,6 +251,7 @@ export function decideFactoryReview(
         seenChecksState: snapshot.checksState ?? null,
         seenMergeState: baseState(snapshot),
         ...(snapshot.lastReviewId === undefined ? {} : { seenReviewId }),
+        ...(snapshot.lastCommentId === undefined ? {} : { seenCommentId }),
       },
     },
     message: null,
@@ -252,6 +262,7 @@ export function decideFactoryReview(
   const work = (input: {
     readonly comments: boolean;
     readonly seenReviewId: string | null | undefined;
+    readonly seenCommentId: string | null | undefined;
   }) => {
     const parts = [
       ...(newFailure
@@ -275,7 +286,7 @@ export function decideFactoryReview(
       ...stage(
         "fix",
         parts.map((part) => part.summary).join(" "),
-        memoOf(snapshot, input.seenReviewId),
+        memoOf(snapshot, input.seenReviewId, input.seenCommentId),
       ),
       message,
     });
@@ -283,7 +294,11 @@ export function decideFactoryReview(
 
   if (factory.phase === "ready-for-review") {
     if (!newFailure && !newStaleBase) return settled ? settle() : null;
-    return work({ comments: false, seenReviewId: memo.seenReviewId });
+    return work({
+      comments: false,
+      seenReviewId: memo.seenReviewId,
+      seenCommentId: memo.seenCommentId,
+    });
   }
 
   const approved = snapshot.reviewDecision === "approved";
@@ -293,26 +308,33 @@ export function decideFactoryReview(
     snapshot.mergeState === "has-hooks" ||
     snapshot.mergeState === "unstable";
 
-  if (!newReview && approved && green && unblocked && unresolved === 0) {
+  if (!newReview && !newComment && approved && green && unblocked && unresolved === 0) {
     return factory.phase === "ready-to-merge"
       ? null
-      : dropHeld(stage("ready-to-merge", "Approved and green.", memoOf(snapshot, seenReviewId)));
+      : dropHeld(
+          stage(
+            "ready-to-merge",
+            "Approved and green.",
+            memoOf(snapshot, seenReviewId, seenCommentId),
+          ),
+        );
   }
 
-  if (!newReview && !newThreads && !newFailure && !newStaleBase) {
+  if (!newReview && !newComment && !newThreads && !newFailure && !newStaleBase) {
     // Ready to merge no longer holds, for example a new commit set checks back to pending.
     if (factory.phase === "ready-to-merge") {
       return stage(
         "under-review",
         "Waiting on checks or reviewers.",
-        memoOf(snapshot, seenReviewId),
+        memoOf(snapshot, seenReviewId, seenCommentId),
       );
     }
     return settled ? settle() : null;
   }
-  const comments = newReview || newThreads;
+  const comments = newReview || newComment || newThreads;
   return work({
     comments,
     seenReviewId: comments ? (snapshot.lastReviewId ?? seenReviewId) : seenReviewId,
+    seenCommentId: comments ? (snapshot.lastCommentId ?? seenCommentId) : seenCommentId,
   });
 }

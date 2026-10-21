@@ -62,6 +62,7 @@ function factory(overrides: Partial<ThreadFactory> = {}): ThreadFactory {
       seenChecksState: "pending",
       seenMergeState: "blocked",
       seenReviewId: null,
+      seenCommentId: null,
     },
     ...overrides,
   };
@@ -264,6 +265,50 @@ describe("decideFactoryReview", () => {
     expect(opened?.message).toContain("New review activity");
   });
 
+  it("asks the agent to answer a new conversation comment once", () => {
+    const commented = thread({ pullRequests: [link({ updatedAt: NOW, lastCommentId: "IC_1" })] });
+    const decision = decideFactoryReview(commented, NOW);
+    expect(decision?.factory?.phase).toBe("fix");
+    expect(decision?.message).toContain("New review activity");
+    expect(decision?.factory?.review?.seenCommentId).toBe("IC_1");
+
+    const seen = thread({
+      ...commented,
+      factory: { ...factory(), review: decision!.factory!.review! },
+    });
+    expect(decideFactoryReview(seen, NOW)).toBeNull();
+  });
+
+  it("does not mark ready to merge over a conversation comment the agent was not sent", () => {
+    const decision = decideFactoryReview(
+      thread({
+        pullRequests: [
+          link({
+            reviewDecision: "approved",
+            checksState: "passing",
+            mergeState: "clean",
+            lastCommentId: "IC_1",
+          }),
+        ],
+      }),
+      NOW,
+    );
+    expect(decision?.factory?.phase).toBe("fix");
+  });
+
+  it("treats the current comment as handled on a memo from before comment ids", () => {
+    const { seenCommentId: _, ...oldMemo } = factory().review!;
+    const decision = decideFactoryReview(
+      thread({
+        factory: factory({ review: oldMemo }),
+        pullRequests: [link({ lastCommentId: "IC_1" })],
+      }),
+      NOW,
+    );
+    expect(decision?.message).toBeNull();
+    expect(decision?.factory?.review?.seenCommentId).toBe("IC_1");
+  });
+
   it("treats the current review as handled on a memo from before review ids", () => {
     const { seenReviewId: _, ...oldMemo } = factory().review!;
     const decision = decideFactoryReview(
@@ -448,6 +493,16 @@ describe("decideFactoryReview with token saving", () => {
     expect(decision?.factory?.pendingWork?.message).toContain("moved ahead");
   });
 
+  it("holds a stale base and a new conversation comment as one piece of work", () => {
+    const decision = decideFactoryReview(
+      thread({ pullRequests: [link({ lastCommentId: "IC_1", canUpdateBranch: true })] }),
+      NOW,
+      SAVING,
+    );
+    expect(decision?.factory?.pendingWork?.message).toContain("Rebase this branch");
+    expect(decision?.factory?.pendingWork?.message).toContain("New review activity");
+  });
+
   it("adds new work to work already held", () => {
     const held = factory({
       pendingWork: { summary: "CI failed.", message: "CI is failing on the branch." },
@@ -471,7 +526,10 @@ describe("decideFactoryReview with token saving", () => {
       pendingWork: { summary: "CI failed.", message: "CI is failing on the branch." },
     });
     const decision = decideFactoryReview(thread({ factory: held }), NOW);
-    expect(decision?.message).toBe("CI is failing on the branch.");
+    expect(decision?.message).toMatch(/^CI is failing on the branch\./);
+    // The work waited, so the agent also checks the whole pull request.
+    expect(decision?.message).toContain("Rebase onto the base branch if it moved ahead");
+    expect(decision?.message).toContain("conversation comment");
     expect(decision?.factory?.phase).toBe("fix");
     expect(decision?.factory?.pendingWork).toBeNull();
 

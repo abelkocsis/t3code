@@ -2013,6 +2013,27 @@ describe("batched pull request summaries", () => {
                 ],
               },
               reviewThreads: { nodes: [{ isResolved: true }, { isResolved: false }, null] },
+              comments: {
+                nodes: [
+                  {
+                    id: "IC_ana",
+                    createdAt: "2026-08-20T00:00:00Z",
+                    author: { __typename: "User", login: "ana" },
+                  },
+                  // The author's own reports and a bot's notice are newer, and still not counted.
+                  {
+                    id: "IC_abel",
+                    createdAt: "2026-08-22T00:00:00Z",
+                    author: { __typename: "User", login: "abel" },
+                  },
+                  {
+                    id: "IC_bot",
+                    createdAt: "2026-08-23T00:00:00Z",
+                    author: { __typename: "Bot", login: "socket-security" },
+                  },
+                  null,
+                ],
+              },
             },
           },
           s1: {
@@ -2036,11 +2057,13 @@ describe("batched pull request summaries", () => {
       viewerDidAuthor: true,
       canUpdateBranch: true,
       lastReviewer: { login: "bo" },
+      lastCommentId: "IC_ana",
       unresolvedReviewThreads: 1,
     });
     expect(decoded.success.get(1)?.lastReviewer).toBeNull();
     // A document that did not ask for the threads does not claim there are none.
     expect(decoded.success.get(1)).not.toHaveProperty("unresolvedReviewThreads");
+    expect(decoded.success.get(1)).not.toHaveProperty("lastCommentId");
   });
 
   it("reads stack membership only where the document asked for it", () => {

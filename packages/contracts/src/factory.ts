@@ -91,6 +91,11 @@ export const FactoryReviewMemo = Schema.Struct({
    * Absent on a memo written before this existed.
    */
   seenReviewId: Schema.optional(Schema.NullOr(TrimmedNonEmptyString)),
+  /**
+   * The newest conversation comment by someone else the agent was sent, by the host's comment
+   * id. Null: none yet. Absent on a memo written before this existed.
+   */
+  seenCommentId: Schema.optional(Schema.NullOr(TrimmedNonEmptyString)),
 });
 export type FactoryReviewMemo = typeof FactoryReviewMemo.Type;
 
@@ -123,6 +128,17 @@ export const FactoryPendingWork = Schema.Struct({
   message: TrimmedNonEmptyString,
 });
 export type FactoryPendingWork = typeof FactoryPendingWork.Type;
+
+/**
+ * The message that starts held work. The work waited, so the pull request may have moved on
+ * since: the agent also checks it whole and handles everything else in the same turn.
+ */
+export function factoryHeldWorkMessage(pending: FactoryPendingWork): string {
+  return [
+    pending.message,
+    `This work waited before it started, so check the whole pull request before you print the phase marker. Rebase onto the base branch if it moved ahead or conflicts. Fix CI if it fails. Read every review, open review thread, and conversation comment you have not answered yet, and handle each one: fix it or push back with a reason, reply on the pull request, and resolve the conversations you fixed. If you changed code, post a short report under the pull request. Print one "${FACTORY_PHASE_MARKER}" line for the whole set.`,
+  ].join("\n\n");
+}
 
 export const ThreadFactory = Schema.Struct({
   input: FactoryInput,

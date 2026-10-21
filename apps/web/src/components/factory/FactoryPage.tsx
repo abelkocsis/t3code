@@ -11,6 +11,7 @@ import {
   FACTORY_PHASES,
   FACTORY_REVIEW_PHASES,
   FACTORY_BLOCKED_SNOOZE_MS,
+  factoryHeldWorkMessage,
   type FactoryInput,
   type FactoryPhase,
   type ModelSelection,
@@ -1514,7 +1515,7 @@ function StartWorkButton({ task }: { task: FactoryTask }) {
         message: {
           messageId: newMessageId(),
           role: "user",
-          text: pending.message,
+          text: factoryHeldWorkMessage(pending),
           attachments: [],
         },
         runtimeMode: task.thread.runtimeMode,
@@ -1577,6 +1578,11 @@ function ReviewActions({ task, compact }: { task: FactoryTask; compact: boolean 
               ? { seenReviewId: task.factory.review.seenReviewId }
               : (task.factory.reviewRound ?? 0) === 0
                 ? { seenReviewId: null }
+                : {}),
+            ...(task.factory.review?.seenCommentId !== undefined
+              ? { seenCommentId: task.factory.review.seenCommentId }
+              : (task.factory.reviewRound ?? 0) === 0
+                ? { seenCommentId: null }
                 : {}),
           },
         },

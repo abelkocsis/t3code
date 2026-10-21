@@ -1605,6 +1605,9 @@ export const make = Effect.gen(function* () {
             ...(changeRequest.lastReviewId === undefined
               ? {}
               : { lastReviewId: changeRequest.lastReviewId }),
+            ...(changeRequest.lastCommentId === undefined
+              ? {}
+              : { lastCommentId: changeRequest.lastCommentId }),
             ...(changeRequest.unresolvedReviewThreads === undefined
               ? {}
               : { unresolvedReviewThreads: changeRequest.unresolvedReviewThreads }),

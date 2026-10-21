@@ -121,6 +121,7 @@ export interface ProviderChangeRequestSummary {
   /** The most recent reviewer other than the author or a bot; null where nobody reviewed. */
   readonly lastReviewer?: PullRequestActor | null | undefined;
   readonly lastReviewId?: string | null | undefined;
+  readonly lastCommentId?: string | null | undefined;
   readonly unresolvedReviewThreads?: number | undefined;
   readonly viewerDidAuthor?: boolean | undefined;
   /** The base moved ahead and the viewer may update the branch; false when it is current. */
@@ -236,6 +237,7 @@ export interface ProviderChangeRequestDetail extends ProviderChangeRequest {
   readonly mergeState?: PullRequestMergeState;
   readonly lastReviewer?: PullRequestActor | null;
   readonly lastReviewId?: string | null;
+  readonly lastCommentId?: string | null;
   readonly unresolvedReviewThreads?: number;
   readonly viewerDidAuthor?: boolean;
   readonly canUpdateBranch?: boolean;
