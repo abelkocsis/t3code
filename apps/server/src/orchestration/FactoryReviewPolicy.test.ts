@@ -218,7 +218,23 @@ describe("decideFactoryReview", () => {
     ).toBeNull();
   });
 
-  it("sends a review that came before the first review round, even an approval", () => {
+  it("marks ready to merge on a new approval, holding no work under token saving", () => {
+    const approved = link({
+      lastReviewId: "PRR_1",
+      reviewDecision: "approved",
+      checksState: "passing",
+      mergeState: "clean",
+    });
+    const decision = decideFactoryReview(thread({ pullRequests: [approved] }), NOW, {
+      tokenSaving: true,
+    });
+    expect(decision?.factory?.phase).toBe("ready-to-merge");
+    expect(decision?.message).toBeNull();
+    expect(decision?.factory?.pendingWork ?? null).toBeNull();
+    expect(decision?.factory?.review?.seenReviewId).toBe("PRR_1");
+  });
+
+  it("sends a new review on an approved pull request that still has open threads", () => {
     const decision = decideFactoryReview(
       thread({
         pullRequests: [
@@ -227,6 +243,7 @@ describe("decideFactoryReview", () => {
             reviewDecision: "approved",
             checksState: "passing",
             mergeState: "clean",
+            unresolvedReviewThreads: 1,
           }),
         ],
       }),

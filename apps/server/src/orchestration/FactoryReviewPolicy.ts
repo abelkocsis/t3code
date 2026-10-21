@@ -191,9 +191,9 @@ function withoutClearedWork(
  * - "done" with a pull request becomes "ready-for-review".
  * - Ready for review: nobody reviews yet, so only a failed check or a stale base (behind or
  *   in conflict) becomes a message to the agent, and the phase goes to "fix".
- * - Under review: a human review or conversation comment the agent was not sent yet comes
- *   first, even an approval, because an approval can carry notes. Then approval plus green checks on an unblocked
- *   branch gives "ready-to-merge". More open threads than before (a bot's review), a failed
+ * - Under review: approval plus green checks on an unblocked branch with no open threads gives
+ *   "ready-to-merge", even when the approval is new. Otherwise a human review or conversation
+ *   comment the agent was not sent yet comes first. More open threads than before (a bot's review), a failed
  *   check, or a stale base become a message to the agent and the phase goes to "fix". Each
  *   cause fires once, and again only after it cleared.
  * - Ready to merge falls back to the under-review rules when the pull request changes.
@@ -410,14 +410,16 @@ function decideWithFactory(
     snapshot.mergeState === "has-hooks" ||
     snapshot.mergeState === "unstable";
 
-  if (!newReview && !newComment && approved && green && unblocked && unresolved === 0) {
-    return factory.phase === "ready-to-merge"
+  // A new review on an approved, green pull request with no open threads is the approval
+  // itself, or a note on top of it, so it counts as seen and needs no agent turn.
+  if (!newComment && approved && green && unblocked && unresolved === 0) {
+    return factory.phase === "ready-to-merge" && !newReview
       ? null
       : dropHeld(
           stage(
             "ready-to-merge",
             "Approved and green.",
-            memoOf(snapshot, seenReviewId, seenCommentId),
+            memoOf(snapshot, snapshot.lastReviewId ?? seenReviewId, seenCommentId),
           ),
         );
   }
