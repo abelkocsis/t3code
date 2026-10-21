@@ -3,6 +3,7 @@ import {
   type ChatAttachment,
   CommandId,
   EventId,
+  type MessageId,
   type ModelSelection,
   type OrchestrationEvent,
   ProviderDriverKind,
@@ -48,6 +49,8 @@ import { ProviderService } from "../../provider/Services/ProviderService.ts";
 import { ProviderRegistry } from "../../provider/Services/ProviderRegistry.ts";
 import { OrchestrationEngineService } from "../Services/OrchestrationEngine.ts";
 import { ProjectionSnapshotQuery } from "../Services/ProjectionSnapshotQuery.ts";
+import { ProjectionThreadActivityRepository } from "../../persistence/Services/ProjectionThreadActivities.ts";
+import { ProjectionThreadActivityRepositoryLive } from "../../persistence/Layers/ProjectionThreadActivities.ts";
 import {
   ProviderCommandReactor,
   type ProviderCommandReactorShape,
@@ -99,6 +102,27 @@ const isCompactCommandMessage = (message: ThreadTitleMessage): boolean =>
   message.role === "user" &&
   (message.attachments?.length ?? 0) === 0 &&
   message.text.trim().toLowerCase() === "/compact";
+
+/** The share of the context window at which a factory task compacts before its next turn. */
+const FACTORY_COMPACT_AT = 0.8;
+
+/**
+ * Whether the newest context reading fills the window to the factory limit. A compaction
+ * newer than the last reading means the window is small again.
+ */
+export function isFactoryContextNearlyFull(
+  latest: { readonly kind: string; readonly payload: unknown } | undefined,
+): boolean {
+  if (latest?.kind !== "context-window.updated") return false;
+  const payload = latest.payload;
+  if (typeof payload !== "object" || payload === null) return false;
+  const { usedTokens, maxTokens } = payload as Record<string, unknown>;
+  if (typeof usedTokens !== "number" || typeof maxTokens !== "number" || maxTokens <= 0) {
+    return false;
+  }
+  return usedTokens / maxTokens >= FACTORY_COMPACT_AT;
+}
+
 function mapProviderSessionStatusToOrchestrationStatus(
   status: "connecting" | "ready" | "running" | "error" | "closed",
 ): OrchestrationSession["status"] {
@@ -216,6 +240,7 @@ const make = Effect.gen(function* () {
   const crypto = yield* Crypto.Crypto;
   const orchestrationEngine = yield* OrchestrationEngineService;
   const projectionSnapshotQuery = yield* ProjectionSnapshotQuery;
+  const projectionThreadActivityRepository = yield* ProjectionThreadActivityRepository;
   const providerAuthService = yield* ProviderAuthService;
   const providerService = yield* ProviderService;
   const providerRegistry = yield* ProviderRegistry;
@@ -539,6 +564,18 @@ const make = Effect.gen(function* () {
       .getThreadDetailById(threadId, { activityKinds: [] })
       .pipe(Effect.map(Option.getOrUndefined));
   });
+
+  const factoryContextNearlyFull = (threadId: ThreadId) =>
+    projectionThreadActivityRepository
+      .listByThreadId({
+        threadId,
+        activityKinds: ["context-window.updated", "context-compaction"],
+        limit: 1,
+      })
+      .pipe(
+        Effect.map((activities) => isFactoryContextNearlyFull(activities.at(-1))),
+        Effect.orElseSucceed(() => false),
+      );
 
   const rejectStartedThreadModelChangeIfRequired = Effect.fnUntraced(function* (input: {
     readonly threadId: ThreadId;
@@ -1426,6 +1463,52 @@ const make = Effect.gen(function* () {
           }),
         ),
       );
+    // Messages queued behind an automatic compaction still go out when it fails.
+    const startCompaction = (input: {
+      readonly requestId: MessageId | undefined;
+      readonly automatic: boolean;
+    }) => {
+      compactingThreadIds.add(event.payload.threadId);
+      const clearCompacting = Effect.sync(
+        () => void compactingThreadIds.delete(event.payload.threadId),
+      );
+      return Effect.gen(function* () {
+        yield* ensureSessionForThread(
+          event.payload.threadId,
+          event.payload.createdAt,
+          event.payload.modelSelection !== undefined
+            ? { modelSelection: event.payload.modelSelection, pendingTurnStart: true }
+            : { pendingTurnStart: true },
+        );
+        compactionSessionEnsured = true;
+        if (event.payload.modelSelection !== undefined) {
+          threadModelSelections.set(event.payload.threadId, event.payload.modelSelection);
+        }
+        yield* providerService.compactThread(
+          event.payload.threadId,
+          event.payload.modelSelection,
+          input.requestId,
+        );
+      }).pipe(
+        Effect.andThen(restoreCompaction(event.payload.threadId, true)),
+        Effect.andThen(clearCompacting),
+        Effect.andThen(resumeTurnsAfterCompaction(event.payload.threadId)),
+        Effect.catchCause((cause) =>
+          recoverCompactionFailure(cause).pipe(
+            Effect.ensuring(clearCompacting),
+            Effect.andThen(
+              input.automatic
+                ? resumeTurnsAfterCompaction(event.payload.threadId)
+                : cancelTurnsAfterCompaction(
+                    event.payload.threadId,
+                    "Context compaction failed. Send this message again to continue.",
+                  ),
+            ),
+          ),
+        ),
+        Effect.forkScoped,
+      );
+    };
     if (isCompactCommand) {
       if (!hasOtherUserMessages) {
         return yield* appendTurnStartFailure(
@@ -1446,44 +1529,23 @@ const make = Effect.gen(function* () {
         );
         return;
       }
-      compactingThreadIds.add(event.payload.threadId);
-      const clearCompacting = Effect.sync(
-        () => void compactingThreadIds.delete(event.payload.threadId),
-      );
-      yield* Effect.gen(function* () {
-        yield* ensureSessionForThread(
-          event.payload.threadId,
-          event.payload.createdAt,
-          event.payload.modelSelection !== undefined
-            ? { modelSelection: event.payload.modelSelection, pendingTurnStart: true }
-            : { pendingTurnStart: true },
-        );
-        compactionSessionEnsured = true;
-        if (event.payload.modelSelection !== undefined) {
-          threadModelSelections.set(event.payload.threadId, event.payload.modelSelection);
-        }
-        yield* providerService.compactThread(
-          event.payload.threadId,
-          event.payload.modelSelection,
-          event.payload.messageId,
-        );
-      }).pipe(
-        Effect.andThen(restoreCompaction(event.payload.threadId, true)),
-        Effect.andThen(clearCompacting),
-        Effect.andThen(resumeTurnsAfterCompaction(event.payload.threadId)),
-        Effect.catchCause((cause) =>
-          recoverCompactionFailure(cause).pipe(
-            Effect.ensuring(clearCompacting),
-            Effect.andThen(
-              cancelTurnsAfterCompaction(
-                event.payload.threadId,
-                "Context compaction failed. Send this message again to continue.",
-              ),
-            ),
-          ),
-        ),
-        Effect.forkScoped,
-      );
+      yield* startCompaction({ requestId: event.payload.messageId, automatic: false });
+      return;
+    }
+    // A factory task whose last turn filled most of its context compacts before new work, so
+    // the work starts on a small context. The message waits in the compaction queue.
+    if (
+      !resumed &&
+      thread.factory != null &&
+      hasOtherUserMessages &&
+      !compactingThreadIds.has(event.payload.threadId) &&
+      !turnsAfterCompaction.has(event.payload.threadId) &&
+      thread.session?.status !== "starting" &&
+      thread.session?.status !== "running" &&
+      (yield* factoryContextNearlyFull(event.payload.threadId))
+    ) {
+      turnsAfterCompaction.set(event.payload.threadId, [event]);
+      yield* startCompaction({ requestId: undefined, automatic: true });
       return;
     }
     if (
@@ -1978,4 +2040,6 @@ const make = Effect.gen(function* () {
   } satisfies ProviderCommandReactorShape;
 });
 
-export const ProviderCommandReactorLive = Layer.effect(ProviderCommandReactor, make);
+export const ProviderCommandReactorLive = Layer.effect(ProviderCommandReactor, make).pipe(
+  Layer.provide(ProjectionThreadActivityRepositoryLive),
+);

@@ -1165,6 +1165,87 @@ describe("ProviderCommandReactor", () => {
     }),
   );
 
+  effectIt.effect.each(["factory", "plain"])(
+    "compacts a %s thread whose last turn filled its context before new work",
+    (kind) =>
+      Effect.gen(function* () {
+        const harness = yield* Effect.promise(() => createHarness());
+        const threadId = ThreadId.make("thread-1");
+        const now = "2026-01-01T00:00:00.000Z";
+        const dispatchTurn = (id: string, text: string, createdAt: string) =>
+          harness.engine.dispatch({
+            type: "thread.turn.start",
+            commandId: CommandId.make(`cmd-${id}`),
+            threadId,
+            message: {
+              messageId: asMessageId(`user-message-${id}`),
+              role: "user",
+              text,
+              attachments: [],
+            },
+            interactionMode: DEFAULT_PROVIDER_INTERACTION_MODE,
+            runtimeMode: "approval-required",
+            createdAt,
+          });
+
+        yield* dispatchTurn("first", "Build it", now);
+        yield* Effect.promise(() => waitFor(() => harness.sendTurn.mock.calls.length === 1));
+        yield* harness.engine.dispatch({
+          type: "thread.session.set",
+          commandId: CommandId.make("cmd-session-ready"),
+          threadId,
+          session: {
+            threadId,
+            status: "ready",
+            providerName: "codex",
+            providerInstanceId: ProviderInstanceId.make("codex"),
+            runtimeMode: "approval-required",
+            activeTurnId: null,
+            lastError: null,
+            updatedAt: now,
+          },
+          createdAt: now,
+        });
+        if (kind === "factory") {
+          yield* harness.engine.dispatch({
+            type: "thread.factory.set",
+            commandId: CommandId.make("cmd-factory-set"),
+            threadId,
+            factory: {
+              input: { kind: "free-text", value: "Build it" },
+              phase: "under-review",
+              summary: null,
+              startedAt: now,
+              updatedAt: now,
+            },
+          });
+        }
+        yield* harness.engine.dispatch({
+          type: "thread.activity.append",
+          commandId: CommandId.make("cmd-context-window"),
+          threadId,
+          activity: {
+            id: EventId.make("activity-context-window"),
+            tone: "info",
+            kind: "context-window.updated",
+            summary: "Context window updated",
+            payload: { usedTokens: 170_000, maxTokens: 200_000 },
+            turnId: null,
+            createdAt: now,
+          },
+          createdAt: now,
+        });
+
+        yield* dispatchTurn("review", "Fix the review comments", "2026-01-01T00:00:01.000Z");
+        yield* Effect.promise(() => waitFor(() => harness.sendTurn.mock.calls.length === 2));
+        yield* Effect.promise(() => harness.drain());
+        expect(harness.compactThread).toHaveBeenCalledTimes(kind === "factory" ? 1 : 0);
+        expect(harness.sendTurn.mock.calls[1]?.[0]).toMatchObject({
+          input: "Fix the review comments",
+        });
+      }),
+  );
+
   effectIt.effect.each(["resume", "stop before resume", "stop after send"])(
     "queues messages until compaction restores the session (%s)",
     (scenario) =>
