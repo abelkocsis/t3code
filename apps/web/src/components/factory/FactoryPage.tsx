@@ -2044,16 +2044,27 @@ function GatePanel({ task }: { task: FactoryTask }) {
   );
 }
 
+// The unsent form outlives navigation away from the page, but not a reload.
+let startTaskDraft: {
+  text: string;
+  chosenProjectKey: string | null;
+  modelSelection: ModelSelection | null;
+} = { text: "", chosenProjectKey: null, modelSelection: null };
+
 /** One field, or the issue picker. The project comes from the input when it can. */
 function StartTaskForm() {
   const projects = useProjects();
   const environmentId = usePrimaryEnvironmentId();
   const startTask = useStartFactoryTask();
-  const [text, setText] = useState("");
-  const [chosenProjectKey, setChosenProjectKey] = useState<string | null>(null);
+  const [text, setText] = useState(startTaskDraft.text);
+  const [chosenProjectKey, setChosenProjectKey] = useState(startTaskDraft.chosenProjectKey);
   const [starting, setStarting] = useState(false);
   const [pickerOpen, setPickerOpen] = useState(false);
-  const [modelSelection, setModelSelection] = useState<ModelSelection | null>(null);
+  const [modelSelection, setModelSelection] = useState(startTaskDraft.modelSelection);
+
+  useEffect(() => {
+    startTaskDraft = { text, chosenProjectKey, modelSelection };
+  }, [text, chosenProjectKey, modelSelection]);
 
   const input = useMemo(() => classifyFactoryInput(text), [text]);
   const resolution = useMemo(
