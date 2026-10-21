@@ -8,6 +8,8 @@ import type { SnoozePreset } from "@t3tools/client-runtime/state/thread-settled"
  */
 export type ThreadActionMenuId =
   | "new-thread-on-branch"
+  | "open-in-window"
+  | "pop-back"
   | "filter-by-project"
   | "project-settings"
   | "pin"
@@ -48,6 +50,11 @@ export interface ThreadActionMenuState {
     /** True when the list is already scoped to this thread's project. */
     readonly isActive: boolean;
   } | null;
+  /**
+   * The desktop thread window action: "open" in the main window, "pop-back"
+   * in a thread window, and null where the client has no thread windows.
+   */
+  readonly threadWindowAction: "open" | "pop-back" | null;
   readonly isPinned: boolean;
   /** The folder this thread sits in, or null when it is ungrouped. */
   readonly folderId: string | null;
@@ -91,7 +98,8 @@ export function buildThreadActionMenuItems(
   state: ThreadActionMenuState,
 ): ReadonlyArray<ContextMenuItem<ThreadActionMenuId>> {
   return [
-    ...(state.branch
+    // A thread window shows one thread, so it starts no new ones.
+    ...(state.branch && state.threadWindowAction !== "pop-back"
       ? [
           {
             id: "new-thread-on-branch" as const,
@@ -100,6 +108,11 @@ export function buildThreadActionMenuItems(
           },
         ]
       : []),
+    ...(state.threadWindowAction === "open"
+      ? [{ id: "open-in-window" as const, label: "Open in new window", icon: "external-link" }]
+      : state.threadWindowAction === "pop-back"
+        ? [{ id: "pop-back" as const, label: "Pop back to main window", icon: "app-window" }]
+        : []),
     ...(state.supports.pinning
       ? [
           state.isPinned

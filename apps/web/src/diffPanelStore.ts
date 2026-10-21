@@ -4,6 +4,7 @@ import { create } from "zustand";
 import { createJSONStorage, persist } from "zustand/middleware";
 
 import { resolveStorage } from "./lib/storage";
+import { windowStateStorage } from "./threadWindows";
 
 export type DiffPanelSelection =
   | { kind: "branch"; baseRef: string | null }
@@ -120,7 +121,9 @@ export const useDiffPanelStore = create<DiffPanelStoreState>()(
       name: "t3code:diff-panel-state:v1",
       version: 1,
       storage: createJSONStorage(() =>
-        resolveStorage(typeof window !== "undefined" ? window.localStorage : undefined),
+        windowStateStorage(
+          resolveStorage(typeof window !== "undefined" ? window.localStorage : undefined),
+        ),
       ),
       partialize: (state) => ({
         byThreadKey: state.byThreadKey,

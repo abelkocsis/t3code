@@ -44,6 +44,7 @@ import {
 import { useLocation, useNavigate, useParams } from "@tanstack/react-router";
 import * as Option from "effect/Option";
 import {
+  ExternalLinkIcon,
   ArrowLeftIcon,
   CalendarDaysIcon,
   ChartNoAxesColumnIcon,
@@ -213,6 +214,8 @@ import {
 } from "../sidebarProjectGrouping";
 import type { Project } from "../types";
 import { PullRequestGlyph } from "~/components/pullRequest/pullRequestIcons";
+import { openThreadInWindow } from "~/lib/threadWindowActions";
+import { canOpenThreadWindows } from "~/threadWindows";
 import { readPullRequestListPreferences } from "~/components/pullRequest/pullRequestListPreferences";
 
 const EMPTY_BROWSE_ENTRIES: FilesystemBrowseResult["entries"] = [];
@@ -2025,6 +2028,21 @@ function OpenCommandPaletteDialog(props: {
       icon: <ArrowRightLeftIcon className={ITEM_ICON_CLASS} />,
       run: async () => {
         openProviderSwitchDialog({ threadRef, surface: "thread" });
+      },
+    });
+  }
+
+  if (activeThread !== null && canOpenThreadWindows) {
+    const threadRef = scopeThreadRef(activeThread.environmentId, activeThread.id);
+    actionItems.push({
+      kind: "action",
+      value: "action:open-in-window",
+      searchTerms: ["window", "pop out", "popout", "new window", "detach", "side by side"],
+      title: "Open in new window",
+      description: "Show this thread in its own window",
+      icon: <ExternalLinkIcon className={ITEM_ICON_CLASS} />,
+      run: async () => {
+        openThreadInWindow(threadRef);
       },
     });
   }

@@ -24,6 +24,7 @@ import {
 } from "react";
 import { createPortal } from "react-dom";
 import { isElectron } from "../../env";
+import { canOpenThreadWindows } from "../../threadWindows";
 import GitActionsControl from "../GitActionsControl";
 import { isTrailingDoubleClick } from "../Sidebar.logic";
 import { type DraftId } from "~/composerDraftStore";
@@ -498,12 +499,14 @@ export const ChatHeader = memo(function ChatHeader({
           // terminal toggle does not sit against the last action. The page header adds 8px more
           // right padding at sm. This fork adds the to-do list and the daily summary everywhere,
           // and the step away control on the desktop build. Each one costs a 32px toggle and its
-          // 4px gap.
+          // 4px gap. The desktop main window adds the open in new window control on a thread.
           rightPanelOpen
             ? "pr-0"
-            : isElectron
-              ? "pr-46.25 sm:pr-42.25 @3xl/header-actions:pr-43.25"
-              : "pr-37.25 sm:pr-33.25 @3xl/header-actions:pr-34.25",
+            : isElectron && canOpenThreadWindows && isServerThread
+              ? "pr-55.25 sm:pr-51.25 @3xl/header-actions:pr-52.25"
+              : isElectron
+                ? "pr-46.25 sm:pr-42.25 @3xl/header-actions:pr-43.25"
+                : "pr-37.25 sm:pr-33.25 @3xl/header-actions:pr-34.25",
           "[[data-panel-animations=true]_&]:motion-safe:transition-[padding-right] [[data-panel-animations=true]_&]:motion-safe:duration-(--panel-animation-duration) [[data-panel-animations=true]_&]:motion-safe:ease-out",
         )}
       >

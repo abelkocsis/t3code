@@ -193,6 +193,8 @@ import {
   type RightPanelSurface,
   useRightPanelStore,
 } from "../rightPanelStore";
+import { openThreadInWindow } from "../lib/threadWindowActions";
+import { canOpenThreadWindows } from "../threadWindows";
 import {
   isPreviewSupportedInRuntime,
   setActivePreviewTab,
@@ -4751,6 +4753,9 @@ export default function ChatView(props: ChatViewProps) {
   const toggleTodoSurface = useCallback(() => {
     if (!activeThreadRef) return;
     useRightPanelStore.getState().toggle(activeThreadRef, "todos");
+  }, [activeThreadRef]);
+  const openActiveThreadInWindow = useCallback(() => {
+    if (activeThreadRef) openThreadInWindow(activeThreadRef);
   }, [activeThreadRef]);
   const openFileSurface = useCallback(
     (relativePath: string) => {
@@ -9887,6 +9892,11 @@ export default function ChatView(props: ChatViewProps) {
       standupOpen={rightPanelOpen && activeRightPanelSurface?.kind === "standup"}
       onOpenTodos={activeThreadRef ? toggleTodoSurface : undefined}
       todosOpen={rightPanelOpen && activeRightPanelSurface?.kind === "todos"}
+      onOpenInWindow={
+        canOpenThreadWindows && isServerThread && activeThreadRef
+          ? openActiveThreadInWindow
+          : undefined
+      }
       onToggleTerminal={toggleTerminalVisibility}
       onToggleRightPanel={toggleRightPanel}
     />

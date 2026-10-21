@@ -5,6 +5,7 @@ import { buildThreadActionMenuItems, type ThreadActionMenuState } from "./thread
 const baseState: ThreadActionMenuState = {
   branch: null,
   projectFilter: null,
+  threadWindowAction: null,
   isPinned: false,
   folderId: null,
   folders: [],
@@ -42,6 +43,18 @@ function allIds(state: ThreadActionMenuState): string[] {
 }
 
 describe("buildThreadActionMenuItems", () => {
+  it("offers a new window in the main window and the way back in a thread window", () => {
+    const branchState = { ...baseState, branch: "feature/x" };
+    expect(ids({ ...branchState, threadWindowAction: "open" }).slice(0, 2)).toEqual([
+      "new-thread-on-branch",
+      "open-in-window",
+    ]);
+    // A thread window starts no threads, so the branch item goes with it.
+    expect(ids({ ...branchState, threadWindowAction: "pop-back" })[0]).toBe("pop-back");
+    expect(ids(branchState)).not.toContain("open-in-window");
+    expect(ids(branchState)).not.toContain("pop-back");
+  });
+
   it("hides lifecycle items when the environment lacks the capabilities", () => {
     expect(
       ids({

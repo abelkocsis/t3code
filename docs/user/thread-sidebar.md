@@ -71,6 +71,18 @@ another session now does the task. A factory task moves to the new thread, and
 a task that is not in the sidebar settles its old thread automatically. Only
 Claude and Codex can switch, and a thread cannot switch while a turn runs.
 
+## Open a thread in its own window
+
+In the desktop app, you can put threads side by side. Right-click a thread in the
+sidebar and choose **Open in new window**. You can also click the window button
+at the top right of the chat, or use the thread title menu or the command palette. The new window shows the chat and the right panel, without the
+sidebar and without the browser preview.
+
+A thread shows in one window at a time. When you click it in the sidebar, T3 Code
+brings its window forward. To move it back, click the button at the top left of
+its window, or choose **Pop back to main window** from the thread title menu.
+Thread windows do not reopen after a restart.
+
 ## Pin and reorder threads
 
 Pin a thread from its menu to keep it above your active work.

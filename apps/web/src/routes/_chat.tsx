@@ -25,6 +25,8 @@ import { selectThreadTerminalUiState, useTerminalUiStateStore } from "../termina
 import { isPreviewSupportedInRuntime } from "../previewStateStore";
 import { selectActiveRightPanel, useRightPanelStore } from "../rightPanelStore";
 import { useThreadSelectionStore } from "../threadSelectionStore";
+import { isThreadWindow, usePoppedOutThreadKeys } from "../threadWindows";
+import { scopedThreadKey } from "@t3tools/client-runtime/environment";
 import { stackedThreadToast, toastManager } from "~/components/ui/toast";
 import { primaryServerKeybindingsAtom } from "~/state/server";
 
@@ -213,10 +215,21 @@ function ChatRouteLayout() {
     strict: false,
     select: (params) => resolveThreadRouteTarget(params),
   });
+  const poppedOutThreadKeys = usePoppedOutThreadKeys();
+  // A thread with its own window does not render here; ThreadWindowRouting
+  // focuses that window and leaves the route.
+  const threadPoppedOut =
+    threadTarget?.kind === "server" &&
+    poppedOutThreadKeys.has(scopedThreadKey(threadTarget.threadRef));
   return (
     <>
-      <ChatRouteGlobalShortcuts />
-      {threadTarget ? <ThreadRouteView target={threadTarget} /> : <Outlet />}
+      {/* Its shortcuts start threads, which happens in the main window. */}
+      {isThreadWindow ? null : <ChatRouteGlobalShortcuts />}
+      {threadPoppedOut ? null : threadTarget ? (
+        <ThreadRouteView target={threadTarget} />
+      ) : (
+        <Outlet />
+      )}
     </>
   );
 }

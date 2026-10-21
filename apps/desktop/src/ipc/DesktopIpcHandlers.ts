@@ -72,6 +72,7 @@ import {
 } from "./methods/snapShot.ts";
 import * as PreviewIpc from "./methods/preview.ts";
 import * as AppActivationIpc from "./methods/appActivation.ts";
+import * as ThreadWindowIpc from "./methods/threadWindows.ts";
 import { getWslState, setWslBackendEnabled, setWslDistro, setWslOnly } from "./methods/wsl.ts";
 
 export const installDesktopIpcHandlers = Effect.fn("desktop.ipc.installHandlers")(function* () {
@@ -149,6 +150,10 @@ export const installDesktopIpcHandlers = Effect.fn("desktop.ipc.installHandlers"
   yield* ipc.handle(showThreadNotification);
   yield* ipc.handle(setAttentionBadgeCount);
   yield* ipc.handle(setOverlayState);
+  yield* ipc.handleSync(ThreadWindowIpc.listThreadWindows);
+  yield* ipc.handle(ThreadWindowIpc.openThreadWindow);
+  yield* ipc.handle(ThreadWindowIpc.popBackThreadWindow);
+  yield* ipc.handle(ThreadWindowIpc.showInMainWindow);
   for (const previewMethod of PreviewIpc.methods) {
     yield* ipc.handle(previewMethod);
   }

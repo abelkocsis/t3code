@@ -87,6 +87,10 @@ const makeDesktopWindowLayer = (selectedAction: Deferred.Deferred<string>) =>
     dispatchSnapShotEvent: () => Effect.void,
     zoomMain: (direction) =>
       Deferred.succeed(selectedAction, `zoom-${direction}`).pipe(Effect.asVoid),
+    openThreadWindow: () => Effect.die("unexpected thread window"),
+    popBackThreadWindow: () => Effect.void,
+    showRouteInMain: () => Effect.void,
+    threadWindowTargets: Effect.succeed([]),
     syncAppearance: Effect.void,
   } satisfies DesktopWindow.DesktopWindow["Service"]);
 

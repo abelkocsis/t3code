@@ -163,6 +163,8 @@ import { cn } from "~/lib/utils";
 import { EnvironmentMachineIcon } from "./EnvironmentMachineIcon";
 import { ProjectEnvironmentBadge } from "./ProjectEnvironmentBadge";
 import { buildThreadActionMenuItems } from "./threadActionMenu.logic";
+import { openThreadInWindow } from "../lib/threadWindowActions";
+import { canOpenThreadWindows } from "../threadWindows";
 import { resolveThreadAttention } from "@t3tools/client-runtime/state/thread-attention";
 import {
   animateSidebarLayoutChanges,
@@ -4796,6 +4798,7 @@ export default function Sidebar() {
                     isActive: projectScopeKey === threadProjectGroup.projectKey,
                   }
                 : null,
+              threadWindowAction: canOpenThreadWindows ? "open" : null,
               isPinned,
               folderId: thread.folderId ?? null,
               folders: readThreadFolders().folders,
@@ -4840,6 +4843,9 @@ export default function Sidebar() {
           return;
         }
         switch (clicked.value) {
+          case "open-in-window":
+            openThreadInWindow(threadRef);
+            return;
           case "filter-by-project":
             // This item is the only scope control here, so picking the
             // already-scoped project again is the way back to all projects.

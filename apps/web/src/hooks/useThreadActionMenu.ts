@@ -48,6 +48,8 @@ import { useNewThreadHandler } from "./useHandleNewThread";
 import { useClientSettings } from "./useSettings";
 import { useThreadActions } from "./useThreadActions";
 import { useThreadFolders } from "./useThreadFolders";
+import { openThreadInWindow } from "../lib/threadWindowActions";
+import { canOpenThreadWindows, isThreadWindow, popBackThreadWindow } from "../threadWindows";
 
 function failureToast(title: string, error: unknown) {
   toastManager.add(
@@ -163,6 +165,7 @@ export function useThreadActionMenu(input: {
           // The chat header has no project-scoped thread list behind the
           // menu, so the "Filter by project" affordance is sidebar-only.
           projectFilter: null,
+          threadWindowAction: isThreadWindow ? "pop-back" : canOpenThreadWindows ? "open" : null,
           isPinned: thread.pinnedAt != null,
           folderId: thread.folderId ?? null,
           folders: threadFoldersRef.current.folders,
@@ -217,6 +220,12 @@ export function useThreadActionMenu(input: {
           }
         };
         switch (action) {
+          case "open-in-window":
+            openThreadInWindow(threadRef);
+            return;
+          case "pop-back":
+            popBackThreadWindow();
+            return;
           case "project-settings": {
             const project = projects.find(
               (candidate) =>

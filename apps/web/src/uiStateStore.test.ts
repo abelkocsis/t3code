@@ -2,6 +2,7 @@ import { ProjectId, ThreadId } from "@t3tools/contracts";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
 
 import {
+  applyThreadVisitChanges,
   dismissOverlayThread,
   legacyProjectCwdPreferenceKey,
   markThreadUnread,
@@ -18,6 +19,7 @@ import {
   setProjectExpanded,
   setSidebarProjectScopeKey,
   setThreadChangedFilesExpanded,
+  threadVisitChanges,
   type UiState,
 } from "./uiStateStore";
 
@@ -239,6 +241,37 @@ describe("uiStateStore pure functions", () => {
     expect(setSidebarProjectScopeKey(scoped, "github.com/pingdotgg/t3code")).toBe(scoped);
     expect(setSidebarProjectScopeKey(scoped, null).sidebarProjectScopeKey).toBeNull();
     expect(setSidebarProjectScopeKey(scoped, "").sidebarProjectScopeKey).toBeNull();
+  });
+});
+
+describe("thread window visit hand-off", () => {
+  it("carries a thread window's visits and unread marks into the main window", () => {
+    const threadWindowBefore = makeUiState({
+      threadLastVisitedAtById: {
+        popped: "2026-10-21T10:00:00.000Z",
+        unread: "2026-10-21T09:00:00.000Z",
+      },
+    });
+    const threadWindowAfter = markThreadUnread(
+      markThreadVisited(threadWindowBefore, "popped", "2026-10-21T11:00:00.000Z"),
+      "unread",
+      "2026-10-21T09:00:00.000Z",
+    );
+    const changes = threadVisitChanges(
+      threadWindowBefore.threadLastVisitedAtById,
+      threadWindowAfter.threadLastVisitedAtById,
+    );
+
+    const mainWindow = makeUiState({
+      threadLastVisitedAtById: {
+        ...threadWindowBefore.threadLastVisitedAtById,
+        other: "2026-10-21T08:00:00.000Z",
+      },
+    });
+    expect(applyThreadVisitChanges(mainWindow, changes).threadLastVisitedAtById).toEqual({
+      ...threadWindowAfter.threadLastVisitedAtById,
+      other: "2026-10-21T08:00:00.000Z",
+    });
   });
 });
 

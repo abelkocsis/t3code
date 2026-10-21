@@ -1,6 +1,7 @@
 import {
   CalendarDaysIcon,
   CoffeeIcon,
+  ExternalLinkIcon,
   ListChecksIcon,
   Maximize2Icon,
   Minimize2Icon,
@@ -35,6 +36,8 @@ interface PanelLayoutControlsProps {
   /** Toggles the to-do list. Absent for the same reason the summary's is. */
   onOpenTodos?: (() => void) | undefined;
   todosOpen?: boolean;
+  /** Opens the thread in its own window. Absent where a thread cannot have one. */
+  onOpenInWindow?: (() => void) | undefined;
   onToggleTerminal: () => void;
   onToggleRightPanel: () => void;
 }
@@ -53,6 +56,7 @@ export const PanelLayoutControls = memo(function PanelLayoutControls({
   standupOpen = false,
   onOpenTodos,
   todosOpen = false,
+  onOpenInWindow,
   onToggleTerminal,
   onToggleRightPanel,
 }: PanelLayoutControlsProps) {
@@ -64,6 +68,7 @@ export const PanelLayoutControls = memo(function PanelLayoutControls({
       <StepAwayToggle />
       {onOpenTodos ? <TodoToggle open={todosOpen} onOpen={onOpenTodos} /> : null}
       {onOpenStandup ? <StandupToggle open={standupOpen} onOpen={onOpenStandup} /> : null}
+      {onOpenInWindow ? <OpenInWindowControl onOpen={onOpenInWindow} /> : null}
       {showTerminalControl ? (
         <Tooltip>
           <TooltipTrigger render={<span className="flex shrink-0" />}>
@@ -190,6 +195,30 @@ function StandupToggle({ open, onOpen }: { open: boolean; onOpen: () => void }) 
         </Toggle>
       </TooltipTrigger>
       <TooltipPopup side="bottom">Daily summary for your standup</TooltipPopup>
+    </Tooltip>
+  );
+}
+
+/**
+ * Opens the thread in its own window, beside the main one. It is an action, but
+ * it uses the row's toggle so that it looks like its neighbours.
+ */
+function OpenInWindowControl({ onOpen }: { onOpen: () => void }) {
+  return (
+    <Tooltip>
+      <TooltipTrigger render={<span className="flex shrink-0" />}>
+        <Toggle
+          className="shrink-0 [-webkit-app-region:no-drag]"
+          pressed={false}
+          onPressedChange={onOpen}
+          aria-label="Open in new window"
+          variant="ghost"
+          size="sm"
+        >
+          <ExternalLinkIcon className="size-4" />
+        </Toggle>
+      </TooltipTrigger>
+      <TooltipPopup side="bottom">Open in new window</TooltipPopup>
     </Tooltip>
   );
 }

@@ -2,6 +2,7 @@ import { Debouncer } from "@tanstack/react-pacer";
 import type { PullRequestMergeMethod } from "@t3tools/contracts";
 import { create } from "zustand";
 import { normalizeProjectPathForComparison } from "./lib/projectPaths";
+import { isThreadWindow, onThreadWindowMessage, postToMainWindow } from "./threadWindows";
 
 export const PERSISTED_STATE_KEY = "t3code:ui-state:v1";
 // Version 1 stored card visibility, not folder expansion.
@@ -564,7 +565,48 @@ export const useUiStateStore = create<UiStateStore>((set) => ({
     ),
 }));
 
-useUiStateStore.subscribe((state) => debouncedPersistState.maybeExecute(state));
+/** The visit times that differ between two states, by thread. Null marks a removed visit. */
+export function threadVisitChanges(
+  previous: Readonly<Record<string, string>>,
+  next: Readonly<Record<string, string>>,
+): Record<string, string | null> {
+  const changes: Record<string, string | null> = {};
+  for (const threadId of new Set([...Object.keys(previous), ...Object.keys(next)])) {
+    if (next[threadId] !== previous[threadId]) changes[threadId] = next[threadId] ?? null;
+  }
+  return changes;
+}
+
+export function applyThreadVisitChanges(
+  state: UiState,
+  changes: Readonly<Record<string, string | null>>,
+): UiState {
+  const threadLastVisitedAtById = { ...state.threadLastVisitedAtById };
+  for (const [threadId, visitedAt] of Object.entries(changes)) {
+    if (visitedAt === null) delete threadLastVisitedAtById[threadId];
+    else threadLastVisitedAtById[threadId] = visitedAt;
+  }
+  return { ...state, threadLastVisitedAtById };
+}
+
+if (isThreadWindow) {
+  // A thread window saves no UI state. It sends its visit times to the main
+  // window, so the sidebar there stops marking the thread as unread.
+  useUiStateStore.subscribe((state, previous) => {
+    if (state.threadLastVisitedAtById === previous.threadLastVisitedAtById) return;
+    postToMainWindow({
+      kind: "thread-visits",
+      visits: threadVisitChanges(previous.threadLastVisitedAtById, state.threadLastVisitedAtById),
+    });
+  });
+} else {
+  useUiStateStore.subscribe((state) => debouncedPersistState.maybeExecute(state));
+}
+
+onThreadWindowMessage((message) => {
+  if (message.kind !== "thread-visits") return;
+  useUiStateStore.setState((state) => applyThreadVisitChanges(state, message.visits));
+});
 
 if (typeof window !== "undefined" && typeof window.addEventListener === "function") {
   window.addEventListener("beforeunload", () => {

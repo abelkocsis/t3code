@@ -47,6 +47,7 @@ import * as ElectronShell from "../electron/ElectronShell.ts";
 import * as ElectronTheme from "../electron/ElectronTheme.ts";
 import * as ElectronWindow from "../electron/ElectronWindow.ts";
 import {
+  MAIN_WINDOW_SHOW_ROUTE_CHANNEL,
   MENU_ACTION_CHANNEL,
   SNAP_SHOT_EVENT_CHANNEL,
   TRACKPAD_SCROLL_END_CHANNEL,
@@ -68,11 +69,14 @@ const environmentInput = {
   runningUnderArm64Translation: false,
 } satisfies DesktopEnvironment.MakeDesktopEnvironmentInput;
 
+let nextFakeWebContentsId = 1;
+
 function makeFakeBrowserWindow() {
   const windowListeners = new Map<string, (...args: readonly unknown[]) => void>();
   const webContentsListeners = new Map<string, (...args: readonly unknown[]) => void>();
   let zoomLevel = 0;
   const webContents = {
+    id: nextFakeWebContentsId++,
     copyImageAt: vi.fn(),
     focus: vi.fn(),
     isDestroyed: vi.fn(() => false),
@@ -127,6 +131,7 @@ function makeFakeBrowserWindow() {
 
   return {
     window: window as unknown as Electron.BrowserWindow,
+    close: window.close,
     getBounds: window.getBounds,
     getNormalBounds: window.getNormalBounds,
     isDestroyed: window.isDestroyed,
@@ -1629,4 +1634,62 @@ describe("DesktopWindow", () => {
       }).pipe(Effect.provide(layer));
     }),
   );
+
+  describe("thread windows", () => {
+    const target = { environmentId: "env-1", threadId: "thread-1" };
+
+    it.effect("opens one window per thread and focuses it on a second open", () =>
+      Effect.gen(function* () {
+        const main = makeFakeBrowserWindow();
+        const thread = makeFakeBrowserWindow();
+        const scenario = yield* makeSplashScenario([main.window, thread.window]);
+
+        yield* Effect.gen(function* () {
+          const desktopWindow = yield* DesktopWindow.DesktopWindow;
+          yield* desktopWindow.handleBackendReady(new URL("http://127.0.0.1:3773"));
+          yield* desktopWindow.openThreadWindow(target);
+          yield* desktopWindow.openThreadWindow(target);
+
+          assert.equal(yield* Ref.get(scenario.createCalls), 2);
+          assert.deepEqual(thread.loadURL.mock.calls, [["t3code-dev://app/#/env-1/thread-1"]]);
+          assert.include(yield* Ref.get(scenario.revealedWindows), thread.window);
+          assert.deepEqual(yield* desktopWindow.threadWindowTargets, [target]);
+        }).pipe(Effect.provide(scenario.layer));
+      }),
+    );
+
+    it.effect("pops back by closing the window, then showing the thread in the main window", () =>
+      Effect.gen(function* () {
+        const main = makeFakeBrowserWindow();
+        const thread = makeFakeBrowserWindow();
+        const scenario = yield* makeSplashScenario([main.window, thread.window]);
+        const routeShown = yield* Deferred.make<string>();
+        main.send.mockImplementation((channel: string, href: string) => {
+          if (channel === MAIN_WINDOW_SHOW_ROUTE_CHANNEL) {
+            Deferred.doneUnsafe(routeShown, Effect.succeed(href));
+          }
+        });
+
+        yield* Effect.gen(function* () {
+          const desktopWindow = yield* DesktopWindow.DesktopWindow;
+          yield* desktopWindow.handleBackendReady(new URL("http://127.0.0.1:3773"));
+          yield* desktopWindow.openThreadWindow(target);
+          yield* desktopWindow.popBackThreadWindow(thread.window.webContents.id);
+
+          assert.equal(thread.close.mock.calls.length, 1);
+          // The main window shows the thread only once the thread window is gone.
+          assert.isFalse(yield* Deferred.isDone(routeShown));
+
+          const closed = thread.windowListeners.get("closed");
+          if (!closed) {
+            return yield* Effect.die("thread window closed listener was not registered");
+          }
+          closed();
+
+          assert.equal(yield* Deferred.await(routeShown), "/env-1/thread-1");
+          assert.deepEqual(yield* desktopWindow.threadWindowTargets, []);
+        }).pipe(Effect.provide(scenario.layer));
+      }),
+    );
+  });
 });
