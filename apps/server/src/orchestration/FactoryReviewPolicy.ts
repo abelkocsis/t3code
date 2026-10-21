@@ -1,4 +1,6 @@
 import type {
+  FactoryPendingWork,
+  FactoryPendingWorkPart,
   FactoryReviewMemo,
   OrchestrationThreadShell,
   ThreadFactory,
@@ -113,6 +115,73 @@ function behindMessage(link: ThreadPullRequestLink, snapshot: ThreadPullRequestS
   ].join("\n");
 }
 
+/** One message for several causes, so the agent handles them in one turn. */
+function composeWork(parts: ReadonlyArray<FactoryPendingWorkPart>): {
+  readonly summary: string;
+  readonly message: string;
+} {
+  return {
+    summary: parts.map((part) => part.summary).join(" "),
+    message:
+      parts.length === 1
+        ? parts[0]!.message
+        : [
+            "Several things need work on this pull request. Do all of them, then print one phase marker for the whole set.",
+            ...parts.map((part, index) => `${index + 1}. ${part.message}`),
+          ].join("\n\n"),
+  };
+}
+
+/**
+ * The causes held work is made of. Work held before parts existed is matched by its message;
+ * null when it cannot be split.
+ */
+function heldParts(
+  held: FactoryPendingWork,
+  link: ThreadPullRequestLink & { readonly snapshot: ThreadPullRequestSnapshot },
+): ReadonlyArray<FactoryPendingWorkPart> | null {
+  if (held.parts !== undefined) return held.parts;
+  const cause =
+    held.message === ciMessage(link)
+      ? "ci"
+      : held.message === behindMessage(link, link.snapshot)
+        ? "stale-base"
+        : held.message === commentsMessage(link)
+          ? "comments"
+          : null;
+  return cause === null ? null : [{ cause, summary: held.summary, message: held.message }];
+}
+
+/**
+ * Held work loses a cause that cleared on its own: a check that passed on a rerun, or a base
+ * someone else updated. Reviewer feedback stays until the agent answers it.
+ */
+function withoutClearedWork(
+  factory: ThreadFactory,
+  link: ThreadPullRequestLink & { readonly snapshot: ThreadPullRequestSnapshot },
+): ThreadFactory {
+  const held = factory.pendingWork ?? null;
+  const parts = held === null ? null : heldParts(held, link);
+  if (parts === null) return factory;
+  const left = parts.filter((part) =>
+    part.cause === "ci"
+      ? link.snapshot.checksState === "failing"
+      : part.cause === "stale-base"
+        ? isStaleBase(baseState(link.snapshot))
+        : true,
+  );
+  if (left.length === parts.length) return factory;
+  if (left.length === 0) {
+    return { ...factory, summary: "The held work cleared on its own.", pendingWork: null };
+  }
+  const work = composeWork(left);
+  return {
+    ...factory,
+    summary: `${work.summary} Waiting for you to start it.`,
+    pendingWork: { ...work, parts: left },
+  };
+}
+
 /**
  * Moves a task through the review stages from its pull request, and tells the agent when
  * review work is needed. The human marks "under-review" and merges; this never merges.
@@ -131,6 +200,7 @@ function behindMessage(link: ThreadPullRequestLink, snapshot: ThreadPullRequestS
  * - Token saving holds each message as `pendingWork` instead of sending it, and leaves the
  *   phase alone, so the task waits on the human. Turning token saving off sends held work, and
  *   the agent also checks the whole pull request, because it may have moved on meanwhile.
+ *   A held failed check or stale base that clears on its own leaves the held work.
  */
 export function decideFactoryReview(
   thread: OrchestrationThreadShell,
@@ -139,9 +209,22 @@ export function decideFactoryReview(
 ): FactoryReviewDecision | null {
   if (thread.archivedAt !== null) return null;
   const link = factoryPullRequest(thread);
-  const factory = thread.factory ?? null;
+  const original = thread.factory ?? null;
+  if (!original || !link) return null;
+  const factory = withoutClearedWork(original, link);
+  return (
+    decideWithFactory(thread, factory, link, now, options) ??
+    (factory === original ? null : { factory, message: null })
+  );
+}
 
-  if (!factory || !link) return null;
+function decideWithFactory(
+  thread: OrchestrationThreadShell,
+  factory: ThreadFactory,
+  link: ThreadPullRequestLink & { readonly snapshot: ThreadPullRequestSnapshot },
+  now: string,
+  options: { readonly tokenSaving: boolean },
+): FactoryReviewDecision | null {
   const snapshot = link.snapshot;
   const stage = (phase: ThreadFactory["phase"], summary: string | null, memo?: FactoryReviewMemo) =>
     ({
@@ -183,21 +266,29 @@ export function decideFactoryReview(
       message: factoryHeldWorkMessage(held),
     };
   }
-  // Holding replaces sending. Work already held is kept, so nothing found earlier is lost.
-  const send = (decision: FactoryReviewDecision): FactoryReviewDecision | null => {
-    if (!options.tokenSaving || decision.message === null || decision.factory === null) {
+  // Holding replaces sending. Work already held is kept, so nothing found earlier is lost; a
+  // cause found again replaces its older copy.
+  const send = (
+    decision: FactoryReviewDecision,
+    parts: ReadonlyArray<FactoryPendingWorkPart>,
+  ): FactoryReviewDecision | null => {
+    if (!options.tokenSaving || decision.factory === null) {
       return canMessageThread(thread, now) ? decision : null;
     }
-    const summary = decision.factory.summary ?? "Review work is waiting.";
+    const known = held === null ? [] : heldParts(held, link);
+    // Old held work that cannot be split stays whole, as feedback, which never clears alone.
+    const kept =
+      known === null
+        ? [{ cause: "comments" as const, summary: held!.summary, message: held!.message }]
+        : known.filter((part) => !parts.some((added) => added.cause === part.cause));
+    const merged = [...kept, ...parts];
+    const work = composeWork(merged);
     return {
       factory: {
         ...decision.factory,
         phase: factory.phase,
-        summary: `${summary} Waiting for you to start it.`,
-        pendingWork: {
-          summary,
-          message: held === null ? decision.message : `${held.message}\n\n${decision.message}`,
-        },
+        summary: `${work.summary} Waiting for you to start it.`,
+        pendingWork: { ...work, parts: merged },
       },
       message: null,
     };
@@ -264,32 +355,43 @@ export function decideFactoryReview(
     readonly seenReviewId: string | null | undefined;
     readonly seenCommentId: string | null | undefined;
   }) => {
-    const parts = [
+    const parts: ReadonlyArray<FactoryPendingWorkPart> = [
       ...(newFailure
-        ? [{ summary: "CI failed; the agent is looking.", message: ciMessage(link) }]
+        ? [
+            {
+              cause: "ci" as const,
+              summary: "CI failed; the agent is looking.",
+              message: ciMessage(link),
+            },
+          ]
         : []),
       ...(newStaleBase
-        ? [{ summary: "Rebasing onto the base branch.", message: behindMessage(link, snapshot) }]
+        ? [
+            {
+              cause: "stale-base" as const,
+              summary: "Rebasing onto the base branch.",
+              message: behindMessage(link, snapshot),
+            },
+          ]
         : []),
       ...(input.comments
-        ? [{ summary: "Reading new review comments.", message: commentsMessage(link) }]
+        ? [
+            {
+              cause: "comments" as const,
+              summary: "Reading new review comments.",
+              message: commentsMessage(link),
+            },
+          ]
         : []),
     ];
-    const message =
-      parts.length === 1
-        ? parts[0]!.message
-        : [
-            "Several things need work on this pull request. Do all of them, then print one phase marker for the whole set.",
-            ...parts.map((part, index) => `${index + 1}. ${part.message}`),
-          ].join("\n\n");
-    return send({
-      ...stage(
-        "fix",
-        parts.map((part) => part.summary).join(" "),
-        memoOf(snapshot, input.seenReviewId, input.seenCommentId),
-      ),
-      message,
-    });
+    const work = composeWork(parts);
+    return send(
+      {
+        ...stage("fix", work.summary, memoOf(snapshot, input.seenReviewId, input.seenCommentId)),
+        message: work.message,
+      },
+      parts,
+    );
   };
 
   if (factory.phase === "ready-for-review") {

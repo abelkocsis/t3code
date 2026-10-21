@@ -121,11 +121,27 @@ export const FACTORY_BLOCKED_SNOOZE_MS = 365 * 24 * 60 * 60 * 1000;
  * Review work the server found but did not start, because token saving is on. The human
  * starts it from the Factory page, which sends `message` to the agent.
  */
+/** Why the review sweep found work: a failed check, a stale base, or reviewer feedback. */
+export const FactoryWorkCause = Schema.Literals(["ci", "stale-base", "comments"]);
+export type FactoryWorkCause = typeof FactoryWorkCause.Type;
+
+export const FactoryPendingWorkPart = Schema.Struct({
+  cause: FactoryWorkCause,
+  summary: TrimmedNonEmptyString,
+  message: TrimmedNonEmptyString,
+});
+export type FactoryPendingWorkPart = typeof FactoryPendingWorkPart.Type;
+
 export const FactoryPendingWork = Schema.Struct({
   /** What needs doing, in one sentence for the task row. */
   summary: TrimmedNonEmptyString,
   /** The message the agent gets when the work starts. */
   message: TrimmedNonEmptyString,
+  /**
+   * The causes `message` is made of, so a cause that clears on its own can leave the held
+   * work. Absent on work held before parts existed.
+   */
+  parts: Schema.optional(Schema.Array(FactoryPendingWorkPart)),
 });
 export type FactoryPendingWork = typeof FactoryPendingWork.Type;
 

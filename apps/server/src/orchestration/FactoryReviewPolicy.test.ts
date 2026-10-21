@@ -537,6 +537,82 @@ describe("decideFactoryReview with token saving", () => {
     expect(decideFactoryReview(busy, NOW)).toBeNull();
   });
 
+  it("drops a held CI failure that passed on a rerun", () => {
+    const failed = decideFactoryReview(
+      thread({ pullRequests: [link({ checksState: "failing" })] }),
+      NOW,
+      SAVING,
+    )!.factory!;
+    const rerun = decideFactoryReview(
+      thread({ factory: failed, pullRequests: [link({ checksState: "pending" })] }),
+      NOW,
+      SAVING,
+    );
+    expect(rerun?.message).toBeNull();
+    expect(rerun?.factory?.pendingWork).toBeNull();
+    expect(rerun?.factory?.updatedAt).toBe(failed.updatedAt);
+
+    // Work held before parts existed is matched by its message.
+    const { parts: _, ...legacy } = failed.pendingWork!;
+    const legacyRerun = decideFactoryReview(
+      thread({
+        factory: { ...failed, pendingWork: legacy },
+        pullRequests: [link({ checksState: "passing" })],
+      }),
+      NOW,
+      SAVING,
+    );
+    expect(legacyRerun?.factory?.pendingWork).toBeNull();
+  });
+
+  it("keeps held review feedback when the held CI failure clears", () => {
+    const held = decideFactoryReview(
+      thread({ pullRequests: [link({ checksState: "failing", lastCommentId: "IC_1" })] }),
+      NOW,
+      SAVING,
+    )!.factory!;
+    expect(held.pendingWork?.parts?.map((part) => part.cause)).toEqual(["ci", "comments"]);
+
+    const cleared = decideFactoryReview(
+      thread({
+        factory: held,
+        pullRequests: [link({ checksState: "passing", lastCommentId: "IC_1" })],
+      }),
+      NOW,
+      SAVING,
+    );
+    expect(cleared?.factory?.pendingWork?.parts?.map((part) => part.cause)).toEqual(["comments"]);
+    expect(cleared?.factory?.pendingWork?.message).not.toContain("CI is failing");
+    expect(cleared?.factory?.pendingWork?.message).toContain("New review activity");
+  });
+
+  it("drops a held rebase once the branch is up to date", () => {
+    const behind = decideFactoryReview(
+      thread({ pullRequests: [link({ mergeState: "behind" })] }),
+      NOW,
+      SAVING,
+    )!.factory!;
+    const updated = decideFactoryReview(
+      thread({ factory: behind, pullRequests: [link({ mergeState: "blocked" })] }),
+      NOW,
+      SAVING,
+    );
+    expect(updated?.factory?.pendingWork).toBeNull();
+  });
+
+  it("keeps old held work it cannot split", () => {
+    const held = factory({
+      pendingWork: { summary: "CI failed.", message: "CI is failing on the branch." },
+    });
+    expect(
+      decideFactoryReview(
+        thread({ factory: held, pullRequests: [link({ checksState: "passing" })] }),
+        NOW,
+        SAVING,
+      ),
+    ).toBeNull();
+  });
+
   it("drops held work when the pull request merges", () => {
     const decision = decideFactoryReview(
       thread({
