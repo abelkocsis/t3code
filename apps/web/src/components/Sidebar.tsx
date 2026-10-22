@@ -5253,7 +5253,7 @@ export default function Sidebar() {
                 </Combobox>
               }
               onNewProject={openAddProjectCommandPalette}
-              onNewFolder={threadFolders.supported ? () => void createFolder() : null}
+              onNewFolder={null}
               searchInputRef={threadSearchInputRef}
               searchQuery={threadSearchQuery}
               onSearchQueryChange={(value) => {
@@ -5267,48 +5267,68 @@ export default function Sidebar() {
               onClearSearch={clearThreadSearch}
             />
             {/* Starting a thread is the sidebar's most-used action, so it gets
-                its own full-width, labelled row rather than an unlabelled icon
-                sharing the header with search and scope. */}
-            <Tooltip>
-              <TooltipTrigger
-                render={
-                  <Button
-                    type="button"
-                    // Outlined rather than filled: the button stays the obvious
-                    // target without a block of accent colour shouting from the
-                    // top of every screen.
-                    variant="outline"
-                    className="mt-1 w-full"
-                    onClick={handleNewThreadClick}
-                    disabled={projects.length === 0}
-                  />
-                }
-              >
-                <SquarePenIcon />
-                <span className="truncate">New thread</span>
-              </TooltipTrigger>
-              <TooltipPopup side="right">
-                {projectGroups.length > 1 ? (
-                  <span className="flex flex-col gap-0.5">
-                    <span>
-                      {newThreadShortcutLabel
-                        ? `New thread (${newThreadShortcutLabel})`
-                        : "New thread"}
+                a labelled row rather than an unlabelled icon sharing the header
+                with search and scope. New folder sits beside it. */}
+            <div className="mt-1 flex w-full items-center gap-2">
+              <Tooltip>
+                <TooltipTrigger
+                  render={
+                    <Button
+                      type="button"
+                      // Outlined rather than filled: the button stays the obvious
+                      // target without a block of accent colour shouting from the
+                      // top of every screen.
+                      variant="outline"
+                      className="min-w-0 flex-1"
+                      onClick={handleNewThreadClick}
+                      disabled={projects.length === 0}
+                    />
+                  }
+                >
+                  <SquarePenIcon />
+                  <span className="truncate">New thread</span>
+                </TooltipTrigger>
+                <TooltipPopup side="right">
+                  {projectGroups.length > 1 ? (
+                    <span className="flex flex-col gap-0.5">
+                      <span>
+                        {newThreadShortcutLabel
+                          ? `New thread (${newThreadShortcutLabel})`
+                          : "New thread"}
+                      </span>
+                      <span className="text-muted-foreground">
+                        New thread in current project: Shift+click
+                        {newThreadInProjectShortcutLabel
+                          ? ` (${newThreadInProjectShortcutLabel})`
+                          : ""}
+                      </span>
                     </span>
-                    <span className="text-muted-foreground">
-                      New thread in current project: Shift+click
-                      {newThreadInProjectShortcutLabel
-                        ? ` (${newThreadInProjectShortcutLabel})`
-                        : ""}
-                    </span>
-                  </span>
-                ) : newThreadShortcutLabel ? (
-                  `New thread (${newThreadShortcutLabel})`
-                ) : (
-                  "New thread"
-                )}
-              </TooltipPopup>
-            </Tooltip>
+                  ) : newThreadShortcutLabel ? (
+                    `New thread (${newThreadShortcutLabel})`
+                  ) : (
+                    "New thread"
+                  )}
+                </TooltipPopup>
+              </Tooltip>
+              {threadFolders.supported ? (
+                <Tooltip>
+                  <TooltipTrigger
+                    render={
+                      <Button
+                        type="button"
+                        variant="outline"
+                        className="min-w-0 flex-1"
+                        onClick={() => void createFolder()}
+                      />
+                    }
+                  >
+                    <FolderIcon />
+                    <span className="truncate">New folder</span>
+                  </TooltipTrigger>
+                  <TooltipPopup side="right">New folder</TooltipPopup>
+                </Tooltip>
+              ) : null}
+            </div>
           </SidebarGroup>
         }
       >
