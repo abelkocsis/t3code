@@ -57,6 +57,7 @@ import {
   CircleDashedIcon,
   ClockIcon,
   EyeIcon,
+  FactoryIcon,
   FolderIcon,
   FolderPlusIcon,
   GitBranchIcon,
@@ -1753,6 +1754,23 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: {
       <TooltipPopup side="top">Unsent draft</TooltipPopup>
     </Tooltip>
   ) : null;
+  // Shown only when a factory task opts into the sidebar (factory.showInSidebar).
+  const factoryIndicator = thread.factory ? (
+    <Tooltip>
+      <TooltipTrigger
+        render={
+          <span
+            role="img"
+            aria-label="Factory task"
+            className="inline-flex shrink-0 items-center"
+          />
+        }
+      >
+        <FactoryIcon aria-hidden className="size-3 text-muted-foreground/65" />
+      </TooltipTrigger>
+      <TooltipPopup side="top">Factory task</TooltipPopup>
+    </Tooltip>
+  ) : null;
   const showPin =
     props.isPinned && (!sortable?.isDragging || (props.dragOverPinned && props.dropVerb === null));
   const pinIndicator = showPin ? (
@@ -1829,6 +1847,7 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: {
             </span>
             {draftIndicator}
             {title}
+            {factoryIndicator}
             {pinIndicator}
             {terminalStatusIcon}
             {isRegeneratingTitle ? (
@@ -2002,6 +2021,7 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: {
               ) : (
                 <span className="flex-1" />
               )}
+              {factoryIndicator}
               {pinIndicator}
               {/* The visible state owns this slot's width: status at rest,
                   actions on hover/keyboard focus or while the popover is open. Keeping
