@@ -1192,7 +1192,11 @@ const layerForkWsRpc = ServerForkWsRpcGroup.toLayer(
   Effect.gen(function* () {
     const standup = yield* StandupService.StandupService;
     const todos = yield* TodoStore.TodoStore;
+    const forkThreadState = yield* ForkThreadStateStore.ForkThreadStateStore;
     return ServerForkWsRpcGroup.of({
+      [WS_METHODS.forkThreadStateSubscribe]: () => forkThreadState.subscribe,
+      [WS_METHODS.forkThreadSetFolder]: (input) =>
+        forkThreadState.setFolder(input.threadId, input.folderId),
       [WS_METHODS.serverGetStandupState]: (input) => standup.getState(input),
       [WS_METHODS.serverGenerateStandupSummary]: (input) => standup.generate(input),
       [WS_METHODS.serverUpdateStandupItems]: (input) => standup.updateItems(input),
@@ -1323,7 +1327,6 @@ const layerUpstreamWsRpc = (
       const config = yield* ServerConfig.ServerConfig;
       const lifecycleEvents = yield* ServerLifecycleEvents.ServerLifecycleEvents;
       const storageCleanup = yield* StorageCleanup.StorageCleanup;
-      const forkThreadState = yield* ForkThreadStateStore.ForkThreadStateStore;
       const databaseStorage = yield* DatabaseStorage.DatabaseStorage;
       const serverSettings = yield* ServerSettings.ServerSettingsService;
       const startup = yield* ServerRuntimeStartup.ServerRuntimeStartup;
@@ -2419,9 +2422,6 @@ const layerUpstreamWsRpc = (
             const keybindingsConfig = yield* keybindings.removeKeybindingRule(rule);
             return { keybindings: keybindingsConfig, issues: [] };
           }),
-        [WS_METHODS.forkThreadStateSubscribe]: () => forkThreadState.subscribe,
-        [WS_METHODS.forkThreadSetFolder]: (input) =>
-          forkThreadState.setFolder(input.threadId, input.folderId),
         [WS_METHODS.serverRunStorageCleanup]: () => storageCleanup.runNow,
         [WS_METHODS.serverGetStorageCleanupReport]: () => storageCleanup.reports,
         [WS_METHODS.serverGetDatabaseStorage]: () => databaseStorage.status,

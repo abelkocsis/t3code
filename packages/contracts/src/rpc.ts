@@ -1997,8 +1997,6 @@ export const UpstreamWsRpcGroup = RpcGroup.make(
   WsServerRemoveKeybindingRpc,
   WsServerRunStorageCleanupRpc,
   WsServerGetStorageCleanupReportRpc,
-  WsForkThreadStateSubscribeRpc,
-  WsForkThreadSetFolderRpc,
   WsServerGetDatabaseStorageRpc,
   WsServerGetSettingsRpc,
   WsServerUpdateSettingsRpc,
@@ -2182,6 +2180,8 @@ export const UpstreamWsRpcGroup = RpcGroup.make(
  * stays where upstream left it.
  */
 export const ForkWsRpcGroup = RpcGroup.make(
+  WsForkThreadStateSubscribeRpc,
+  WsForkThreadSetFolderRpc,
   WsServerGetStandupStateRpc,
   WsServerGenerateStandupSummaryRpc,
   WsServerUpdateStandupItemsRpc,
