@@ -1,6 +1,8 @@
 import {
+  CalendarDaysIcon,
   CoffeeIcon,
   ExternalLinkIcon,
+  ListChecksIcon,
   PanelBottomIcon,
   PanelRightIcon,
   SquareMenuIcon,
@@ -31,6 +33,15 @@ export interface PanelLayoutControlsProps {
   rightPanelOpen: boolean;
   rightPanelShortcutLabel: string | null;
   rightPanelUnavailableLabel?: string;
+  /**
+   * Toggles the to-do list tab. Absent on a surface that has no right panel to
+   * open it in, which is why the control is not offered there.
+   */
+  onOpenTodos?: (() => void) | undefined;
+  todosOpen?: boolean;
+  /** Toggles the daily summary tab. Absent for the same reason the list's is. */
+  onOpenStandup?: (() => void) | undefined;
+  standupOpen?: boolean;
   /** Opens the thread in its own window. Absent where a thread cannot have one. */
   onOpenInWindow?: (() => void) | undefined;
   onToggleTerminal: () => void;
@@ -53,6 +64,10 @@ export const PanelLayoutControls = memo(function PanelLayoutControls({
   rightPanelOpen,
   rightPanelShortcutLabel,
   rightPanelUnavailableLabel = "Right panel is unavailable",
+  onOpenTodos,
+  todosOpen = false,
+  onOpenStandup,
+  standupOpen = false,
   onOpenInWindow,
   onToggleTerminal,
   onToggleThreadPanel,
@@ -88,6 +103,8 @@ export const PanelLayoutControls = memo(function PanelLayoutControls({
       data-panel-layout-controls
     >
       <StepAwayToggle />
+      {onOpenTodos ? <TodoToggle open={todosOpen} onOpen={onOpenTodos} /> : null}
+      {onOpenStandup ? <StandupToggle open={standupOpen} onOpen={onOpenStandup} /> : null}
       {showThreadPanelControl
         ? threadPanelPresentation === "popover"
           ? threadPanelTooltip(
@@ -175,6 +192,61 @@ function StepAwayToggle() {
           ? "Leave step away mode"
           : "Step away mode: a large overlay you can read from across the room"}
       </TooltipPopup>
+    </Tooltip>
+  );
+}
+
+/**
+ * Opens the to-do list, which spans the whole environment rather than the
+ * thread it is opened from. A second press closes the panel while the list is
+ * the tab on screen.
+ *
+ * It sits next to step away rather than only inside the right panel's "+" menu
+ * because the list is what the user reaches for between threads.
+ */
+function TodoToggle({ open, onOpen }: { open: boolean; onOpen: () => void }) {
+  return (
+    <Tooltip>
+      <TooltipTrigger render={<span className="flex shrink-0" />}>
+        <Toggle
+          className="shrink-0 [-webkit-app-region:no-drag]"
+          pressed={open}
+          onPressedChange={onOpen}
+          aria-label="To-do list"
+          variant="ghost"
+          size="sm"
+        >
+          <ListChecksIcon className="size-4" />
+        </Toggle>
+      </TooltipTrigger>
+      <TooltipPopup side="bottom">Your to-do list</TooltipPopup>
+    </Tooltip>
+  );
+}
+
+/**
+ * Opens the daily summary beside the thread, and closes the panel when the
+ * summary is the tab on screen. Like the to-do list it spans every project in
+ * the environment, so it lives in this row and not in the thread's own tabs.
+ * Offered on the web as well as the desktop, unlike step away, because nothing
+ * about it needs an Electron window.
+ */
+function StandupToggle({ open, onOpen }: { open: boolean; onOpen: () => void }) {
+  return (
+    <Tooltip>
+      <TooltipTrigger render={<span className="flex shrink-0" />}>
+        <Toggle
+          className="shrink-0 [-webkit-app-region:no-drag]"
+          pressed={open}
+          onPressedChange={onOpen}
+          aria-label="Daily summary"
+          variant="ghost"
+          size="sm"
+        >
+          <CalendarDaysIcon className="size-4" />
+        </Toggle>
+      </TooltipTrigger>
+      <TooltipPopup side="bottom">Daily summary for your standup</TooltipPopup>
     </Tooltip>
   );
 }

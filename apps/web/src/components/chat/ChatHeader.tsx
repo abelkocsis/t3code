@@ -273,18 +273,19 @@ export const ChatHeader = memo(function ChatHeader({
       ref={breadcrumbContainerRef}
       className={cn(
         "flex min-w-0 flex-1 items-center gap-2 sm:gap-3",
-        // The fixed panel toggles sit over this row. Desktop adds the step
-        // away toggle, and a thread in the main window adds the open in new
-        // window control: one more 32px toggle and its 4px gap each.
+        // The fixed panel toggles sit over this row. The to-do list and daily
+        // summary toggles are always there; desktop adds the step away toggle,
+        // and a thread in the main window adds the open in new window
+        // control: one more 32px toggle and its 4px gap each.
         rightPanelOpen
           ? isElectron
-            ? "pr-18"
-            : "pr-10"
+            ? "pr-36"
+            : "pr-28"
           : isElectron
             ? canOpenThreadWindows && isServerThread
-              ? "pr-41"
-              : "pr-32"
-            : "pr-24",
+              ? "pr-59"
+              : "pr-50"
+            : "pr-42",
       )}
       onContextMenu={handleHeaderContextMenu}
     >

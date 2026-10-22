@@ -8055,6 +8055,10 @@ export default function ChatView(props: ChatViewProps) {
     rightPanelAvailable: activeProject !== null,
     rightPanelOpen,
     rightPanelShortcutLabel: shortcutLabelForCommand(keybindings, "rightPanel.toggle"),
+    onOpenTodos: activeThreadRef ? addTodoSurfaceStable : undefined,
+    todosOpen: rightPanelOpen && activeRightPanelSurface?.kind === "todo",
+    onOpenStandup: activeThreadRef ? addStandupSurfaceStable : undefined,
+    standupOpen: rightPanelOpen && activeRightPanelSurface?.kind === "standup",
     onOpenInWindow:
       canOpenThreadWindows && isServerThread && activeThreadRef
         ? () => openThreadInWindow(activeThreadRef)
