@@ -238,6 +238,13 @@ const LegacyConfirmQuit = Schema.Boolean.pipe(
 
 const QuitConfirmationModeSetting = Schema.Union([QuitConfirmationMode, LegacyConfirmQuit]);
 
+/** Where the overlay window sits, in screen coordinates. */
+export const OverlayWindowPosition = Schema.Struct({
+  x: Schema.Int,
+  y: Schema.Int,
+});
+export type OverlayWindowPosition = typeof OverlayWindowPosition.Type;
+
 export const FontFamilyPreference = Schema.String.check(Schema.isMaxLength(200));
 export type FontFamilyPreference = typeof FontFamilyPreference.Type;
 
@@ -315,6 +322,20 @@ export const ClientSettingsSchema = Schema.Struct({
     Schema.withDecodingDefault(Effect.succeed("off" as const)),
   ),
   inAppNotificationsEnabled: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(false))),
+  // Overlay mode: a small always-on-top window listing the threads the user
+  // has not looked at yet. Desktop-only. `overlayModeEnabled` is the switch
+  // the user owns; `overlayHiddenUntil` is a temporary snooze that expires by
+  // itself.
+  overlayModeEnabled: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(true))),
+  overlayHiddenUntil: Schema.NullOr(TrimmedNonEmptyString).pipe(
+    Schema.withDecodingDefault(Effect.succeed(null)),
+  ),
+  // Whether the overlay rests as a pill when nothing needs the user. Off means
+  // the overlay stays off screen until a thread asks for attention.
+  overlayShowIdlePill: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(true))),
+  overlayPosition: Schema.NullOr(OverlayWindowPosition).pipe(
+    Schema.withDecodingDefault(Effect.succeed(null)),
+  ),
   diffColorScheme: DiffColorScheme.pipe(
     Schema.withDecodingDefault(Effect.succeed("red-green" as const)),
   ),
@@ -1623,6 +1644,10 @@ export function requiredScopesForProjectMutation(
 export const ClientSettingsPatch = Schema.Struct({
   notificationMode: Schema.optionalKey(NotificationMode),
   inAppNotificationsEnabled: Schema.optionalKey(Schema.Boolean),
+  overlayModeEnabled: Schema.optionalKey(Schema.Boolean),
+  overlayHiddenUntil: Schema.optionalKey(Schema.NullOr(TrimmedNonEmptyString)),
+  overlayShowIdlePill: Schema.optionalKey(Schema.Boolean),
+  overlayPosition: Schema.optionalKey(Schema.NullOr(OverlayWindowPosition)),
   diffColorScheme: Schema.optionalKey(DiffColorScheme),
   chatWidth: Schema.optionalKey(ChatWidth),
   loadBalancingEnabled: Schema.optionalKey(Schema.Boolean),

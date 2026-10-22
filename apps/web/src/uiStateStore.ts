@@ -22,6 +22,7 @@ export interface PersistedUiState {
   projectExpandedById?: Record<string, boolean>;
   projectOrder?: string[];
   threadLastVisitedAtById?: Record<string, string>;
+  overlayDismissedAtById?: Record<string, string>;
   collapsedProjectCwds?: string[];
   expandedProjectCwds?: string[];
   projectOrderCwds?: string[];
@@ -40,6 +41,9 @@ export interface UiProjectState {
 
 export interface UiThreadState {
   threadLastVisitedAtById: Record<string, string>;
+  // Attention times the user hid from the overlay. Kept apart from visits so
+  // hiding a thread never clears its unread mark.
+  overlayDismissedAtById: Record<string, string>;
   threadChangedFilesExpandedById: Record<string, Record<string, boolean>>;
 }
 
@@ -59,6 +63,7 @@ const initialState: UiState = {
   projectOrder: [],
   sidebarProjectScopeKey: null,
   threadLastVisitedAtById: {},
+  overlayDismissedAtById: {},
   threadChangedFilesExpandedById: {},
   defaultAdvertisedEndpointKey: null,
   pullRequestMergeMethod: "merge",
@@ -145,6 +150,7 @@ export function parsePersistedState(parsed: PersistedUiState): UiState {
     projectExpandedById,
     projectOrder,
     threadLastVisitedAtById: sanitizeTimestampRecord(parsed.threadLastVisitedAtById),
+    overlayDismissedAtById: sanitizeTimestampRecord(parsed.overlayDismissedAtById),
     threadChangedFilesExpandedById:
       parsed.threadChangedFilesExpansionVersion === THREAD_CHANGED_FILES_EXPANSION_VERSION
         ? sanitizePersistedThreadChangedFilesExpanded(parsed.threadChangedFilesExpandedById)
@@ -223,6 +229,7 @@ export function persistState(state: UiState): void {
         projectExpandedById,
         projectOrder: state.projectOrder,
         threadLastVisitedAtById: state.threadLastVisitedAtById,
+        overlayDismissedAtById: state.overlayDismissedAtById,
         defaultAdvertisedEndpointKey: state.defaultAdvertisedEndpointKey,
         sidebarProjectScopeKey: state.sidebarProjectScopeKey,
         threadChangedFilesExpansionVersion: THREAD_CHANGED_FILES_EXPANSION_VERSION,
@@ -287,6 +294,32 @@ export function markThreadUnread(
       [threadId]: unreadVisitedAt,
     },
   };
+}
+
+export function dismissOverlayThread(state: UiState, threadId: string, at: string): UiState {
+  const atMs = Date.parse(at);
+  if (!Number.isFinite(atMs)) {
+    return state;
+  }
+  const previousAt = state.overlayDismissedAtById[threadId];
+  const previousAtMs = previousAt ? Date.parse(previousAt) : NaN;
+  if (Number.isFinite(previousAtMs) && previousAtMs >= atMs) {
+    return state;
+  }
+  return {
+    ...state,
+    overlayDismissedAtById: {
+      ...state.overlayDismissedAtById,
+      [threadId]: at,
+    },
+  };
+}
+
+export function restoreOverlayDismissals(state: UiState): UiState {
+  if (Object.keys(state.overlayDismissedAtById).length === 0) {
+    return state;
+  }
+  return { ...state, overlayDismissedAtById: {} };
 }
 
 export function setThreadChangedFilesExpanded(
@@ -420,6 +453,8 @@ export function reorderProjects(
 interface UiStateStore extends UiState {
   markThreadVisited: (threadId: string, visitedAt: string) => void;
   markThreadUnread: (threadId: string, latestTurnCompletedAt: string | null | undefined) => void;
+  dismissOverlayThread: (threadId: string, at: string) => void;
+  restoreOverlayDismissals: () => void;
   setThreadChangedFilesExpanded: (threadId: string, turnId: string, expanded: boolean) => void;
   setDefaultAdvertisedEndpointKey: (key: string | null) => void;
   setSidebarProjectScopeKey: (projectKey: string | null) => void;
@@ -438,6 +473,8 @@ export const useUiStateStore = create<UiStateStore>((set) => ({
     set((state) => markThreadVisited(state, threadId, visitedAt)),
   markThreadUnread: (threadId, latestTurnCompletedAt) =>
     set((state) => markThreadUnread(state, threadId, latestTurnCompletedAt)),
+  dismissOverlayThread: (threadId, at) => set((state) => dismissOverlayThread(state, threadId, at)),
+  restoreOverlayDismissals: () => set((state) => restoreOverlayDismissals(state)),
   setThreadChangedFilesExpanded: (threadId, turnId, expanded) =>
     set((state) => setThreadChangedFilesExpanded(state, threadId, turnId, expanded)),
   setDefaultAdvertisedEndpointKey: (key) =>

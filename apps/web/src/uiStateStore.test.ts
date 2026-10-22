@@ -2,6 +2,7 @@ import { ProjectId, ThreadId } from "@t3tools/contracts";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
 
 import {
+  dismissOverlayThread,
   legacyProjectCwdPreferenceKey,
   markThreadUnread,
   markThreadVisited,
@@ -11,6 +12,7 @@ import {
   persistState,
   reorderProjects,
   resolveProjectExpanded,
+  restoreOverlayDismissals,
   setDefaultAdvertisedEndpointKey,
   setProjectExpanded,
   setSidebarProjectScopeKey,
@@ -24,6 +26,7 @@ function makeUiState(overrides: Partial<UiState> = {}): UiState {
     projectOrder: [],
     sidebarProjectScopeKey: null,
     threadLastVisitedAtById: {},
+    overlayDismissedAtById: {},
     threadChangedFilesExpandedById: {},
     defaultAdvertisedEndpointKey: null,
     pullRequestMergeMethod: "merge",
@@ -32,6 +35,31 @@ function makeUiState(overrides: Partial<UiState> = {}): UiState {
 }
 
 describe("uiStateStore pure functions", () => {
+  it("hides a thread from the overlay without touching its unread mark", () => {
+    const threadId = ThreadId.make("thread-1");
+    const initialState = makeUiState();
+
+    const next = dismissOverlayThread(initialState, threadId, "2026-02-25T12:30:00.000Z");
+
+    expect(next.overlayDismissedAtById[threadId]).toBe("2026-02-25T12:30:00.000Z");
+    expect(next.threadLastVisitedAtById).toEqual({});
+  });
+
+  it("keeps the newest dismissal, so an older stamp cannot raise the row again", () => {
+    const threadId = ThreadId.make("thread-1");
+    const newer = dismissOverlayThread(makeUiState(), threadId, "2026-02-25T12:30:00.000Z");
+
+    expect(dismissOverlayThread(newer, threadId, "2026-02-25T12:00:00.000Z")).toBe(newer);
+  });
+
+  it("brings every hidden thread back at once", () => {
+    const threadId = ThreadId.make("thread-1");
+    const dismissed = dismissOverlayThread(makeUiState(), threadId, "2026-02-25T12:30:00.000Z");
+
+    expect(restoreOverlayDismissals(dismissed).overlayDismissedAtById).toEqual({});
+    expect(restoreOverlayDismissals(makeUiState())).toEqual(makeUiState());
+  });
+
   it("stores server timestamps without moving visit state backwards", () => {
     const threadId = ThreadId.make("thread-1");
     const initialState = makeUiState();
@@ -200,6 +228,7 @@ describe("parsePersistedState", () => {
       threadLastVisitedAtById: {
         "environment:thread-1": "2026-02-25T12:35:00.000Z",
       },
+      overlayDismissedAtById: {},
       defaultAdvertisedEndpointKey: "desktop-core:lan:http",
       sidebarProjectScopeKey: null,
       pullRequestMergeMethod: "merge",
@@ -322,6 +351,7 @@ describe("uiStateStore persistence", () => {
       threadLastVisitedAtById: {
         "environment:thread-1": "2026-02-25T12:35:00.000Z",
       },
+      overlayDismissedAtById: {},
       defaultAdvertisedEndpointKey: "desktop-core:lan:http",
       sidebarProjectScopeKey: null,
       threadChangedFilesExpansionVersion: 2,

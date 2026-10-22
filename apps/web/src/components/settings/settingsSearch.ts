@@ -379,6 +379,18 @@ export const SETTINGS_SEARCH_ITEMS = [
     searchTerms: ["notification toast popup completion input approval failure"],
   },
   {
+    id: "overlay-mode",
+    title: "Overlay mode",
+    to: "/settings/general",
+    searchTerms: ["overlay floating window always on top unseen threads step away desktop"],
+  },
+  {
+    id: "overlay-idle-pill",
+    title: "Overlay pill when nothing needs you",
+    to: "/settings/general",
+    searchTerms: ["overlay pill idle resting bar desktop"],
+  },
+  {
     id: "quick-replies",
     title: "Quick replies",
     to: "/settings/general",

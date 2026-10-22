@@ -3,6 +3,7 @@ import { settingsScopeEnvironmentLabels } from "./settingsScopeAxis";
 import { useScopedSettingsWriteAllowed } from "./useScopedSettings";
 import { Spinner } from "~/components/ui/spinner";
 import { NotificationSettings } from "./NotificationSettings";
+import { OverlaySettings } from "./OverlaySettings";
 import { UpstreamReleaseSection } from "./UpstreamReleaseSection";
 import { QuickRepliesSettings } from "./QuickRepliesSettings";
 import { PRIVACY_POLICY_URL } from "../../legalLinks";
@@ -2447,6 +2448,7 @@ export function GeneralSettingsPanel() {
             />
           }
         />
+        <OverlaySettings />
         <QuickRepliesSettings />
         <SettingsRow
           {...searchableSetting("time-format")}

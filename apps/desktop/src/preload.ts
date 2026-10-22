@@ -1,5 +1,6 @@
 import type {
   DesktopBridge,
+  DesktopOverlayAction,
   DesktopPreviewOpenLinkEvent,
   DesktopPreviewPointerEvent,
   DesktopPreviewRecordingInputEvent,
@@ -88,6 +89,26 @@ contextBridge.exposeInMainWorld("desktopBridge", {
   getClientPlatform: () => clientPlatform,
   setNotificationBadge: (badge) =>
     ipcRenderer.invoke(IpcChannels.SET_NOTIFICATION_BADGE_CHANNEL, badge),
+  setOverlayState: (state) => ipcRenderer.invoke(IpcChannels.SET_OVERLAY_STATE_CHANNEL, state),
+  onOverlayAction: (listener) => {
+    const wrappedListener = (_event: Electron.IpcRendererEvent, action: unknown) => {
+      if (typeof action !== "object" || action === null) return;
+      listener(action as DesktopOverlayAction);
+    };
+    ipcRenderer.on(IpcChannels.OVERLAY_ACTION_FORWARD_CHANNEL, wrappedListener);
+    return () =>
+      ipcRenderer.removeListener(IpcChannels.OVERLAY_ACTION_FORWARD_CHANNEL, wrappedListener);
+  },
+  onOverlayMoved: (listener) => {
+    const wrappedListener = (_event: Electron.IpcRendererEvent, position: unknown) => {
+      if (typeof position !== "object" || position === null) return;
+      const { x, y } = position as { x: unknown; y: unknown };
+      if (typeof x !== "number" || typeof y !== "number") return;
+      listener({ x, y });
+    };
+    ipcRenderer.on(IpcChannels.OVERLAY_MOVED_CHANNEL, wrappedListener);
+    return () => ipcRenderer.removeListener(IpcChannels.OVERLAY_MOVED_CHANNEL, wrappedListener);
+  },
   onNotificationBadgeClear: (listener) => {
     const handler = () => listener();
     ipcRenderer.on(IpcChannels.SET_NOTIFICATION_BADGE_CHANNEL, handler);

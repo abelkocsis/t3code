@@ -1,0 +1,147 @@
+import { useNavigate } from "@tanstack/react-router";
+import { scopedThreadKey, scopeThreadRef } from "@t3tools/client-runtime/environment";
+import {
+  resolveOverlayHideUntil,
+  resolveOverlayState,
+} from "@t3tools/client-runtime/state/overlay-visibility";
+import { shortAttentionLabel } from "@t3tools/client-runtime/state/thread-attention";
+import type {
+  DesktopOverlayAction,
+  DesktopOverlayState,
+  EnvironmentId,
+  ThreadId,
+} from "@t3tools/contracts";
+import { useEffect, useEffectEvent } from "react";
+
+import { useStepAwayStore } from "../stepAwayStore";
+import { useUiStateStore } from "../uiStateStore";
+import { useAttentionThreads } from "./useAttentionThreads";
+import { useNowMinute } from "./useNowMinute";
+import { updateClientSettings, useClientSettings } from "./useSettings";
+import { useWindowFocused } from "./useWindowFocused";
+
+/**
+ * Overlay mode: a small always-on-top window listing what the user has not
+ * seen.
+ *
+ * The renderer decides everything and pushes a finished payload; the overlay
+ * window itself holds no state and opens no connection of its own. Mounted once
+ * at the root, next to the notification coordinator it shares its source with.
+ */
+export function useOverlayMode(): void {
+  const navigate = useNavigate();
+  const { unseen, workingCount, dismissedCount } = useAttentionThreads();
+  const appFocused = useWindowFocused();
+  // A temporary hide expires on the clock, not on a thread event, so the
+  // minute tick is what brings the overlay back when nothing else happens.
+  const nowMinute = useNowMinute();
+  const enabled = useClientSettings((settings) => settings.overlayModeEnabled);
+  const hiddenUntil = useClientSettings((settings) => settings.overlayHiddenUntil);
+  const position = useClientSettings((settings) => settings.overlayPosition);
+  const showIdlePill = useClientSettings((settings) => settings.overlayShowIdlePill);
+  const stepAway = useStepAwayStore((state) => state.active);
+  const setStepAway = useStepAwayStore((state) => state.setActive);
+  const dismissOverlayThread = useUiStateStore((state) => state.dismissOverlayThread);
+  const restoreOverlayDismissals = useUiStateStore((state) => state.restoreOverlayDismissals);
+
+  const resolved = resolveOverlayState({
+    enabled,
+    hiddenUntil,
+    now: new Date(`${nowMinute}:00.000Z`).toISOString(),
+    appFocused,
+    unseen,
+    workingCount,
+    showIdlePill,
+    stepAway,
+    dismissedCount,
+  });
+  const state: DesktopOverlayState = {
+    mode: resolved.mode,
+    items: resolved.items.map((item) => ({
+      environmentId: item.environmentId,
+      threadId: item.threadId,
+      threadTitle: item.threadTitle,
+      projectTitle: item.projectTitle,
+      phase: item.phase,
+      phaseLabel: shortAttentionLabel(item.phase),
+    })),
+    workingCount: resolved.workingCount,
+    dismissedCount: resolved.dismissedCount,
+    // Holding off display sleep is the point of step away mode: a dark screen
+    // cannot be read from across the room. The pill and the full overlay let
+    // the display sleep, or the Mac would never rest while T3 Code runs.
+    keepAwake: stepAway,
+    position,
+  };
+  const stateKey = JSON.stringify(state);
+
+  useEffect(() => {
+    void window.desktopBridge?.setOverlayState?.(JSON.parse(stateKey) as DesktopOverlayState);
+  }, [stateKey]);
+
+  const handleAction = useEffectEvent((action: DesktopOverlayAction) => {
+    if (action.kind === "open-thread") {
+      void navigate({
+        to: "/$environmentId/$threadId",
+        params: {
+          environmentId: action.environmentId as EnvironmentId,
+          threadId: action.threadId as ThreadId,
+        },
+      });
+      return;
+    }
+    if (action.kind === "dismiss-item") {
+      // The row carries the attention time it was drawn from, so hiding it
+      // covers this phase and nothing the agent does afterwards.
+      const item = unseen.find(
+        (candidate) =>
+          candidate.environmentId === action.environmentId &&
+          candidate.threadId === action.threadId,
+      );
+      if (item === undefined) return;
+      dismissOverlayThread(
+        scopedThreadKey(
+          scopeThreadRef(item.environmentId as EnvironmentId, item.threadId as ThreadId),
+        ),
+        item.at,
+      );
+      return;
+    }
+    if (action.kind === "restore-dismissed") {
+      restoreOverlayDismissals();
+      return;
+    }
+    if (action.kind === "step-away") {
+      setStepAway(action.enabled);
+      return;
+    }
+    if (action.kind === "open-settings") {
+      void navigate({ to: "/settings/general", hash: "overlay-mode" });
+      return;
+    }
+    const until = resolveOverlayHideUntil(action.duration, new Date());
+    // "Until I turn it back on" is the switch, not a deadline. Everything else
+    // schedules a return, so hiding for an hour can never become permanent.
+    void updateClientSettings(
+      until === null
+        ? { overlayModeEnabled: false, overlayHiddenUntil: null }
+        : { overlayHiddenUntil: until },
+    );
+  });
+
+  useEffect(() => {
+    const subscribe = window.desktopBridge?.onOverlayAction;
+    if (subscribe === undefined) return;
+    return subscribe((action) => handleAction(action));
+  }, []);
+
+  const handleMoved = useEffectEvent((next: { x: number; y: number }) => {
+    void updateClientSettings({ overlayPosition: next });
+  });
+
+  useEffect(() => {
+    const subscribe = window.desktopBridge?.onOverlayMoved;
+    if (subscribe === undefined) return;
+    return subscribe((next) => handleMoved(next));
+  }, []);
+}

@@ -107,6 +107,64 @@ export const DesktopAppBrandingSchema = Schema.Struct({
   displayName: Schema.String,
 });
 
+/**
+ * One row in the overlay window.
+ *
+ * The renderer sends finished text, not thread state: the overlay is a dumb
+ * view with no connection of its own, so it never derives a phase or a label.
+ */
+export const DesktopOverlayItemSchema = Schema.Struct({
+  environmentId: Schema.String,
+  threadId: Schema.String,
+  threadTitle: Schema.String,
+  projectTitle: Schema.NullOr(Schema.String),
+  phaseLabel: Schema.String,
+  /** Drives the row's accent colour. */
+  phase: Schema.Literals(["waiting_for_approval", "waiting_for_input", "completed", "failed"]),
+});
+export type DesktopOverlayItem = typeof DesktopOverlayItemSchema.Type;
+
+export const DesktopOverlayStateSchema = Schema.Struct({
+  mode: Schema.Literals(["hidden", "pill", "full", "stepAway"]),
+  items: Schema.Array(DesktopOverlayItemSchema),
+  workingCount: Schema.Int,
+  /** Whether to hold off display sleep while the overlay shows. */
+  keepAwake: Schema.Boolean,
+  /** How many threads the user hid from the overlay and can bring back. */
+  dismissedCount: Schema.Int,
+  /** Where the user last dragged the overlay, or null for the default corner. */
+  position: Schema.NullOr(Schema.Struct({ x: Schema.Int, y: Schema.Int })),
+});
+export type DesktopOverlayState = typeof DesktopOverlayStateSchema.Type;
+
+/** What the user did in the overlay window. The renderer owns every response. */
+export const DesktopOverlayActionSchema = Schema.Union([
+  Schema.Struct({
+    kind: Schema.Literal("open-thread"),
+    environmentId: Schema.String,
+    threadId: Schema.String,
+  }),
+  Schema.Struct({
+    kind: Schema.Literal("hide"),
+    duration: Schema.Literals(["hour", "tomorrow", "indefinitely"]),
+  }),
+  /**
+   * Takes one thread off the overlay without reading it. The thread keeps its
+   * unread mark in the main UI, and newer work on it raises the row again.
+   */
+  Schema.Struct({
+    kind: Schema.Literal("dismiss-item"),
+    environmentId: Schema.String,
+    threadId: Schema.String,
+  }),
+  /** Puts every hidden thread back on the overlay. */
+  Schema.Struct({ kind: Schema.Literal("restore-dismissed") }),
+  Schema.Struct({ kind: Schema.Literal("open-settings") }),
+  /** Turned on from the overlay's own menu, and off from its exit button. */
+  Schema.Struct({ kind: Schema.Literal("step-away"), enabled: Schema.Boolean }),
+]);
+export type DesktopOverlayAction = typeof DesktopOverlayActionSchema.Type;
+
 export const DesktopSnapShotMode = Schema.Literals(["direct", "portal", "unavailable"]);
 export type DesktopSnapShotMode = typeof DesktopSnapShotMode.Type;
 
@@ -1039,6 +1097,15 @@ export interface DesktopBridge {
    * only the main process can spend a notification click's activation token.
    */
   revealWindow?: () => Promise<void>;
+  /**
+   * Drive the always-on-top overlay window. Optional so a newer web client
+   * keeps working inside an older desktop shell, which simply shows no overlay.
+   */
+  setOverlayState?: (state: DesktopOverlayState) => Promise<void>;
+  /** Fires when the user acts in the overlay. Returns an unsubscribe. */
+  onOverlayAction?: (listener: (action: DesktopOverlayAction) => void) => () => void;
+  /** Remembers where the user dragged the overlay. Returns an unsubscribe. */
+  onOverlayMoved?: (listener: (position: { x: number; y: number }) => void) => () => void;
   /**
    * The OS locale as a BCP-47 tag, which the renderer cannot read for itself:
    * the packaged app ships only the `en-US` Chromium locale pak, so

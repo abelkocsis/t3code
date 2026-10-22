@@ -18,6 +18,7 @@ import {
   type KeyboardEvent as ReactKeyboardEvent,
   type MouseEvent as ReactMouseEvent,
 } from "react";
+import { isElectron } from "../../env";
 import { isTrailingDoubleClick } from "../Sidebar.logic";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
 import { toastManager } from "../ui/toast";
@@ -269,7 +270,9 @@ export const ChatHeader = memo(function ChatHeader({
       ref={breadcrumbContainerRef}
       className={cn(
         "flex min-w-0 flex-1 items-center gap-2 sm:gap-3",
-        rightPanelOpen ? "pr-10" : "pr-24",
+        // The fixed panel toggles sit over this row. Desktop adds the step
+        // away toggle, so it reserves one more button of width.
+        rightPanelOpen ? (isElectron ? "pr-18" : "pr-10") : isElectron ? "pr-32" : "pr-24",
       )}
       onContextMenu={handleHeaderContextMenu}
     >
