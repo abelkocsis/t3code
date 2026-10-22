@@ -87,6 +87,7 @@ import * as SourceControlRepositoryService from "./sourceControl/SourceControlRe
 import * as SourceControlIssueService from "./sourceControl/SourceControlIssueService.ts";
 import * as StorageCleanup from "./storageCleanup.ts";
 import * as ForkThreadStateStore from "./fork/ForkThreadStateStore.ts";
+import * as SlackReplyService from "./slack/SlackReplyService.ts";
 import * as StandupService from "./standup/StandupService.ts";
 import * as TodoStore from "./todos/TodoStore.ts";
 import * as DatabaseStorage from "./persistence/DatabaseStorage.ts";
@@ -507,6 +508,7 @@ const layerUnusedConfigRpcServices = Layer.mergeAll(
   Layer.mock(SourceControlIssueService.SourceControlIssueService)({}),
   Layer.mock(StorageCleanup.StorageCleanup)({}),
   Layer.mock(ForkThreadStateStore.ForkThreadStateStore)({}),
+  Layer.mock(SlackReplyService.SlackReplyService)({}),
   Layer.mock(StandupService.StandupService)({}),
   Layer.mock(TodoStore.TodoStore)({}),
   Layer.mock(DatabaseStorage.DatabaseStorage)({}),

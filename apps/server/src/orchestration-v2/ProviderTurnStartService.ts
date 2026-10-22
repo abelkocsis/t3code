@@ -53,6 +53,8 @@ import {
 } from "@t3tools/provider-core/server/failure";
 import * as RunExecutionService from "./RunExecutionService.ts";
 import * as RuntimePolicy from "./RuntimePolicy.ts";
+import * as ForkThreadStateStore from "../fork/ForkThreadStateStore.ts";
+import { appendSlackThreadTurnContext } from "../slack/slackThreadTurnContext.ts";
 import {
   isRestartNoteContinuation,
   pendingRestartCancelledBackgroundWork,
@@ -113,6 +115,7 @@ export const layer: Layer.Layer<
   | ProviderSessionManager.ProviderSessionManagerV2
   | RunExecutionService.RunExecutionServiceV2
   | RuntimePolicy.RuntimePolicyV2
+  | ForkThreadStateStore.ForkThreadStateStore
 > = Layer.effect(
   ProviderTurnStartServiceV2,
   Effect.gen(function* () {
@@ -130,6 +133,7 @@ export const layer: Layer.Layer<
     const providerSessions = yield* ProviderSessionManager.ProviderSessionManagerV2;
     const runExecution = yield* RunExecutionService.RunExecutionServiceV2;
     const runtimePolicy = yield* RuntimePolicy.RuntimePolicyV2;
+    const forkThreadState = yield* ForkThreadStateStore.ForkThreadStateStore;
     const isManagedWorktreePath = yield* makeIsManagedWorktreePath;
 
     // These callbacks outlive startup while a run drains background work. Build
@@ -954,10 +958,17 @@ export const layer: Layer.Layer<
       const routableSubagents = projection.subagents.filter((subagent) =>
         RunExecutionService.canRouteRelatedSubagent(subagent.status),
       );
-      const userText = projectComposerContextForProvider({
+      const composedText = projectComposerContextForProvider({
         text: message.text,
         records: message.context?.records ?? [],
       });
+      // The fork's Slack link rides along on every turn; a store failure
+      // must not keep the turn from starting.
+      const forkState = yield* forkThreadState
+        .get(projection.thread.id)
+        .pipe(Effect.orElseSucceed(() => null));
+      const userText =
+        appendSlackThreadTurnContext(composedText, forkState?.slackThread) ?? composedText;
       // Delivered once: this run's provider turn marks the work as told. A
       // restart continuation is prompted by its own text or resumes natively.
       const noteContinuation = isRestartNoteContinuation(

@@ -70,6 +70,17 @@ const ForkThreadFactory = Effect.gen(function* () {
  * import does. A pristine upstream database has no such column and nothing to import.
  */
 const ImportLegacyThreadFactory = Effect.gen(function* () {
+const ForkThreadStateSlackThread = Effect.gen(function* () {
+  const sql = yield* SqlClient.SqlClient;
+  yield* sql`ALTER TABLE fork_thread_state ADD COLUMN slack_thread_json TEXT`;
+});
+
+/**
+ * Carries the old fork's per-thread Slack link over from `projection_threads`,
+ * which only a database that ran the old fork has a `slack_thread_json`
+ * column on. A row the folder import already created keeps its folder.
+ */
+const ImportLegacySlackThread = Effect.gen(function* () {
   const sql = yield* SqlClient.SqlClient;
   const tables = yield* sql<{ readonly name: string }>`
     SELECT name FROM sqlite_schema WHERE type = 'table' AND name = 'projection_threads'
@@ -83,6 +94,13 @@ const ImportLegacyThreadFactory = Effect.gen(function* () {
     FROM projection_threads
     WHERE factory_json IS NOT NULL
     ON CONFLICT (thread_id) DO UPDATE SET factory_json = excluded.factory_json
+  if (!columns.some((column) => column.name === "slack_thread_json")) return;
+  yield* sql`
+    INSERT INTO fork_thread_state (thread_id, folder_id, slack_thread_json, updated_at)
+    SELECT thread_id, NULL, slack_thread_json, updated_at
+    FROM projection_threads
+    WHERE slack_thread_json IS NOT NULL
+    ON CONFLICT (thread_id) DO UPDATE SET slack_thread_json = excluded.slack_thread_json
   `;
 });
 
@@ -97,6 +115,8 @@ export const forkMigrationEntries: ReadonlyArray<
   [2, "ImportLegacyThreadState", ImportLegacyThreadState],
   [3, "ForkThreadFactory", ForkThreadFactory],
   [4, "ImportLegacyThreadFactory", ImportLegacyThreadFactory],
+  [5, "ForkThreadStateSlackThread", ForkThreadStateSlackThread],
+  [6, "ImportLegacySlackThread", ImportLegacySlackThread],
 ];
 
 const run = Migrator.make({});

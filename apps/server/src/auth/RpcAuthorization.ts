@@ -83,6 +83,9 @@ export const RPC_REQUIRED_SCOPES = {
   [WS_METHODS.serverGetStorageCleanupReport]: AuthOrchestrationReadScope,
   [WS_METHODS.forkThreadStateSubscribe]: AuthOrchestrationReadScope,
   [WS_METHODS.forkThreadSetFolder]: AuthOrchestrationOperateScope,
+  [WS_METHODS.forkThreadSetSlackThread]: AuthOrchestrationOperateScope,
+  // Sends a message to Slack as the user.
+  [WS_METHODS.forkReplyInSlackThread]: AuthOrchestrationOperateScope,
   [WS_METHODS.serverGetStandupState]: AuthOrchestrationReadScope,
   // Generating spends provider tokens, and the rest write the stored summary.
   [WS_METHODS.serverGenerateStandupSummary]: AuthOrchestrationOperateScope,

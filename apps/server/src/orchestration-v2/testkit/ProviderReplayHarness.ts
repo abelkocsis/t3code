@@ -46,6 +46,7 @@ import * as CommandOutputRecorder from "./CommandOutputRecorder.ts";
 import * as ProviderSwitchService from "../ProviderSwitchService.ts";
 import * as ProviderTurnControlService from "../ProviderTurnControlService.ts";
 import * as ProviderTurnStartService from "../ProviderTurnStartService.ts";
+import * as ForkThreadStateStore from "../../fork/ForkThreadStateStore.ts";
 import * as ProviderTurnStartServiceTestkit from "../ProviderTurnStartService.testkit.ts";
 import * as McpAppModelContext from "../../mcpApps/McpAppModelContext.ts";
 import * as RunExecutionService from "../RunExecutionService.ts";
@@ -404,6 +405,9 @@ export function layerWithRegistry<Error>(
         layerRuntime,
         layerServerConfig,
         layerServerSettings,
+        Layer.mock(ForkThreadStateStore.ForkThreadStateStore)({
+          get: () => Effect.succeed(null),
+        }),
       ),
     ),
   );

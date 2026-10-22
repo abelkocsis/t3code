@@ -177,6 +177,7 @@ import * as ServerSettings from "./serverSettings.ts";
 import * as DatabaseStorage from "./persistence/DatabaseStorage.ts";
 import * as StorageCleanup from "./storageCleanup.ts";
 import * as ForkThreadStateStore from "./fork/ForkThreadStateStore.ts";
+import * as SlackReplyService from "./slack/SlackReplyService.ts";
 import * as StandupService from "./standup/StandupService.ts";
 import * as TodoStore from "./todos/TodoStore.ts";
 import * as TerminalManager from "./terminal/Manager.ts";
@@ -1194,6 +1195,7 @@ const layerForkWsRpc = ServerForkWsRpcGroup.toLayer(
     const standup = yield* StandupService.StandupService;
     const todos = yield* TodoStore.TodoStore;
     const forkThreadState = yield* ForkThreadStateStore.ForkThreadStateStore;
+    const slackReplies = yield* SlackReplyService.SlackReplyService;
     const sourceControlIssues = yield* SourceControlIssueService.SourceControlIssueService;
     return ServerForkWsRpcGroup.of({
       [WS_METHODS.sourceControlSearchIssues]: (input) => sourceControlIssues.searchIssues(input),
@@ -1203,6 +1205,9 @@ const layerForkWsRpc = ServerForkWsRpcGroup.toLayer(
         forkThreadState.setFolder(input.threadId, input.folderId),
       [WS_METHODS.forkThreadSetFactory]: (input) =>
         forkThreadState.setFactory(input.threadId, input.factory),
+      [WS_METHODS.forkThreadSetSlackThread]: (input) =>
+        forkThreadState.setSlackThread(input.threadId, input.slackThread),
+      [WS_METHODS.forkReplyInSlackThread]: (input) => slackReplies.replyInThread(input),
       [WS_METHODS.serverGetStandupState]: (input) => standup.getState(input),
       [WS_METHODS.serverGenerateStandupSummary]: (input) => standup.generate(input),
       [WS_METHODS.serverUpdateStandupItems]: (input) => standup.updateItems(input),

@@ -1,6 +1,6 @@
 /**
- * The fork's per-thread row: which folder a thread sits in, and its code-factory
- * task state when it runs as one.
+ * The fork's per-thread row: which folder a thread sits in, which Slack thread
+ * it is linked to, and its code-factory task state when it runs as one.
  *
  * Writes go to `fork_thread_state` and then to a PubSub, so every client
  * subscribed over the wire sees the row change. The table is small, one row
@@ -21,6 +21,7 @@ import * as Stream from "effect/Stream";
 
 import {
   ForkThreadStateError,
+  SlackThreadRef,
   ThreadFactory,
   ThreadFolderId,
   ThreadId,
@@ -32,9 +33,11 @@ const Row = Schema.Struct({
   thread_id: ThreadId,
   folder_id: Schema.NullOr(ThreadFolderId),
   factory_json: Schema.NullOr(Schema.String),
+  slack_thread_json: Schema.NullOr(Schema.fromJsonString(SlackThreadRef)),
   updated_at: Schema.String,
 });
 const decodeRows = Schema.decodeUnknownEffect(Schema.Array(Row));
+const encodeSlackThread = Schema.encodeSync(Schema.NullOr(Schema.fromJsonString(SlackThreadRef)));
 const decodeFactory = Schema.decodeUnknownOption(Schema.fromJsonString(ThreadFactory));
 const encodeFactory = Schema.encodeSync(Schema.fromJsonString(ThreadFactory));
 
@@ -44,6 +47,7 @@ const toState = (row: typeof Row.Type): ForkThreadState => ({
   threadId: row.thread_id,
   folderId: row.folder_id,
   factory: row.factory_json === null ? null : Option.getOrNull(decodeFactory(row.factory_json)),
+  slackThread: row.slack_thread_json,
   updatedAt: row.updated_at,
 });
 
@@ -51,6 +55,9 @@ export class ForkThreadStateStore extends Context.Service<
   ForkThreadStateStore,
   {
     readonly list: Effect.Effect<ReadonlyArray<ForkThreadState>, ForkThreadStateError>;
+    readonly get: (
+      threadId: ThreadId,
+    ) => Effect.Effect<ForkThreadState | null, ForkThreadStateError>;
     readonly setFolder: (
       threadId: ThreadId,
       folderId: ThreadFolderId | null,
@@ -58,6 +65,10 @@ export class ForkThreadStateStore extends Context.Service<
     readonly setFactory: (
       threadId: ThreadId,
       factory: ThreadFactory | null,
+    ) => Effect.Effect<ForkThreadState, ForkThreadStateError>;
+    readonly setSlackThread: (
+      threadId: ThreadId,
+      slackThread: SlackThreadRef | null,
     ) => Effect.Effect<ForkThreadState, ForkThreadStateError>;
     /** The whole table, then one event per change, for as long as the stream is read. */
     readonly subscribe: Stream.Stream<ForkThreadStateStreamEvent, ForkThreadStateError>;
@@ -75,7 +86,7 @@ const make = Effect.gen(function* () {
   const changes = yield* PubSub.unbounded<ForkThreadState>();
 
   const list = sql`
-    SELECT thread_id, folder_id, factory_json, updated_at
+    SELECT thread_id, folder_id, factory_json, slack_thread_json, updated_at
     FROM fork_thread_state ORDER BY updated_at
   `.pipe(
     Effect.flatMap(decodeRows),
@@ -85,7 +96,7 @@ const make = Effect.gen(function* () {
 
   const read = (threadId: ThreadId) =>
     sql`
-      SELECT thread_id, folder_id, factory_json, updated_at
+      SELECT thread_id, folder_id, factory_json, slack_thread_json, updated_at
       FROM fork_thread_state WHERE thread_id = ${threadId}
     `.pipe(
       Effect.flatMap(decodeRows),
@@ -139,6 +150,22 @@ const make = Effect.gen(function* () {
     return yield* publishRow("setFactory", threadId);
   });
 
+  const setSlackThread = Effect.fn("ForkThreadStateStore.setSlackThread")(function* (
+    threadId: ThreadId,
+    slackThread: SlackThreadRef | null,
+  ) {
+    const updatedAt = DateTime.formatIso(yield* DateTime.now);
+    const json = encodeSlackThread(slackThread);
+    yield* sql`
+      INSERT INTO fork_thread_state (thread_id, slack_thread_json, updated_at)
+      VALUES (${threadId}, ${json}, ${updatedAt})
+      ON CONFLICT (thread_id) DO UPDATE SET
+        slack_thread_json = excluded.slack_thread_json,
+        updated_at = excluded.updated_at
+    `.pipe(Effect.mapError(sqlError("setSlackThread")));
+    return yield* publishRow("setSlackThread", threadId);
+  });
+
   // Subscribe before the snapshot so a write between the two still arrives.
   const subscribe = Stream.unwrap(
     PubSub.subscribe(changes).pipe(
@@ -157,7 +184,14 @@ const make = Effect.gen(function* () {
     ),
   );
 
-  return ForkThreadStateStore.of({ list, setFolder, setFactory, subscribe });
+  return ForkThreadStateStore.of({
+    list,
+    get: read,
+    setFolder,
+    setFactory,
+    setSlackThread,
+    subscribe,
+  });
 });
 
 export const layer = Layer.effect(ForkThreadStateStore, make);

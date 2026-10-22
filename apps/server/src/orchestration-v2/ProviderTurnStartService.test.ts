@@ -17,6 +17,7 @@ import {
   ProjectId,
   type OrchestrationV2ThreadProjection,
   OrchestrationV2DomainEvent,
+  type SlackThreadRef,
 } from "@t3tools/contracts";
 import * as Cause from "effect/Cause";
 import * as DateTime from "effect/DateTime";
@@ -44,6 +45,7 @@ import * as ProjectionStore from "./ProjectionStore.ts";
 import * as ProviderAdapter from "@t3tools/provider-core/server/ProviderAdapter";
 import * as ProviderSessionManager from "./ProviderSessionManager.ts";
 import * as ProviderTurnStart from "./ProviderTurnStartService.ts";
+import * as ForkThreadStateStore from "../fork/ForkThreadStateStore.ts";
 import * as RunExecutionService from "./RunExecutionService.ts";
 import * as RuntimePolicy from "./RuntimePolicy.ts";
 
@@ -182,6 +184,9 @@ function startWithMissingWorktree(
           tryHandlePromptCommand: () => Effect.succeed(false),
         }),
         Layer.mock(RunExecutionService.RunExecutionServiceV2)({ startRootRun }),
+        Layer.mock(ForkThreadStateStore.ForkThreadStateStore)({
+          get: () => Effect.succeed(null),
+        }),
         Layer.mock(RuntimePolicy.RuntimePolicyV2)({}),
       ),
     ),
@@ -289,6 +294,8 @@ function makeLocalCommandHarness(input: {
   readonly interruptRunBeforeOpenFailure?: boolean;
   readonly writeFailure?: unknown;
   readonly failReadsAfterRunning?: boolean;
+  /** The fork's Slack link for this thread, which the turn text must carry. */
+  readonly slackThread?: SlackThreadRef;
 }) {
   const now = DateTime.makeUnsafe("2026-09-04T12:00:00Z");
   const threadId = ThreadId.make("thread-native-account-command");
@@ -663,6 +670,19 @@ function makeLocalCommandHarness(input: {
         Layer.mock(ProviderSessionManager.ProviderSessionManagerV2)({ open }),
         Layer.mock(ProviderAuthService.ProviderAuthService)({ tryHandlePromptCommand }),
         Layer.mock(RunExecutionService.RunExecutionServiceV2)({ startRootRun }),
+        Layer.mock(ForkThreadStateStore.ForkThreadStateStore)({
+          get: () =>
+            Effect.succeed(
+              input.slackThread === undefined
+                ? null
+                : {
+                    threadId,
+                    folderId: null,
+                    slackThread: input.slackThread,
+                    updatedAt: "2026-09-04T12:00:00Z",
+                  },
+            ),
+        }),
         Layer.mock(RuntimePolicy.RuntimePolicyV2)({
           resolve: resolveRuntimePolicy,
         }),
@@ -1172,6 +1192,27 @@ effectIt.effect("does not mistake a failed state read for a superseded run", () 
     const finalizeCheck = yield* Effect.flip(controls.shouldFinalizeRun!());
     expect(startCheck._tag).toBe("ProjectionStoreReadError");
     expect(finalizeCheck._tag).toBe("ProjectionStoreReadError");
+  }),
+);
+
+effectIt.effect("tells the provider about the thread's linked Slack thread", () =>
+  Effect.gen(function* () {
+    const slackThread = {
+      url: "https://acme.slack.com/archives/C0123ABCD/p1700000000123456",
+      channelId: "C0123ABCD",
+      threadTs: "1700000000.123456",
+    };
+    const harness = makeLocalCommandHarness({
+      text: "Continue",
+      failReadsAfterRunning: true,
+      slackThread,
+    });
+
+    yield* harness.start;
+
+    const text = harness.startRootRun.mock.calls[0]?.[0]?.message.text;
+    expect(text?.startsWith("Continue\n\n[")).toBe(true);
+    expect(text).toContain(slackThread.url);
   }),
 );
 

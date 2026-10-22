@@ -34,7 +34,7 @@ it.layer(layer)("ForkThreadStateStore", (it) => {
       const fork = yield* sql<{ readonly migration_id: number }>`
         SELECT migration_id FROM fork_sql_migrations ORDER BY migration_id
       `;
-      assert.isAtLeast(fork.length, 2);
+      assert.isAtLeast(fork.length, 4);
     }),
   );
 
@@ -103,6 +103,27 @@ it.layer(layer)("ForkThreadStateStore", (it) => {
       `;
       const listed = yield* store.list;
       assert.strictEqual(listed.find((state) => state.threadId === "thread-broken")?.factory, null);
+  it.effect("links a Slack thread without touching the folder, and reads one row back", () =>
+    Effect.gen(function* () {
+      const store = yield* ForkThreadStateStore.ForkThreadStateStore;
+      const threadC = ThreadId.make("thread-c");
+      const slackThread = {
+        url: "https://acme.slack.com/archives/C0123ABCD/p1700000000123456",
+        channelId: "C0123ABCD",
+        threadTs: "1700000000.123456",
+      };
+      yield* store.setFolder(threadC, folderX);
+      const linked = yield* store.setSlackThread(threadC, slackThread);
+      assert.deepStrictEqual(linked.slackThread, slackThread);
+      assert.strictEqual(linked.folderId, folderX);
+
+      const read = yield* store.get(threadC);
+      assert.deepStrictEqual(read?.slackThread, slackThread);
+      assert.strictEqual(yield* store.get(ThreadId.make("thread-unknown")), null);
+
+      const unlinked = yield* store.setSlackThread(threadC, null);
+      assert.strictEqual(unlinked.slackThread, null);
+      assert.strictEqual(unlinked.folderId, folderX);
     }),
   );
 });

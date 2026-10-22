@@ -5,6 +5,7 @@ import * as DatabaseStorage from "./persistence/DatabaseStorage.ts";
 import * as StorageCleanup from "./storageCleanup.ts";
 import * as FactoryReviewReactor from "./fork/FactoryReviewReactor.ts";
 import * as ForkThreadStateStore from "./fork/ForkThreadStateStore.ts";
+import * as SlackReplyService from "./slack/SlackReplyService.ts";
 import * as StandupService from "./standup/StandupService.ts";
 import * as StandupStore from "./standup/StandupStore.ts";
 import * as TodoStore from "./todos/TodoStore.ts";
@@ -590,6 +591,7 @@ const layerRuntimeCoreDependenciesBase = Layer.mergeAll(
   layerIdleCompactionWorker,
   StorageCleanup.layer.pipe(Layer.provide(ProjectionStoreV2.layer)),
   ForkThreadStateStore.layer,
+  SlackReplyService.layer,
   StandupService.layer.pipe(
     Layer.provide(StandupStore.layer),
     Layer.provide(layerPullRequestService),

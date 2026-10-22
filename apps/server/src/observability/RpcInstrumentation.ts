@@ -59,6 +59,8 @@ const RPC_AGGREGATES = {
   [WS_METHODS.serverGetStorageCleanupReport]: "server",
   [WS_METHODS.forkThreadStateSubscribe]: "server",
   [WS_METHODS.forkThreadSetFolder]: "server",
+  [WS_METHODS.forkThreadSetSlackThread]: "server",
+  [WS_METHODS.forkReplyInSlackThread]: "server",
   [WS_METHODS.serverGetStandupState]: "server",
   [WS_METHODS.serverGenerateStandupSummary]: "server",
   [WS_METHODS.serverUpdateStandupItems]: "server",
