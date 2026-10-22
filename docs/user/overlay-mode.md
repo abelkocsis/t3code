@@ -17,6 +17,10 @@ that thread from the overlay without opening it. It stays unread in the
 sidebar, and comes back to the overlay when the agent does something new.
 **Bring back hidden threads** in the overlay menu restores them all.
 
+Factory tasks list under their own **Factory** heading when plain threads are
+waiting too. A task at a gate reads **Waiting on you**; otherwise the row
+names its stage.
+
 The overlay's menu (**⋯**) hides it for an hour, until tomorrow morning, or
 until you turn it back on. Turn it off or on in **Settings → General →
 Overlay mode**. Turn off **Overlay pill when nothing needs you** to keep the

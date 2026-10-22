@@ -11,8 +11,9 @@ factory** from the command palette.
 ## Start a task
 
 Paste a GitHub issue link, a pull request link, or describe the task in the
-field at the top of the page. T3 Code picks the project from the repository in
-the link; when it cannot, pick the project yourself. Choose a model and effort
+field at the top of the page. **Pick an issue** searches the issues you can
+read and puts the chosen link in the field. T3 Code picks the project from the
+repository in the link; when it cannot, pick the project yourself. Choose a model and effort
 if the project default is not what you want, then press **Run the
 code-factory**. The task gets its own worktree off the project's current
 branch.
@@ -30,7 +31,16 @@ Factory** takes a task off the page and keeps the thread.
 Each row shows the phase, how long the task has been in it, and whether it
 waits on you. Select a row to see the agent's open question with its options,
 its last reply, and a reply box. Tasks can be grouped in folders and dragged
-between them.
+between them. Right-click the pull request icon to copy its link.
+
+A factory task is also a thread, marked with a factory icon in the sidebar.
+It asks for attention, in the sidebar, the overlay, and a notification, only
+when it needs you: at a gate, on a question or approval, on held work, or on a
+failure. While the agent or the review loop works it reads as working, however
+many turns finish. Opening the thread clears the highlight.
+
+**To-do** and **Summary** at the top of the page open the to-do list and the
+daily summary beside the task list.
 
 From a row's menu you can snooze the task, put it to sleep until another pull
 request merges, move it to a phase by hand when the agent lost track, or
