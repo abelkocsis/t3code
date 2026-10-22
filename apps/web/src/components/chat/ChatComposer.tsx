@@ -33,6 +33,7 @@ import type {
   PullRequestListInput,
   PreviewAnnotationPayload,
   ProviderApprovalDecision,
+  QuickReply,
   ThreadContextRecord,
   ProviderInteractionMode,
   ResolvedKeybindingsConfig,
@@ -301,6 +302,8 @@ import { ComposerPrimaryActions } from "./ComposerPrimaryActions";
 import { ComposerPendingApprovalPanel } from "./ComposerPendingApprovalPanel";
 import { ComposerPendingUserInputPanel } from "./ComposerPendingUserInputPanel";
 import { ComposerPlanFollowUpBanner } from "./ComposerPlanFollowUpBanner";
+import { ComposerQuickReplies } from "./ComposerQuickReplies";
+import { offeredQuickReplies, shouldShowQuickReplies } from "./quickReplyVisibility";
 import {
   ComposerControl,
   ComposerControlIcon,
@@ -2838,6 +2841,16 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
     pendingUserInputs.length > 0 ||
     (!isComposerCollapsedMobile && showPlanFollowUpPrompt && activeProposedPlan !== null);
   const showCollapsedMobilePromptRow = isComposerCollapsedMobile && !isComposerApprovalState;
+  const quickReplies = offeredQuickReplies(settings.quickReplies, routeKind === "draft");
+  const showQuickReplies = shouldShowQuickReplies({
+    replyCount: quickReplies.length,
+    hasSendableContent: composerSendState.hasSendableContent,
+    hasPendingApproval: isComposerApprovalState,
+    pendingUserInputCount: pendingUserInputs.length,
+    showPlanFollowUpPrompt,
+    isSendDisabled,
+    isComposerCollapsedMobile,
+  });
   const showComposerAttachAction =
     fileStagingLimit !== null &&
     (!activePendingProgress ||
@@ -4165,6 +4178,19 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
     setComposerCursor(collapseExpandedComposerCursor(nextPrompt, nextPrompt.length));
     setComposerTrigger(null);
     setComposerHighlightedItemId(null);
+  };
+
+  const applyQuickReply = (reply: QuickReply, insertOnly: boolean) => {
+    replacePromptFromHistory(reply.text);
+    // Filling the composer is an edit like any other, so it ends browsing.
+    promptHistoryPositionRef.current = null;
+    if (insertOnly) {
+      scheduleComposerFocus();
+      return;
+    }
+    // `submitComposer` reads the prompt from the ref the line above wrote,
+    // so the send carries the reply without waiting for a render.
+    submitComposer(undefined, "auto");
   };
 
   const navigatePromptHistory = (
@@ -6502,6 +6528,9 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
               </ComposerBanner.Root>
             </ComposerBanner.Attachment>
           ) : null}
+          {showQuickReplies ? (
+            <ComposerQuickReplies replies={quickReplies} onSelect={applyQuickReply} />
+          ) : null}
           {showComposerTopDrawer && (!isTasksDrawerOpen || hasBlockingComposerTopDrawer) ? (
             <ComposerBanner.Attachment>
               <ComposerBanner.Root
@@ -7168,6 +7197,10 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
                     containerClassName={cn(isComposerResting && "min-w-0 flex-1")}
                     className={cn(
                       showMobilePendingAnswerActions && "max-sm:pb-12",
+                      // On a new thread the centered composer grows until the
+                      // headline above and the toolbar below would leave the pane.
+                      !isComposerResting &&
+                        "in-data-[draft-hero]:max-h-[max(13rem,calc(100cqh-25rem))]",
                       isComposerResting &&
                         "my-0 max-h-8 min-h-8 overflow-hidden py-0 whitespace-pre! leading-8",
                       isComposerApprovalState && "min-h-10",

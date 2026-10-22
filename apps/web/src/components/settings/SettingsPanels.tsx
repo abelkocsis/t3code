@@ -4,6 +4,7 @@ import { useScopedSettingsWriteAllowed } from "./useScopedSettings";
 import { Spinner } from "~/components/ui/spinner";
 import { NotificationSettings } from "./NotificationSettings";
 import { UpstreamReleaseSection } from "./UpstreamReleaseSection";
+import { QuickRepliesSettings } from "./QuickRepliesSettings";
 import { PRIVACY_POLICY_URL } from "../../legalLinks";
 import { ArchiveIcon, ArchiveX, CheckIcon, ChevronRightIcon, SettingsIcon } from "lucide-react";
 import { Link, useNavigate } from "@tanstack/react-router";
@@ -2446,6 +2447,7 @@ export function GeneralSettingsPanel() {
             />
           }
         />
+        <QuickRepliesSettings />
         <SettingsRow
           {...searchableSetting("time-format")}
           description="System default follows your browser or OS clock preference."

@@ -1090,6 +1090,32 @@ export const StorageCleanupSettings = Schema.Struct({
 });
 export type StorageCleanupSettings = typeof StorageCleanupSettings.Type;
 
+/**
+ * One saved reply the composer offers as a chip while the draft is empty.
+ *
+ * `label` is what the chip shows and `text` is what the agent receives, so a
+ * long instruction can sit behind a two-word chip. `showInNewThread` also
+ * offers the chip on a thread that has not run yet; absent means it does not.
+ */
+export const QuickReply = Schema.Struct({
+  id: TrimmedNonEmptyString,
+  label: TrimmedNonEmptyString,
+  text: TrimmedNonEmptyString,
+  showInNewThread: Schema.optionalKey(Schema.Boolean),
+});
+export type QuickReply = typeof QuickReply.Type;
+
+/**
+ * The replies a fresh environment starts with: the four answers that get typed
+ * over and over once an agent stops and waits.
+ */
+export const DEFAULT_QUICK_REPLIES: ReadonlyArray<QuickReply> = [
+  { id: "go", label: "Go", text: "go" },
+  { id: "try-again", label: "Try again", text: "try again" },
+  { id: "continue", label: "Continue", text: "continue from where you left off" },
+  { id: "commit-push", label: "Commit, push", text: "commit, push" },
+];
+
 export const ServerSettings = Schema.Struct({
   // Null means no client has migrated this preference yet; an empty value is
   // authoritative so another device cannot resurrect cleared preferences.
@@ -1269,6 +1295,14 @@ export const ServerSettings = Schema.Struct({
 
   usagePriceOverrides: Schema.Record(TrimmedNonEmptyString, UsageModelPriceOverride).pipe(
     Schema.withDecodingDefault(Effect.succeed({})),
+  ),
+  /**
+   * Chips the composer offers while the draft is empty. Server-owned rather
+   * than client-local, so a phone attached to this environment offers the same
+   * replies as the desktop window.
+   */
+  quickReplies: Schema.Array(QuickReply).pipe(
+    Schema.withDecodingDefault(Effect.succeed(DEFAULT_QUICK_REPLIES)),
   ),
 
   usageModelAliases: Schema.Record(TrimmedNonEmptyString, TrimmedNonEmptyString).pipe(
@@ -1541,6 +1575,8 @@ export const ServerSettingsPatch = Schema.Struct({
   usagePriceOverrides: Schema.optionalKey(
     Schema.Record(TrimmedNonEmptyString, Schema.NullOr(UsageModelPriceOverride)),
   ),
+  /** The whole list, in chip order. An empty array turns the chips off. */
+  quickReplies: Schema.optionalKey(Schema.Array(QuickReply)),
 
   usageModelAliases: Schema.optionalKey(
     Schema.Record(TrimmedNonEmptyString, Schema.NullOr(TrimmedNonEmptyString)),
