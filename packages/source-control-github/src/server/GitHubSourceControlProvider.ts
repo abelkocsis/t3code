@@ -31,6 +31,12 @@ import * as GitHubRequestPolicy from "./GitHubRequestPolicy.ts";
 import * as GitHubChangeRequestTemplate from "./gitHubChangeRequestTemplate.ts";
 import * as GitHubGraphQlClient from "./gitHubGraphQlClient.ts";
 import {
+  buildGitHubIssueDetailPath,
+  buildGitHubIssueSearchPath,
+  decodeGitHubIssueDetailJson,
+  decodeGitHubIssueSearchJson,
+} from "./gitHubIssues.ts";
+import {
   normalizeGitHubPullRequestRecord,
   type NormalizedGitHubPullRequestRecord,
 } from "./gitHubPullRequests.ts";
@@ -660,6 +666,8 @@ export const make = Effect.gen(function* () {
     return decoded.success;
   });
 
+  const issueHost = () => environment.GH_HOST?.trim().toLowerCase() || "github.com";
+
   const readViewerLogin = Effect.fn("GitHubSourceControlProvider.readViewerLogin")(function* (
     host: string,
   ) {
@@ -1039,5 +1047,59 @@ export const make = Effect.gen(function* () {
           providerError("checkoutChangeRequest", input.cwd, { reference: input.reference }),
         ),
       ),
+    // Issues are searched on the default host rather than a checkout's remote: no project is
+    // chosen yet when a picker runs, and the search spans every repository the account reads.
+    searchIssues: Effect.fn("GitHubSourceControlProvider.searchIssues")(
+      function* (input) {
+        const response = yield* rest(
+          {
+            host: issueHost(),
+            operation: "searchIssues",
+            path: buildGitHubIssueSearchPath(input),
+            allowReserve: true,
+          },
+          "No repository with that name, or you cannot read it.",
+        );
+        const decoded = decodeGitHubIssueSearchJson(response.body);
+        if (Result.isFailure(decoded)) {
+          return yield* failure("GitHub returned an invalid issue search.", decoded.failure);
+        }
+        return decoded.success;
+      },
+      (effect, input) =>
+        effect.pipe(
+          Effect.mapError(
+            providerError(
+              "searchIssues",
+              input.cwd,
+              input.repository === null ? undefined : { repository: input.repository },
+            ),
+          ),
+        ),
+    ),
+    getIssue: Effect.fn("GitHubSourceControlProvider.getIssue")(
+      function* (input) {
+        const response = yield* rest(
+          {
+            host: issueHost(),
+            operation: "getIssue",
+            path: buildGitHubIssueDetailPath(input.issue),
+            allowReserve: true,
+          },
+          `No issue #${input.issue.number} in ${input.issue.repository}, or you cannot read it.`,
+        );
+        const decoded = decodeGitHubIssueDetailJson(response.body, input.issue);
+        if (Result.isFailure(decoded)) {
+          return yield* failure("GitHub returned an invalid issue.", decoded.failure);
+        }
+        return decoded.success;
+      },
+      (effect, input) =>
+        effect.pipe(
+          Effect.mapError(
+            providerError("getIssue", input.cwd, { repository: input.issue.repository }),
+          ),
+        ),
+    ),
   });
 });

@@ -141,6 +141,8 @@ const RPC_AGGREGATES = {
   [WS_METHODS.sourceControlLookupRepository]: "source-control",
   [WS_METHODS.sourceControlCloneRepository]: "source-control",
   [WS_METHODS.sourceControlPublishRepository]: "source-control",
+  [WS_METHODS.sourceControlSearchIssues]: "source-control",
+  [WS_METHODS.sourceControlIssueDetails]: "source-control",
   [WS_METHODS.projectCloneStart]: "source-control",
   [WS_METHODS.projectCloneCancel]: "source-control",
   [WS_METHODS.projectCloneRetry]: "source-control",

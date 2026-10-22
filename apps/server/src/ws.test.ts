@@ -84,6 +84,7 @@ import * as ServerSelfUpdate from "./cloud/selfUpdate.ts";
 import * as SessionStore from "./auth/SessionStore.ts";
 import * as SourceControlDiscovery from "./sourceControl/SourceControlDiscovery.ts";
 import * as SourceControlRepositoryService from "./sourceControl/SourceControlRepositoryService.ts";
+import * as SourceControlIssueService from "./sourceControl/SourceControlIssueService.ts";
 import * as StorageCleanup from "./storageCleanup.ts";
 import * as ForkThreadStateStore from "./fork/ForkThreadStateStore.ts";
 import * as StandupService from "./standup/StandupService.ts";
@@ -503,6 +504,7 @@ const layerUnusedConfigRpcServices = Layer.mergeAll(
   Layer.mock(SessionStore.SessionStore)({ cookieName: "config-test", legacyCookieName: undefined }),
   Layer.mock(SourceControlDiscovery.SourceControlDiscovery)({}),
   Layer.mock(SourceControlRepositoryService.SourceControlRepositoryService)({}),
+  Layer.mock(SourceControlIssueService.SourceControlIssueService)({}),
   Layer.mock(StorageCleanup.StorageCleanup)({}),
   Layer.mock(ForkThreadStateStore.ForkThreadStateStore)({}),
   Layer.mock(StandupService.StandupService)({}),

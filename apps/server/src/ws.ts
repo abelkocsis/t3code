@@ -243,6 +243,7 @@ import * as PullRequestSyncReactor from "./orchestration-v2/PullRequestSyncReact
 import * as SourceControlDiscovery from "./sourceControl/SourceControlDiscovery.ts";
 import * as OtlpEndpointCheck from "./observability/OtlpEndpointCheck.ts";
 import * as SourceControlRepositoryService from "./sourceControl/SourceControlRepositoryService.ts";
+import * as SourceControlIssueService from "./sourceControl/SourceControlIssueService.ts";
 import * as SourceControlBuiltInDrivers from "./sourceControl/builtInDrivers.ts";
 import * as SourceControlProviderRegistry from "./sourceControl/SourceControlProviderRegistry.ts";
 import * as GitVcsDriver from "./vcs/GitVcsDriver.ts";
@@ -1354,6 +1355,7 @@ const layerUpstreamWsRpc = (
       const otlpEndpointCheck = yield* OtlpEndpointCheck.OtlpEndpointCheck;
       const sourceControlRepositories =
         yield* SourceControlRepositoryService.SourceControlRepositoryService;
+      const sourceControlIssues = yield* SourceControlIssueService.SourceControlIssueService;
       const withPullRequestViewer = pullRequests.withRoutingCredential;
       const bootstrapCredentials = yield* PairingGrantStore.PairingGrantStore;
       const sessions = yield* SessionStore.SessionStore;
@@ -2593,6 +2595,9 @@ const layerUpstreamWsRpc = (
           sourceControlRepositories.lookupRepository(input),
         [WS_METHODS.sourceControlCloneRepository]: (input) =>
           sourceControlRepositories.cloneRepository(input),
+        [WS_METHODS.sourceControlSearchIssues]: (input) => sourceControlIssues.searchIssues(input),
+        [WS_METHODS.sourceControlIssueDetails]: (input) =>
+          sourceControlIssues.getIssueDetails(input),
         [WS_METHODS.projectCloneStart]: (input) =>
           projectCloneTracker.start(input, {
             createProject: (project) =>

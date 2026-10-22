@@ -25,6 +25,14 @@ export function createSourceControlEnvironmentAtoms<R, E>(
       label: "environment-data:source-control:repository",
       tag: WS_METHODS.sourceControlLookupRepository,
     }),
+    issues: createEnvironmentRpcQueryAtomFamily(runtime, {
+      label: "environment-data:source-control:issues",
+      tag: WS_METHODS.sourceControlSearchIssues,
+    }),
+    issueDetails: createEnvironmentRpcQueryAtomFamily(runtime, {
+      label: "environment-data:source-control:issue-details",
+      tag: WS_METHODS.sourceControlIssueDetails,
+    }),
     cloneRepository: createEnvironmentRpcCommand(runtime, {
       label: "environment-data:source-control:clone-repository",
       tag: WS_METHODS.sourceControlCloneRepository,

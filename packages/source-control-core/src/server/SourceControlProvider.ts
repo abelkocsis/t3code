@@ -5,6 +5,9 @@ import type {
   RepositoryIdentity,
   ChangeRequest,
   ChangeRequestState,
+  SourceControlIssueDetail,
+  SourceControlIssueRef,
+  SourceControlIssueSummary,
   SourceControlProviderError,
   SourceControlProviderInfo,
   SourceControlProviderKind,
@@ -100,6 +103,16 @@ export function repositoryPathFromRemoteUrl(url: string | null): string | null {
   return path.length > 0 ? path : null;
 }
 
+export interface SourceControlIssueSearchBatch {
+  readonly issues: ReadonlyArray<SourceControlIssueSummary>;
+  /**
+   * Rows the host returned, before pull requests and unreadable rows were dropped. The
+   * caller compares it against the limit it asked for, which a filtered count could not
+   * answer.
+   */
+  readonly rawCount: number;
+}
+
 export class SourceControlProvider extends Context.Service<
   SourceControlProvider,
   {
@@ -172,5 +185,22 @@ export class SourceControlProvider extends Context.Service<
       readonly reference: string;
       readonly force?: boolean;
     }) => Effect.Effect<void, SourceControlProviderError>;
+    /**
+     * Open issues the signed-in account can read, across every repository or scoped to one.
+     * Optional: every host names and shapes issues differently, and a host without this
+     * is reported to the user as not supporting issue search rather than as having none.
+     */
+    readonly searchIssues?: (input: {
+      readonly cwd: string;
+      readonly query: string;
+      readonly assignedToViewer: boolean;
+      readonly repository: string | null;
+      readonly limit: number;
+    }) => Effect.Effect<SourceControlIssueSearchBatch, SourceControlProviderError>;
+    /** One issue with its whole body, which is what seeds a thread. */
+    readonly getIssue?: (input: {
+      readonly cwd: string;
+      readonly issue: SourceControlIssueRef;
+    }) => Effect.Effect<SourceControlIssueDetail, SourceControlProviderError>;
   }
 >()("@t3tools/source-control-core/server/SourceControlProvider") {}

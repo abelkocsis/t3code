@@ -1330,3 +1330,94 @@ it.effect.each([
     );
   },
 );
+
+describe("GitHubSourceControlProvider issues", () => {
+  const item = (number: number, extra: Record<string, unknown> = {}) => ({
+    number,
+    title: `Issue ${number}`,
+    html_url: `https://github.com/acme/web/issues/${number}`,
+    repository_url: "https://api.github.com/repos/acme/web",
+    state: "open",
+    labels: [],
+    assignees: [],
+    user: { login: "me" },
+    comments: 0,
+    created_at: "2026-01-01T00:00:00Z",
+    updated_at: "2026-01-02T00:00:00Z",
+    body: "Body",
+    ...extra,
+  });
+
+  it.effect("searches the default host with the filters folded into the query", () => {
+    const requests: Array<GitHubRest.GitHubRestInput> = [];
+    return Effect.gen(function* () {
+      const gh = yield* makeProvider({
+        rest: (input) =>
+          Effect.sync(() => {
+            requests.push(input);
+            return restResponse({ items: [item(1), item(2, { pull_request: {} })] });
+          }),
+      });
+      const batch = yield* gh.searchIssues!({
+        cwd: "/repo",
+        query: "reconnect",
+        assignedToViewer: true,
+        repository: "acme/web",
+        limit: 2,
+      });
+      assert.strictEqual(requests[0]!.host, "github.com");
+      const path = requests[0]!.path;
+      const params = new URLSearchParams(path.slice(path.indexOf("?") + 1));
+      assert.isTrue(path.startsWith("search/issues?"));
+      assert.strictEqual(params.get("q"), "is:issue is:open assignee:@me repo:acme/web reconnect");
+      assert.strictEqual(params.get("per_page"), "2");
+      // The pull request is dropped from the rows, but still counted towards the page.
+      assert.deepStrictEqual(
+        batch.issues.map((issue) => issue.number),
+        [1],
+      );
+      assert.strictEqual(batch.rawCount, 2);
+    });
+  });
+
+  it.effect("reads one issue with its body from the repository it names", () => {
+    const requests: Array<string> = [];
+    return Effect.gen(function* () {
+      const gh = yield* makeProvider({
+        rest: (input) =>
+          Effect.sync(() => {
+            requests.push(`${input.method ?? "GET"} ${input.path}`);
+            return restResponse(item(7, { body: "The whole body" }));
+          }),
+      });
+      const issue = yield* gh.getIssue!({
+        cwd: "/repo",
+        issue: { repository: "acme/web", number: 7 },
+      });
+      assert.deepStrictEqual(requests, ["GET repos/acme/web/issues/7"]);
+      assert.strictEqual(issue.repository, "acme/web");
+      assert.strictEqual(issue.body, "The whole body");
+    });
+  });
+
+  it.effect("tells the user which issue was not found", () =>
+    Effect.gen(function* () {
+      const gh = yield* makeProvider({
+        rest: () =>
+          Effect.fail(
+            new GitHubRequestPolicy.GitHubApiNotFoundError({
+              host: "github.com",
+              operation: "getIssue",
+            }),
+          ),
+      });
+      const error = yield* gh.getIssue!({
+        cwd: "/repo",
+        issue: { repository: "acme/web", number: 7 },
+      }).pipe(Effect.flip);
+      assert.strictEqual(error.operation, "getIssue");
+      assert.strictEqual(error.repository, "acme/web");
+      assert.strictEqual(error.detail, "No issue #7 in acme/web, or you cannot read it.");
+    }),
+  );
+});

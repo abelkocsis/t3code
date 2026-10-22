@@ -117,6 +117,7 @@ import * as SourceControlProviderRegistry from "./sourceControl/SourceControlPro
 import * as PullRequestReadCache from "./pullRequest/PullRequestReadCache.ts";
 import * as SourceControlRateLimit from "@t3tools/source-control-core/server/SourceControlRateLimit";
 import * as SourceControlRepositoryService from "./sourceControl/SourceControlRepositoryService.ts";
+import * as SourceControlIssueService from "./sourceControl/SourceControlIssueService.ts";
 import * as WorktreeSetupTracker from "./project/WorktreeSetupTracker.ts";
 import * as Observability from "./observability/Observability.ts";
 import * as HeapSnapshot from "./observability/HeapSnapshot.ts";
@@ -383,6 +384,10 @@ const layerSourceControlRepositoryService = SourceControlRepositoryService.layer
   Layer.provideMerge(layerSourceControlProviderRegistry),
 );
 
+const layerSourceControlIssueService = SourceControlIssueService.layer.pipe(
+  Layer.provide(layerSourceControlProviderRegistry),
+);
+
 const layerProjectCloneTracker = ProjectCloneTracker.layer.pipe(
   Layer.provide(layerSourceControlRepositoryService),
 );
@@ -405,6 +410,7 @@ const layerVcs = Layer.empty.pipe(
   Layer.provideMerge(layerGitWorkflow),
   Layer.provideMerge(layerReview),
   Layer.provideMerge(layerSourceControlRepositoryService),
+  Layer.provideMerge(layerSourceControlIssueService),
   Layer.provideMerge(layerProjectCloneTracker),
   Layer.provideMerge(
     VcsStatusBroadcaster.layer.pipe(

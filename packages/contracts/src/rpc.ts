@@ -385,6 +385,11 @@ import {
   SourceControlCloneRepositoryInput,
   SourceControlCloneRepositoryResult,
   SourceControlDiscoveryResult,
+  SourceControlIssueDetailsInput,
+  SourceControlIssueDetailsResult,
+  SourceControlIssueError,
+  SourceControlIssueSearchInput,
+  SourceControlIssueSearchResult,
   SourceControlPublishRepositoryInput,
   SourceControlPublishRepositoryResult,
   SourceControlRepositoryError,
@@ -586,6 +591,8 @@ export const WS_METHODS = {
   sourceControlLookupRepository: "sourceControl.lookupRepository",
   sourceControlCloneRepository: "sourceControl.cloneRepository",
   sourceControlPublishRepository: "sourceControl.publishRepository",
+  sourceControlSearchIssues: "sourceControl.searchIssues",
+  sourceControlIssueDetails: "sourceControl.issueDetails",
   projectCloneStart: "projectClone.start",
   projectCloneCancel: "projectClone.cancel",
   projectCloneRetry: "projectClone.retry",
@@ -1287,6 +1294,18 @@ const WsSubscribeProjectClonesRpc = Rpc.make(WS_METHODS.subscribeProjectClones, 
   success: ProjectCloneListEvent,
   error: EnvironmentAuthorizationError,
   stream: true,
+});
+
+const WsSourceControlSearchIssuesRpc = Rpc.make(WS_METHODS.sourceControlSearchIssues, {
+  payload: SourceControlIssueSearchInput,
+  success: SourceControlIssueSearchResult,
+  error: Schema.Union([SourceControlIssueError, EnvironmentAuthorizationError]),
+});
+
+const WsSourceControlIssueDetailsRpc = Rpc.make(WS_METHODS.sourceControlIssueDetails, {
+  payload: SourceControlIssueDetailsInput,
+  success: SourceControlIssueDetailsResult,
+  error: Schema.Union([SourceControlIssueError, EnvironmentAuthorizationError]),
 });
 
 const WsSourceControlPublishRepositoryRpc = Rpc.make(WS_METHODS.sourceControlPublishRepository, {
@@ -2072,6 +2091,8 @@ export const UpstreamWsRpcGroup = RpcGroup.make(
   WsPullRequestsSetLabelsRpc,
   WsSourceControlLookupRepositoryRpc,
   WsSourceControlCloneRepositoryRpc,
+  WsSourceControlSearchIssuesRpc,
+  WsSourceControlIssueDetailsRpc,
   WsSourceControlPublishRepositoryRpc,
   WsProjectCloneStartRpc,
   WsProjectCloneCancelRpc,
