@@ -19,6 +19,7 @@
 - [Usage and limits](./user/usage.md)
 - [To-do list](./user/todo-list.md)
 - [Daily summary](./user/daily-summary.md)
+- [Code factory](./user/code-factory.md)
 - [Product usage data](./user/telemetry.md)
 - [Remote access](./user/remote-access.md)
 - [T3 Connect troubleshooting](./user/t3-connect-troubleshooting.md)
