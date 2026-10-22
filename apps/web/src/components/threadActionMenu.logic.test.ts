@@ -20,6 +20,7 @@ const baseState: ThreadActionMenuState = {
   canSnoozeNow: true,
   isRegeneratingTitle: false,
   isRunning: false,
+  isFactoryTask: false,
   supports: {
     settlement: true,
     autoSettleOptOut: true,
@@ -75,6 +76,7 @@ describe("buildThreadActionMenuItems", () => {
             "rename",
             "regenerate-title",
             "auto-settle",
+            "factory:add",
             "archive",
             "delete",
           ]
@@ -86,6 +88,7 @@ describe("buildThreadActionMenuItems", () => {
             "rename",
             "regenerate-title",
             "auto-settle",
+            "factory:add",
             "archive",
             "delete",
           ];
@@ -122,7 +125,15 @@ describe("buildThreadActionMenuItems", () => {
           titleRegeneration: false,
         },
       }),
-    ).toEqual(["rename", "mark-unread", "copy", "project-settings", "archive", "delete"]);
+    ).toEqual([
+      "rename",
+      "mark-unread",
+      "factory:add",
+      "copy",
+      "project-settings",
+      "archive",
+      "delete",
+    ]);
   });
 
   it("offers every folder, checks the current one, and hides removal when ungrouped", () => {

@@ -46,5 +46,9 @@ export function createForkEnvironmentAtoms<R, E>(
       label: "environment-data:fork:set-thread-folder",
       tag: WS_METHODS.forkThreadSetFolder,
     }),
+    setThreadFactory: createEnvironmentRpcCommand(runtime, {
+      label: "environment-data:fork:set-thread-factory",
+      tag: WS_METHODS.forkThreadSetFactory,
+    }),
   };
 }

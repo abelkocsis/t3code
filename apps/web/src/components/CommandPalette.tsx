@@ -64,6 +64,7 @@ import {
   CheckIcon,
   ChevronRightIcon,
   CornerLeftUpIcon,
+  FactoryIcon,
   FileSearchIcon,
   FolderGit2Icon,
   FolderIcon,
@@ -2112,6 +2113,17 @@ function OpenCommandPaletteDialog(props: {
       },
     });
   }
+
+  actionItems.push({
+    kind: "action",
+    value: "action:factory",
+    searchTerms: ["factory", "code factory", "tasks", "issues", "review", "autonomous"],
+    title: "Open factory",
+    icon: <FactoryIcon className={ITEM_ICON_CLASS} />,
+    run: async () => {
+      await navigate({ to: "/factory" });
+    },
+  });
 
   actionItems.push({
     kind: "action",

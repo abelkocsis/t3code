@@ -28,6 +28,8 @@ export type ThreadActionMenuId =
   | "copy-path"
   | "copy-branch"
   | "copy-thread-id"
+  | "factory:add"
+  | "factory:remove"
   | "archive"
   | "delete";
 
@@ -93,6 +95,8 @@ export interface ThreadActionMenuState {
   readonly isRegeneratingTitle: boolean;
   /** Archive rejects a thread with an attached provider, so disable it here rather than let the action fail. */
   readonly isRunning: boolean;
+  /** Whether the thread runs as a code-factory task, which picks between add and remove. */
+  readonly isFactoryTask: boolean;
   readonly supports: {
     readonly settlement: boolean;
     readonly autoSettleOptOut: boolean;
@@ -242,6 +246,9 @@ export function buildThreadActionMenuItems(
           },
         ]
       : []),
+    state.isFactoryTask
+      ? { id: "factory:remove", label: "Remove from Factory", icon: "folder-tree" }
+      : { id: "factory:add", label: "Add to Factory", icon: "folder-tree" },
     {
       id: "copy",
       label: "Copy",

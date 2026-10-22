@@ -1,4 +1,10 @@
-import type { EnvironmentId, ForkThreadState, ThreadFolderId, ThreadId } from "@t3tools/contracts";
+import type {
+  EnvironmentId,
+  ForkThreadState,
+  ThreadFactory,
+  ThreadFolderId,
+  ThreadId,
+} from "@t3tools/contracts";
 import { useAtomValue } from "@effect/atom-react";
 import { createForkEnvironmentAtoms } from "@t3tools/client-runtime/state/fork";
 import { scopedThreadKey, scopeThreadRef } from "@t3tools/client-runtime/environment";
@@ -40,4 +46,13 @@ export function useSetThreadFolder() {
   const setThreadFolder = useAtomCommand(forkEnvironment.setThreadFolder);
   return (environmentId: EnvironmentId, threadId: ThreadId, folderId: ThreadFolderId | null) =>
     setThreadFolder({ environmentId, input: { threadId, folderId } });
+}
+
+/** Flags a thread as a code-factory task, or takes it off the Factory page with null. */
+export function useSetThreadFactory() {
+  const setThreadFactory = useAtomCommand(forkEnvironment.setThreadFactory, {
+    reportFailure: false,
+  });
+  return (environmentId: EnvironmentId, threadId: ThreadId, factory: ThreadFactory | null) =>
+    setThreadFactory({ environmentId, input: { threadId, factory } });
 }

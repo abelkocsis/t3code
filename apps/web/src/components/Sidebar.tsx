@@ -11,6 +11,9 @@ import {
 } from "./chat/threadContextDrag";
 import { discardComposerDraft } from "../lib/discardComposerDraft";
 import { requestCustomSnooze } from "./CustomSnoozeDialog";
+import { factoryOf } from "./factory/factory.logic";
+import { useFactoryMembership } from "./factory/useFactoryMembership";
+import { useForkThreadStates } from "../state/fork";
 import { useSupportsMultiplePullRequests } from "~/hooks/useSupportsMultiplePullRequests";
 import { resolveThreadCurrentPullRequestLink } from "@t3tools/shared/threadPullRequests";
 import { useAtomValue } from "@effect/atom-react";
@@ -2963,6 +2966,8 @@ export default function Sidebar() {
   const confirmThreadArchive = useClientSettings((s) => s.confirmThreadArchive);
   const timestampFormat = useClientSettings((s) => s.timestampFormat);
   const projectGroupingSettings = useClientSettings(selectProjectGroupingSettings);
+  const forkThreadStates = useForkThreadStates();
+  const { addToFactory, removeFromFactory } = useFactoryMembership();
   const {
     settleThread,
     unsettleThread,
@@ -4695,6 +4700,7 @@ export default function Sidebar() {
         const supportsFolders =
           serverConfigs.get(thread.environmentId)?.environment.capabilities.threadFolders === true;
         const isRegeneratingTitle = thread.titleRegeneration != null;
+        const factory = factoryOf(thread, forkThreadStates);
         const isSettled = settledThreadKeysRef.current.has(threadKey);
         const isSnoozed = snoozedThreadKeysRef.current.has(threadKey);
         const isPinned = thread.pinnedAt != null;
@@ -4731,6 +4737,7 @@ export default function Sidebar() {
               canSnoozeNow: canSnooze(thread, { now: new Date().toISOString() }),
               isRegeneratingTitle,
               isRunning: !threadRuntimeCanArchive(thread.runtime),
+              isFactoryTask: factory !== null,
               supports: {
                 settlement: supportsSettlement,
                 autoSettleOptOut: supportsAutoSettleOptOut,
@@ -4866,6 +4873,12 @@ export default function Sidebar() {
           }
           case "mark-unread":
             markThreadUnread(threadRef);
+            return;
+          case "factory:add":
+            await addToFactory(thread);
+            return;
+          case "factory:remove":
+            if (factory !== null) await removeFromFactory(thread, factory);
             return;
           case "copy-path":
             if (!threadWorkspacePath) {

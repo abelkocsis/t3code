@@ -53,6 +53,9 @@ import { useThreadActions } from "./useThreadActions";
 import { openThreadInWindow } from "../lib/threadWindowActions";
 import { canOpenThreadWindows, isThreadWindow, popBackThreadWindow } from "../threadWindows";
 import { useThreadFolders } from "./useThreadFolders";
+import { useFactoryMembership } from "../components/factory/useFactoryMembership";
+import { factoryOf } from "../components/factory/factory.logic";
+import { useForkThreadStates } from "../state/fork";
 
 function failureToast(title: string, error: unknown) {
   toastManager.add(
@@ -98,6 +101,8 @@ export function useThreadActionMenu(input: {
   const forkThreadStates = useForkThreadStates();
   const setThreadFolder = useSetThreadFolder();
   const handleNewThread = useNewThreadHandler();
+  const forkThreadStates = useForkThreadStates();
+  const { addToFactory, removeFromFactory } = useFactoryMembership();
   const confirmThreadDelete = useClientSettings((s) => s.confirmThreadDelete);
   const confirmThreadArchive = useClientSettings((s) => s.confirmThreadArchive);
   const timestampFormat = useClientSettings((s) => s.timestampFormat);
@@ -138,6 +143,7 @@ export function useThreadActionMenu(input: {
         titleRegeneration: readEnvironmentSupportsTitleRegeneration(threadRef.environmentId),
       };
       const isRegeneratingTitle = thread.titleRegeneration != null;
+      const factory = factoryOf(thread, forkThreadStates);
       const snoozePresets = resolveSnoozePresets(now, timestampFormat);
       const items = buildThreadActionMenuItems({
         canOperate: readEnvironmentScope(threadRef.environmentId, AuthOrchestrationOperateScope),
@@ -153,6 +159,7 @@ export function useThreadActionMenu(input: {
         canSnoozeNow: canSnooze(thread, { now: now.toISOString() }),
         isRegeneratingTitle,
         isRunning: !threadRuntimeCanArchive(thread.runtime),
+        isFactoryTask: factory !== null,
         supports,
         snoozePresets,
       });
@@ -290,6 +297,12 @@ export function useThreadActionMenu(input: {
           return;
         case "mark-unread":
           markThreadUnread(threadRef);
+          return;
+        case "factory:add":
+          await addToFactory(thread);
+          return;
+        case "factory:remove":
+          if (factory !== null) await removeFromFactory(thread, factory);
           return;
         case "copy-path": {
           const workspacePath = thread.worktreePath ?? projectCwd;
