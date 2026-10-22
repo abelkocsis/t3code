@@ -25,20 +25,17 @@ export const ActorOther = Schema.Struct({
 })
 export interface ActorOther extends Schema.Struct.Type<typeof ActorOther.fields> {}
 
-/** Represents an object which can take actions on GitHub. Typically a User or Bot. */
-export const Actor = Schema.Struct({
-  __typename: GraphQL.otherTypename<Shared.Typename.Actor>()([]),
-  /** The username of the actor. */
-  login: Schema.String
-})
-export interface Actor extends Schema.Struct.Type<typeof Actor.fields> {}
-
 /** A review object for a given pull request. */
 export const LatestReviewsNodesPullRequestReview = Schema.Struct({
   /** Identifies the current state of the pull request review. */
   state: GraphQL.enumLiterals(Shared.PullRequestReviewState.literals),
+  /** Identifies when the Pull Request Review was submitted */
+  submittedAt: Schema.NullOr(Shared.DateTime),
   /** The actor who authored the comment. */
-  author: Schema.NullOr(Actor)
+  author: Schema.NullOr(Schema.Union([
+    User,
+    ActorOther
+  ]))
 })
 export interface LatestReviewsNodesPullRequestReview extends Schema.Struct.Type<typeof LatestReviewsNodesPullRequestReview.fields> {}
 
@@ -48,6 +45,20 @@ export const LatestReviewsPullRequestReviewConnection = Schema.Struct({
   nodes: Schema.NullOr(Schema.Array(Schema.NullOr(LatestReviewsNodesPullRequestReview)))
 })
 export interface LatestReviewsPullRequestReviewConnection extends Schema.Struct.Type<typeof LatestReviewsPullRequestReviewConnection.fields> {}
+
+/** A threaded list of comments for a given pull request. */
+export const PullRequestReviewThread = Schema.Struct({
+  /** Whether this thread has been resolved */
+  isResolved: Schema.Boolean
+})
+export interface PullRequestReviewThread extends Schema.Struct.Type<typeof PullRequestReviewThread.fields> {}
+
+/** Review comment threads for a pull request review. */
+export const PullRequestSummaryRepositoryPullRequestReviewThreadsPullRequestReviewThreadConnection = Schema.Struct({
+  /** A list of nodes. */
+  nodes: Schema.NullOr(Schema.Array(Schema.NullOr(PullRequestReviewThread)))
+})
+export interface PullRequestSummaryRepositoryPullRequestReviewThreadsPullRequestReviewThreadConnection extends Schema.Struct.Type<typeof PullRequestSummaryRepositoryPullRequestReviewThreadsPullRequestReviewThreadConnection.fields> {}
 
 /** Represents the rollup for both the check runs and status for a commit. */
 export const PullRequestSummaryRepositoryPullRequestCommitsNodesCommitStatusCheckRollupStatusCheckRollup = Schema.Struct({
@@ -109,6 +120,8 @@ export const PullRequestSummaryRepositoryPullRequestPullRequest = Schema.Struct(
   isDraft: Schema.Boolean,
   /** Whether or not the pull request can be merged based on the existence of merge conflicts. */
   mergeable: GraphQL.enumLiterals(Shared.MergeableState.literals),
+  /** Detailed information about the current pull request merge state status. */
+  mergeStateStatus: GraphQL.enumLiterals(Shared.MergeStateStatus.literals),
   /** The current status of this pull request with respect to code review. */
   reviewDecision: Schema.NullOr(GraphQL.enumLiterals(Shared.PullRequestReviewDecision.literals)),
   /** The number of additions in this pull request. */
@@ -134,6 +147,8 @@ export const PullRequestSummaryRepositoryPullRequestPullRequest = Schema.Struct(
   ])),
   /** A list of latest reviews per user associated with the pull request that are not also pending review. */
   latestReviews: Schema.NullOr(LatestReviewsPullRequestReviewConnection),
+  /** The list of all review threads for this pull request. */
+  reviewThreads: PullRequestSummaryRepositoryPullRequestReviewThreadsPullRequestReviewThreadConnection,
   /** A list of commits present in this pull request's head branch not present in the base branch. */
   commits: PullRequestSummaryRepositoryPullRequestCommitsPullRequestCommitConnection,
   /** The stack this Pull Request belongs to, or null if it is not part of a stack */
@@ -160,7 +175,7 @@ export const PullRequestSummary = GraphQL.query("PullRequestSummary", {
       { name: "stacks", body: "Boolean!" }
     ],
     selections: [
-      { name: "repository", body: ["(owner:$", "owner", " name:$", "name", "){pullRequest(number:$", "number", "){number title url state isDraft mergeable reviewDecision additions deletions changedFiles updatedAt mergedAt closedAt headRefName baseRefName author{__typename login avatarUrl...on User{name}}latestReviews(first:20){nodes{state author{__typename login}}}commits(last:1){nodes{commit{statusCheckRollup{state}}}}stack@include(if:$", "stacks", "){number size baseRefName}stackEntry@include(if:$", "stacks", "){position}}}"] }
+      { name: "repository", body: ["(owner:$", "owner", " name:$", "name", "){pullRequest(number:$", "number", "){number title url state isDraft mergeable mergeStateStatus reviewDecision additions deletions changedFiles updatedAt mergedAt closedAt headRefName baseRefName author{__typename login avatarUrl...on User{name}}latestReviews(first:20){nodes{state submittedAt author{__typename login avatarUrl...on User{name}}}}reviewThreads(first:100){nodes{isResolved}}commits(last:1){nodes{commit{statusCheckRollup{state}}}}stack@include(if:$", "stacks", "){number size baseRefName}stackEntry@include(if:$", "stacks", "){position}}}"] }
     ],
     fragments: []
   },
@@ -301,11 +316,11 @@ export const ReviewsPullRequestReviewConnection = Schema.Struct({
 export interface ReviewsPullRequestReviewConnection extends Schema.Struct.Type<typeof ReviewsPullRequestReviewConnection.fields> {}
 
 /** Review comment threads for a pull request review. */
-export const PullRequestReviewThreadConnection = Schema.Struct({
+export const PullRequestWatchFingerprintRepositoryPullRequestReviewThreadsPullRequestReviewThreadConnection = Schema.Struct({
   /** Identifies the total count of items in the connection. */
   totalCount: Shared.Int
 })
-export interface PullRequestReviewThreadConnection extends Schema.Struct.Type<typeof PullRequestReviewThreadConnection.fields> {}
+export interface PullRequestWatchFingerprintRepositoryPullRequestReviewThreadsPullRequestReviewThreadConnection extends Schema.Struct.Type<typeof PullRequestWatchFingerprintRepositoryPullRequestReviewThreadsPullRequestReviewThreadConnection.fields> {}
 
 /** Represents a count of the state of a check run. */
 export const CheckRunStateCount = Schema.Struct({
@@ -375,7 +390,7 @@ export const PullRequestWatchFingerprintRepositoryPullRequestPullRequest = Schem
   /** A list of reviews associated with the pull request. */
   reviews: Schema.NullOr(ReviewsPullRequestReviewConnection),
   /** The list of all review threads for this pull request. */
-  reviewThreads: PullRequestReviewThreadConnection,
+  reviewThreads: PullRequestWatchFingerprintRepositoryPullRequestReviewThreadsPullRequestReviewThreadConnection,
   /** A list of commits present in this pull request's head branch not present in the base branch. */
   commits: PullRequestWatchFingerprintRepositoryPullRequestCommitsPullRequestCommitConnection
 })

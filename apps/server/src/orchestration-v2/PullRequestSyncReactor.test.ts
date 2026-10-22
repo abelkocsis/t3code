@@ -584,6 +584,33 @@ describe("PullRequestSyncReactor", () => {
     ),
   );
 
+  it.effect("keeps the merge state, last reviewer and unresolved threads in the snapshot", () =>
+    Effect.scoped(
+      Effect.gen(function* () {
+        yield* TestClock.setTime(Date.parse(NOW));
+        const fixture = yield* makeHarness({
+          snapshot: makeSnapshot([makeThread("one", { pullRequests: [makeLink(42)] })]),
+          summary: (input) =>
+            Effect.succeed(
+              makeSummary(input, {
+                mergeState: "blocked",
+                lastReviewer: { login: "ana", name: null, avatarUrl: null },
+                unresolvedReviewThreads: 2,
+              }),
+            ),
+        });
+
+        yield* Effect.gen(function* () {
+          yield* startAndSweep(fixture);
+
+          const [command] = yield* Ref.get(fixture.syncCommands);
+          assert.include(command?.snapshot, { mergeState: "blocked", unresolvedReviewThreads: 2 });
+          assert.strictEqual(command?.snapshot.lastReviewer?.login, "ana");
+        }).pipe(Effect.provide(fixture.layer));
+      }),
+    ),
+  );
+
   it.effect("asks the host once for a pull request shared by two threads in one project", () =>
     Effect.scoped(
       Effect.gen(function* () {

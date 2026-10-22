@@ -11,6 +11,7 @@ query PullRequestSummary($owner: String!, $name: String!, $number: Int!, $stacks
       state
       isDraft
       mergeable
+      mergeStateStatus
       reviewDecision
       additions
       deletions
@@ -27,12 +28,25 @@ query PullRequestSummary($owner: String!, $name: String!, $number: Int!, $stacks
           name
         }
       }
+      # Who reviewed last decides whom a re-review goes back to, so each review carries its
+      # author in full and when it was submitted.
       latestReviews(first: 20) {
         nodes {
           state
+          submittedAt
           author {
+            __typename
             login
+            avatarUrl
+            ... on User {
+              name
+            }
           }
+        }
+      }
+      reviewThreads(first: 100) {
+        nodes {
+          isResolved
         }
       }
       commits(last: 1) {

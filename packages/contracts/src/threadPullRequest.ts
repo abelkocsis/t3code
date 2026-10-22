@@ -12,6 +12,7 @@ import {
   PullRequestActor,
   PullRequestChecksState,
   PullRequestMergeability,
+  PullRequestMergeState,
   PullRequestReviewDecision,
   PullRequestState,
 } from "./pullRequest.ts";
@@ -53,6 +54,10 @@ export const ThreadPullRequestSnapshot = Schema.Struct({
   reviewDecision: Schema.optional(Schema.NullOr(PullRequestReviewDecision)),
   checksState: Schema.optional(Schema.NullOr(PullRequestChecksState)),
   mergeability: Schema.optional(PullRequestMergeability),
+  // The Shipping page sorts linked pull requests by these without reading each one again.
+  mergeState: Schema.optional(PullRequestMergeState),
+  lastReviewer: Schema.optional(Schema.NullOr(PullRequestActor)),
+  unresolvedReviewThreads: Schema.optional(NonNegativeInt),
 });
 export type ThreadPullRequestSnapshot = typeof ThreadPullRequestSnapshot.Type;
 

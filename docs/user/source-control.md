@@ -181,6 +181,13 @@ Press **Escape** before releasing to cancel. Failed closes stay in the list so y
 GitHub, GitLab, and Azure DevOps support auto-merge while checks are outstanding. GitHub also
 supports approving waiting fork workflows and opening a revert pull request for a merged change.
 
+When GitHub blocks a merge, the review header shows the reason in place of the Merge button, such
+as **Review required** or **Checks failing**. Only checks the branch rules require can block it;
+a failing optional check still merges. A reader whose permissions bypass the rules finds **Merge
+now** in the header menu. Auto-merge is offered on a blocked pull request only when
+**Pull request auto-merge** is on in Settings → General; an auto-merge that is already armed
+always shows.
+
 GitHub sharing is off by default. In Settings → Connections → GitHub sharing (Environments on mobile), choose
 **Read PRs** or **Read and act** for each environment you trust to share GitHub access.
 Enable both the original environment and the environment answering its requests on this client.
@@ -300,6 +307,27 @@ returns to your inbox.
 
 Cross-repository links use a project on the same host. Azure DevOps reviews require a project checked
 out from the matching organization and repository.
+
+## Shipping
+
+**Shipping** lists every open pull request linked to a thread that is not archived, sorted by what
+each one waits on. Open it from the rocket in the sidebar's utility row, or with **Open shipping**
+in the command palette. Drafts, merged, and closed pull requests stay out. A row opens its thread.
+
+- **Ready to merge** holds approved pull requests the host would take now. **Merge** merges with
+  the project's merge method; **Merge & settle thread** also settles the thread afterwards.
+- **Ready for review** holds green pull requests that still need a person. Pull requests someone
+  has already reviewed are grouped by that reviewer and marked **Re-review**; pull requests nobody
+  has reviewed share one group. **Copy request** copies a review request listing the group's
+  pull request URLs.
+- **Waiting on checks** holds pull requests whose checks are still running.
+- **Action needed** holds pull requests with conflicts, failing checks, requested changes,
+  unresolved review comments, or a branch behind its base, and names each reason.
+
+The page reads from the server's linked pull request snapshots. Opening it re-reads each pull
+request from the host, at most once every ten seconds; **Refresh** reads them all again. The
+merge state, last reviewer, and unresolved comment count come from GitHub; on other hosts a
+pull request sorts by its review decision, checks, and conflicts alone.
 
 ## GitHub stacks
 

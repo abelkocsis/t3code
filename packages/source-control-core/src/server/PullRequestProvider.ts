@@ -114,6 +114,10 @@ export interface ProviderChangeRequestSummary {
   readonly reviewDecision?: PullRequestReviewDecision | null | undefined;
   readonly checksState?: PullRequestChecksState | null | undefined;
   readonly mergeability?: PullRequestMergeability | undefined;
+  readonly mergeState?: PullRequestMergeState | undefined;
+  /** The most recent reviewer other than the author or a bot; null where nobody reviewed. */
+  readonly lastReviewer?: PullRequestActor | null | undefined;
+  readonly unresolvedReviewThreads?: number | undefined;
   /**
    * Null when the host says it is in none; absent when the read did not ask.
    */
@@ -191,6 +195,8 @@ export interface ProviderChangeRequestDetail extends ProviderChangeRequest {
   readonly viewerPermissions: PullRequestViewerPermissions;
   /** Whether the host's rules let this merge now; absent from a host that does not say. */
   readonly mergeState?: PullRequestMergeState;
+  readonly lastReviewer?: PullRequestActor | null;
+  readonly unresolvedReviewThreads?: number;
   readonly baseComparison?: PullRequestBaseComparison;
   readonly behindBy?: number;
   readonly autoMergeEnabled?: boolean;

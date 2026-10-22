@@ -2345,7 +2345,9 @@ describe("batched pull request summaries", () => {
     headRefName: "feat/seven",
     baseRefName: "main",
     author: { __typename: "Bot", login: "renovate", avatarUrl: "https://a/r.png" },
+    mergeStateStatus: "UNKNOWN",
     latestReviews: { nodes: [] },
+    reviewThreads: { nodes: [] },
     commits: { nodes: [{ commit: { statusCheckRollup: { state: "FAILURE" } } }] },
     ...fields,
   });
@@ -2363,6 +2365,43 @@ describe("batched pull request summaries", () => {
     });
     // The read did not ask about stacks, so the summary does not claim an answer.
     expect(mapped).not.toHaveProperty("stack");
+  });
+
+  it("names the last human reviewer and counts unresolved review threads", () => {
+    const review = (login: string, submittedAt: string, typename = "User") => ({
+      state: "COMMENTED",
+      submittedAt,
+      author: { __typename: typename, login, avatarUrl: "https://a/u.png", name: null },
+    });
+    const mapped = toPullRequestSummary(
+      decodeSummary(
+        summary({
+          author: {
+            __typename: "User",
+            login: "abel",
+            avatarUrl: "https://a/abel.png",
+            name: null,
+          },
+          mergeStateStatus: "BLOCKED",
+          latestReviews: {
+            nodes: [
+              review("ana", "2026-08-20T00:00:00Z"),
+              review("bo", "2026-08-21T00:00:00Z"),
+              // The author's own replies and a bot's review are newer, and still not asked.
+              review("abel", "2026-08-22T00:00:00Z"),
+              review("copilot-pull-request-reviewer", "2026-08-23T00:00:00Z", "Bot"),
+            ],
+          },
+          reviewThreads: { nodes: [{ isResolved: true }, { isResolved: false }, null] },
+        }),
+      ),
+    );
+    expect(mapped).toMatchObject({
+      mergeState: "blocked",
+      lastReviewer: { login: "bo" },
+      unresolvedReviewThreads: 1,
+    });
+    expect(toPullRequestSummary(decodeSummary(summary({}))).lastReviewer).toBeNull();
   });
 
   it("reads stack membership only where the read asked for it", () => {

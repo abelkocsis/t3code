@@ -1041,12 +1041,41 @@ export interface GitHubPullRequestSummary {
   readonly reviewDecision: PullRequestReviewDecision | null;
   readonly checksState: PullRequestChecksState | null;
   readonly mergeability: PullRequestMergeability;
+  readonly mergeState?: PullRequestMergeState;
+  readonly lastReviewer: PullRequestActor | null;
+  readonly unresolvedReviewThreads: number;
   /** Null when GitHub says the pull request is in no stack; absent when the read did not ask. */
   readonly stack?: PullRequestStackMembership | null;
 }
 
+/**
+ * Whom to ask for the next review: the person behind the newest review, whatever its verdict.
+ * The author's own replies in a review thread arrive as reviews too, and a bot cannot be asked
+ * for anything, so neither counts.
+ */
+function toLastReviewer(
+  reviews: ReadonlyArray<{
+    readonly submittedAt: string | null;
+    readonly author: ActorFields | null;
+  }>,
+  authorLogin: string | null | undefined,
+): PullRequestActor | null {
+  const author = trimmed(authorLogin)?.toLowerCase() ?? null;
+  let latest: { readonly actor: PullRequestActor; readonly at: string } | null = null;
+  for (const review of reviews) {
+    const actor = toActor(review.author);
+    const at = trimmed(review.submittedAt);
+    if (actor === null || at === null || actor.isBot === true) continue;
+    const login = actor.login.toLowerCase();
+    if (login === author || login.endsWith("[bot]") || login.startsWith("copilot")) continue;
+    if (latest === null || at > latest.at) latest = { actor, at };
+  }
+  return latest?.actor ?? null;
+}
+
 /** The summary a linked thread keeps current, from one slice of the batched read. */
 export function toPullRequestSummary(pr: SummarizedPullRequest): GitHubPullRequestSummary {
+  const mergeState = toMergeState(pr.mergeStateStatus);
   return {
     number: pr.number,
     title: pr.title,
@@ -1066,6 +1095,11 @@ export function toPullRequestSummary(pr: SummarizedPullRequest): GitHubPullReque
     // One enum for the head commit, dressed as a single check like the search row's.
     checksState: rollupChecksState(rollupStates(pr.commits)),
     mergeability: toMergeability(pr.mergeable),
+    ...(mergeState === undefined ? {} : { mergeState }),
+    lastReviewer: toLastReviewer(nodesOf(pr.latestReviews), pr.author?.login),
+    unresolvedReviewThreads: nodesOf(pr.reviewThreads).filter(
+      (thread) => thread.isResolved === false,
+    ).length,
     ...(pr.stack === undefined ? {} : { stack: toStackMembership(pr) ?? null }),
   };
 }
