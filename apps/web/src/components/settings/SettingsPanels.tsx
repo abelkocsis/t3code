@@ -123,6 +123,7 @@ import {
 } from "../ui/dialog";
 import { DraftInput } from "../ui/draft-input";
 import { Input } from "../ui/input";
+import { Textarea } from "../ui/textarea";
 import {
   DEFAULT_CODE_FONT_STACK,
   DEFAULT_SANS_FONT_STACK,
@@ -2081,6 +2082,34 @@ function LegacyFeaturesSection() {
   );
 }
 
+/**
+ * The prompt template is long, so it edits in a draft and commits on blur: a server round
+ * trip per keystroke would make the field lag.
+ */
+function FactoryPromptTemplateField({
+  value,
+  onCommit,
+}: {
+  value: string;
+  onCommit: (next: string) => void;
+}) {
+  const [draft, setDraft] = useState<string | null>(null);
+  return (
+    <Textarea
+      className="w-full sm:w-96"
+      rows={8}
+      value={draft ?? value}
+      spellCheck={false}
+      aria-label="Factory prompt template"
+      onChange={(event) => setDraft(event.target.value)}
+      onBlur={() => {
+        if (draft !== null && draft !== value) onCommit(draft);
+        setDraft(null);
+      }}
+    />
+  );
+}
+
 export function GeneralSettingsPanel() {
   const modifierLabel = isMacPlatform(navigator.platform) ? "⌘" : "Ctrl";
   const sendShortcutOptions = [
@@ -3399,6 +3428,90 @@ export function GeneralSettingsPanel() {
             >
               View licenses
             </Button>
+          }
+        />
+      </SettingsSection>
+
+      <SettingsSection id="factory" title="Code factory">
+        <SettingsRow
+          serverScoped
+          settingKeys={["factoryPromptTemplate"]}
+          {...searchableSetting("factory-prompt-template")}
+          description="The first message of a factory task. {{input}} stands for the task input."
+          resetAction={
+            settings.factoryPromptTemplate !== DEFAULT_UNIFIED_SETTINGS.factoryPromptTemplate ? (
+              <SettingResetButton
+                label="factory prompt template"
+                onClick={() =>
+                  updateSettings({
+                    factoryPromptTemplate: DEFAULT_UNIFIED_SETTINGS.factoryPromptTemplate,
+                  })
+                }
+              />
+            ) : null
+          }
+          control={
+            <FactoryPromptTemplateField
+              value={settings.factoryPromptTemplate}
+              onCommit={(next) => updateSettings({ factoryPromptTemplate: next })}
+            />
+          }
+        />
+
+        <SettingsRow
+          serverScoped
+          settingKeys={["factoryTokenSaving"]}
+          {...searchableSetting("factory-token-saving")}
+          description="Keep watching pull requests and CI, but hold CI fixes, review replies, and rebases until you start them from the Factory page."
+          resetAction={
+            settings.factoryTokenSaving !== DEFAULT_UNIFIED_SETTINGS.factoryTokenSaving ? (
+              <SettingResetButton
+                label="factory token saving"
+                onClick={() =>
+                  updateSettings({
+                    factoryTokenSaving: DEFAULT_UNIFIED_SETTINGS.factoryTokenSaving,
+                  })
+                }
+              />
+            ) : null
+          }
+          control={
+            <ScopedSwitch
+              settingKeys={["factoryTokenSaving"]}
+              checked={settings.factoryTokenSaving}
+              onCheckedChange={(checked) =>
+                updateSettings({ factoryTokenSaving: Boolean(checked) })
+              }
+              aria-label="Factory token saving"
+            />
+          }
+        />
+
+        <SettingsRow
+          {...searchableSetting("factory-pull-request-opens-in-browser")}
+          description="Open a factory task's pull request in the browser instead of the thread's panel."
+          resetAction={
+            settings.factoryPullRequestOpensInBrowser !==
+            DEFAULT_UNIFIED_SETTINGS.factoryPullRequestOpensInBrowser ? (
+              <SettingResetButton
+                label="factory pull request target"
+                onClick={() =>
+                  updateSettings({
+                    factoryPullRequestOpensInBrowser:
+                      DEFAULT_UNIFIED_SETTINGS.factoryPullRequestOpensInBrowser,
+                  })
+                }
+              />
+            ) : null
+          }
+          control={
+            <Switch
+              checked={settings.factoryPullRequestOpensInBrowser}
+              onCheckedChange={(checked) =>
+                updateSettings({ factoryPullRequestOpensInBrowser: Boolean(checked) })
+              }
+              aria-label="Open factory pull requests in the browser"
+            />
           }
         />
       </SettingsSection>

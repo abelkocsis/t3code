@@ -442,6 +442,26 @@ export const SETTINGS_SEARCH_ITEMS = [
     searchTerms: ["stacked split side by side unified inline view"],
   },
   {
+    id: "factory-prompt-template",
+    title: "Factory prompt template",
+    to: "/settings/general",
+    scope: "environment-defaults",
+    searchTerms: ["code factory task first message prompt template input"],
+  },
+  {
+    id: "factory-token-saving",
+    title: "Factory token saving",
+    to: "/settings/general",
+    scope: "environment-defaults",
+    searchTerms: ["code factory token saving hold review work start ci rebase"],
+  },
+  {
+    id: "factory-pull-request-opens-in-browser",
+    title: "Factory pull requests open in the browser",
+    to: "/settings/general",
+    searchTerms: ["code factory pull request browser panel open"],
+  },
+  {
     id: "proactive-panels",
     title: "Proactive panels",
     to: "/settings/general",
