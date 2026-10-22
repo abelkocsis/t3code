@@ -3,6 +3,7 @@ import type { RelayManagedEndpointRuntimeConfig } from "@t3tools/contracts/relay
 import * as Random from "effect/Random";
 import * as DatabaseStorage from "./persistence/DatabaseStorage.ts";
 import * as StorageCleanup from "./storageCleanup.ts";
+import * as FactoryReviewReactor from "./fork/FactoryReviewReactor.ts";
 import * as ForkThreadStateStore from "./fork/ForkThreadStateStore.ts";
 import * as StandupService from "./standup/StandupService.ts";
 import * as StandupStore from "./standup/StandupStore.ts";
@@ -534,6 +535,18 @@ const layerIdleCompactionWorker = Layer.effectDiscard(
   IdleCompactionService.make.pipe(Effect.flatMap((service) => service.start())),
 ).pipe(Layer.provide(ProjectionStoreV2.layer));
 
+const layerFactoryReviewWorker = Layer.effectDiscard(
+  Effect.gen(function* () {
+    const service = yield* FactoryReviewReactor.FactoryReviewReactor;
+    yield* service.start();
+  }),
+).pipe(
+  Layer.provide(FactoryReviewReactor.layer),
+  Layer.provide(ForkThreadStateStore.layer),
+  Layer.provide(layerPullRequestService),
+  Layer.provide(ProjectionStoreV2.layer),
+);
+
 const layerThreadPullRequestWorker = Layer.effectDiscard(
   ThreadPullRequestService.make.pipe(Effect.flatMap((service) => service.start())),
 ).pipe(Layer.provide(layerPullRequestService));
@@ -582,6 +595,7 @@ const layerRuntimeCoreDependenciesBase = Layer.mergeAll(
     Layer.provide(layerPullRequestService),
     Layer.provideMerge(TodoStore.layer),
   ),
+  layerFactoryReviewWorker,
   DatabaseStorage.layer.pipe(
     Layer.provide(ProjectionMaintenance.layer),
     Layer.provide(
