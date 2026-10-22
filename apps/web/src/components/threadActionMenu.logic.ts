@@ -9,6 +9,10 @@ export type ThreadActionMenuId =
   | "project-settings"
   | "pin"
   | "unpin"
+  | "folder"
+  | "folder:new"
+  | "folder:clear"
+  | `folder:set:${string}`
   | "settle"
   | "unsettle"
   | "auto-settle"
@@ -78,6 +82,10 @@ export interface ThreadActionMenuState {
    */
   readonly threadWindowAction: "open" | "pop-back" | null;
   readonly isPinned: boolean;
+  /** The folder this thread sits in, or null when it is ungrouped. */
+  readonly folderId: string | null;
+  /** Every folder in the sidebar, so the submenu can offer them. */
+  readonly folders: ReadonlyArray<{ readonly id: string; readonly name: string }>;
   readonly isSettled: boolean;
   readonly autoSettleEnabled: boolean;
   readonly isSnoozed: boolean;
@@ -90,6 +98,8 @@ export interface ThreadActionMenuState {
     readonly autoSettleOptOut: boolean;
     readonly snooze: boolean;
     readonly pinning: boolean;
+    /** The server stores folders and a folder per thread. */
+    readonly folders: boolean;
     readonly titleRegeneration: boolean;
   };
   readonly snoozePresets: ReadonlyArray<SnoozePreset>;
@@ -134,6 +144,32 @@ export function buildThreadActionMenuItems(
           state.isPinned
             ? { id: "unpin" as const, label: "Unpin thread", icon: "pin-off" }
             : { id: "pin" as const, label: "Pin thread", icon: "pin" },
+        ]
+      : []),
+    // The submenu lists the folders that exist, so the common move is one
+    // click and a name is only needed for a new group.
+    ...(state.supports.folders
+      ? [
+          {
+            id: "folder" as const,
+            label: "Folder",
+            icon: "folder",
+            children: [
+              ...state.folders.map((folder) => ({
+                id: `folder:set:${folder.id}` as const,
+                label: folder.name,
+                checked: folder.id === state.folderId,
+              })),
+              {
+                id: "folder:new" as const,
+                label: "New folder…",
+                separatorBefore: state.folders.length > 0,
+              },
+              ...(state.folderId === null
+                ? []
+                : [{ id: "folder:clear" as const, label: "Remove from folder" }]),
+            ],
+          },
         ]
       : []),
     ...(state.supports.settlement

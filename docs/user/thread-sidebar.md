@@ -155,6 +155,34 @@ device keeps its own choice.
 While this is on, the active list is ordered by when each thread last came back to you, so you
 cannot drag or move threads within it. Your saved order returns when you turn it off.
 
+## Group threads in folders
+
+Press the folder button beside the search field, or run **New folder** from the command
+palette, to make a folder. It starts empty and stays until you delete it. Drag threads
+into it, or open a thread's menu, choose **Folder**, and pick one. The same menu holds
+**New folder…** and **Remove from folder**, and the chat header menu offers the same
+actions.
+
+A folder is a section of the sidebar, between the pinned threads and the rest of your
+active work, and it holds threads from every project. Click its header to open or close
+it. A closed folder shows how many threads it holds. Which folders are closed is a
+per-device choice.
+
+Drag a thread onto a folder's header or among its rows, or onto the **Drop in …** line an
+empty folder shows, to move it in. Drag it below the folders, into the active list, to take
+it out. A thread dragged into a folder is unpinned, un-settled, or woken first, exactly as a
+drop in the active list does. Drag a thread up or down inside its folder to arrange the
+folder's rows, and drag a folder's header up or down to arrange the folders.
+
+Right-click a folder header for **Rename folder** and **Delete folder**. A rename changes
+only the name. Deleting asks first, then returns its threads to the list. Neither action
+deletes a thread.
+
+A pinned thread shows in the pinned block and a snoozed thread waits in the Snoozed
+section; each keeps its folder and returns to it. A settled thread stays in its folder as
+a compact row. Folders live on your servers, so every client that connects sees them, and
+they need a server that supports them. Mobile shows the threads, but not the folders.
+
 ## Settle finished work
 
 Choose **Settle thread** from its menu to move finished work out of the active list

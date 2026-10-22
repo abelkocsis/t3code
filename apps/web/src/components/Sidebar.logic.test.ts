@@ -59,6 +59,13 @@ import {
   type SidebarListMarker,
   type SidebarSection,
   resolveSidebarDropVerb,
+  folderHeaderMarker,
+  folderIdOfDragId,
+  folderIdOfListId,
+  folderPlaceholderMarker,
+  planSidebarFolderDrop,
+  sidebarFolderSection,
+  sidebarMarkerId,
 } from "./Sidebar.logic";
 import { threadSearchMatchKey } from "@t3tools/client-runtime/state/thread-search";
 import { EnvironmentId, ProjectId, ProviderInstanceId, RunId, ThreadId } from "@t3tools/contracts";
@@ -2460,6 +2467,223 @@ describe("Working shelf (beta)", () => {
         unpin: true,
         unsettle: false,
         unsnooze: false,
+        clearFolder: false,
+      });
+    });
+
+    describe("folders", () => {
+      // Pinned p1 | Folder f1: g1 | empty folder f2 | Active a1
+      const withFolders: readonly SidebarListItem[] = [
+        marker("pinned-header"),
+        row("p1", "pinned"),
+        marker("pinned-divider"),
+        marker(folderHeaderMarker("f1")),
+        row("g1", sidebarFolderSection("f1")),
+        marker(folderHeaderMarker("f2")),
+        marker(folderPlaceholderMarker("f2")),
+        marker("active-placeholder"),
+        row("a1", "active"),
+      ];
+      const activeKeysById = new Map([
+        ["a1", "f"],
+        ["a2", "m"],
+        ["a3", "t"],
+      ]);
+      const plan = (
+        input: Partial<Parameters<typeof planSidebarThreadDrop>[0]> &
+          Pick<
+            Parameters<typeof planSidebarThreadDrop>[0],
+            "activeKey" | "activeSection" | "target"
+          >,
+      ) =>
+        planSidebarThreadDrop({
+          pinnedOrder: [],
+          pinnedKeysById: new Map(),
+          activeOrder: ["a1", "a2", "a3"],
+          activeKeysById,
+          ...input,
+        });
+
+      it("reads a folder section off its header, like the shelves", () => {
+        // Onto a folder's row: into that folder, and its rows stay out of the
+        // inbox's arranged order. The folder's own order carries the arrival.
+        expect(resolveSidebarDropTarget(withFolders, "a1", "g1")).toEqual({
+          section: sidebarFolderSection("f1"),
+          pinnedOrder: ["p1"],
+          activeOrder: [],
+          folderOrder: ["a1", "g1"],
+        });
+        // Onto an empty folder's stand-in row: into that folder.
+        expect(
+          resolveSidebarDropTarget(
+            withFolders,
+            "a1",
+            sidebarMarkerId(folderPlaceholderMarker("f2")),
+          )?.section,
+        ).toBe(sidebarFolderSection("f2"));
+        // The inbox's own stand-in row stays the inbox, either way the row came.
+        expect(
+          resolveSidebarDropTarget(withFolders, "g1", sidebarMarkerId("active-placeholder"))
+            ?.section,
+        ).toBe("active");
+        expect(
+          resolveSidebarDropTarget(withFolders, "a1", sidebarMarkerId("active-placeholder"))
+            ?.section,
+        ).toBe("active");
+        // Below the folders: back to the inbox.
+        expect(resolveSidebarDropTarget(withFolders, "g1", "a1")).toEqual({
+          section: "active",
+          pinnedOrder: ["p1"],
+          activeOrder: ["a1", "g1"],
+        });
+      });
+
+      it("names the folder of a heading, a stand-in row, or a row", () => {
+        expect(folderIdOfListId(withFolders, sidebarMarkerId(folderHeaderMarker("f1")))).toBe("f1");
+        expect(folderIdOfListId(withFolders, sidebarMarkerId(folderPlaceholderMarker("f2")))).toBe(
+          "f2",
+        );
+        expect(folderIdOfListId(withFolders, "g1")).toBe("f1");
+        expect(folderIdOfListId(withFolders, "a1")).toBeNull();
+        expect(folderIdOfDragId(sidebarMarkerId(folderHeaderMarker("f1")))).toBe("f1");
+        expect(folderIdOfDragId(sidebarMarkerId(folderPlaceholderMarker("f1")))).toBeNull();
+        expect(folderIdOfDragId("env:thread")).toBeNull();
+      });
+
+      it("plans a heading drop as the index of the folder it landed on", () => {
+        const folderIds = ["f1", "f2", "f3"];
+        expect(planSidebarFolderDrop({ folderIds, activeFolderId: "f3", overFolderId: "f1" })).toBe(
+          0,
+        );
+        expect(planSidebarFolderDrop({ folderIds, activeFolderId: "f1", overFolderId: "f3" })).toBe(
+          2,
+        );
+        expect(
+          planSidebarFolderDrop({ folderIds, activeFolderId: "f2", overFolderId: "f2" }),
+        ).toBeNull();
+        expect(
+          planSidebarFolderDrop({ folderIds, activeFolderId: "f2", overFolderId: null }),
+        ).toBeNull();
+        expect(
+          planSidebarFolderDrop({ folderIds, activeFolderId: "gone", overFolderId: "f1" }),
+        ).toBeNull();
+      });
+
+      it("files a row at the dropped spot, without touching inbox keys", () => {
+        const moved = plan({
+          activeKey: "a1",
+          activeSection: "active",
+          target: {
+            section: sidebarFolderSection("f1"),
+            pinnedOrder: [],
+            activeOrder: ["a2", "a3"],
+            folderOrder: ["a2", "a1", "a3"],
+          },
+        });
+        expect(moved).toMatchObject({
+          kind: "move-to-folder",
+          folderId: "f1",
+          order: ["a2", "a1", "a3"],
+          unpin: false,
+          unsettle: false,
+          unsnooze: false,
+        });
+        if (moved.kind !== "move-to-folder") return;
+        expect(moved.assignments.map(({ id }) => id)).toEqual(["a1"]);
+        expect(resolveSidebarDropVerb("active", sidebarFolderSection("f1"))).toBe("file");
+      });
+
+      it("joins a folder by membership alone when the server cannot store the key", () => {
+        expect(
+          plan({
+            activeKey: "a1",
+            activeSection: "active",
+            activeReorderableKeys: new Set(),
+            target: {
+              section: sidebarFolderSection("f1"),
+              pinnedOrder: [],
+              activeOrder: [],
+              folderOrder: ["a2", "a1"],
+            },
+          }),
+        ).toMatchObject({ kind: "move-to-folder", assignments: [] });
+      });
+
+      it("unpins and wakes a row dragged into a folder", () => {
+        expect(
+          plan({
+            activeKey: "p1",
+            activeSection: "snoozed",
+            activePinned: true,
+            target: { section: sidebarFolderSection("f1"), pinnedOrder: [], activeOrder: [] },
+          }),
+        ).toMatchObject({ kind: "move-to-folder", unpin: true, unsnooze: true });
+      });
+
+      it("does nothing when a row lands back in its own folder", () => {
+        expect(
+          plan({
+            activeKey: "a1",
+            activeSection: sidebarFolderSection("f1"),
+            folderOrder: ["a1", "a2"],
+            target: {
+              section: sidebarFolderSection("f1"),
+              pinnedOrder: [],
+              activeOrder: [],
+              folderOrder: ["a1", "a2"],
+            },
+          }),
+        ).toEqual({ kind: "none" });
+      });
+
+      it("arranges rows inside a folder with the active key", () => {
+        const result = plan({
+          activeKey: "a1",
+          activeSection: sidebarFolderSection("f1"),
+          folderOrder: ["a1", "a2", "a3"],
+          target: {
+            section: sidebarFolderSection("f1"),
+            pinnedOrder: [],
+            activeOrder: [],
+            folderOrder: ["a2", "a3", "a1"],
+          },
+        });
+        expect(result).toMatchObject({
+          kind: "reorder-folder",
+          folderId: "f1",
+          order: ["a2", "a3", "a1"],
+        });
+        if (result.kind !== "reorder-folder") return;
+        expect(result.assignments.map(({ id }) => id)).toEqual(["a1"]);
+        expect(result.assignments[0]!.orderKey > activeKeysById.get("a3")!).toBe(true);
+      });
+
+      it("refuses a folder arrangement when the server cannot store the key", () => {
+        expect(
+          plan({
+            activeKey: "a1",
+            activeSection: sidebarFolderSection("f1"),
+            activeReorderableKeys: new Set(["a2"]),
+            folderOrder: ["a1", "a2"],
+            target: {
+              section: sidebarFolderSection("f1"),
+              pinnedOrder: [],
+              activeOrder: [],
+              folderOrder: ["a2", "a1"],
+            },
+          }),
+        ).toEqual({ kind: "none" });
+      });
+
+      it("clears the folder when a folder row lands in the inbox", () => {
+        expect(
+          plan({
+            activeKey: "a1",
+            activeSection: sidebarFolderSection("f1"),
+            target: { section: "active", pinnedOrder: [], activeOrder: ["a1", "a2", "a3"] },
+          }),
+        ).toMatchObject({ kind: "move-active", clearFolder: true });
+        expect(resolveSidebarDropVerb(sidebarFolderSection("f1"), "active")).toBe("wake");
       });
     });
   });

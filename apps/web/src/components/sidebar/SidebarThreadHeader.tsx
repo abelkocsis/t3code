@@ -1,7 +1,7 @@
 // New thread is deliberately not in this header: it is the sidebar's most-used
 // action and earns its own full-width labelled row below, which Sidebar.tsx
 // renders.
-import { FolderPlusIcon, SearchIcon, XIcon } from "lucide-react";
+import { FolderIcon, FolderPlusIcon, SearchIcon, XIcon } from "lucide-react";
 import {
   type ComponentProps,
   type KeyboardEvent as ReactKeyboardEvent,
@@ -19,6 +19,8 @@ export interface SidebarThreadHeaderProps {
   hasProjects: boolean;
   projectScope: ReactNode;
   onNewProject: () => void;
+  /** Null when no connected server stores folders. */
+  onNewFolder: (() => void) | null;
   searchInputRef: RefObject<HTMLInputElement | null>;
   searchQuery: string;
   onSearchQueryChange: (value: string) => void;
@@ -34,6 +36,7 @@ export function SidebarThreadHeader({
   hasProjects,
   projectScope,
   onNewProject,
+  onNewFolder,
   searchInputRef,
   searchQuery,
   onSearchQueryChange,
@@ -96,6 +99,11 @@ export function SidebarThreadHeader({
         {hasProjects ? (
           <>
             {projectScope}
+            {onNewFolder ? (
+              <SidebarHeaderIconButton label="New folder" onClick={onNewFolder}>
+                <FolderIcon />
+              </SidebarHeaderIconButton>
+            ) : null}
             <SidebarHeaderIconButton label="Add project" onClick={onNewProject}>
               <FolderPlusIcon />
             </SidebarHeaderIconButton>

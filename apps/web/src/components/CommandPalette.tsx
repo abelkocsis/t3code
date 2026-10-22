@@ -101,6 +101,8 @@ import { useAtomValue } from "@effect/atom-react";
 import { isDesktopLocalConnectionTarget } from "../connection/desktopLocal";
 import { useDesktopLocalBootstraps } from "../connection/useDesktopLocalBootstraps";
 import { useHandleNewThread } from "../hooks/useHandleNewThread";
+import { useThreadFolders } from "../hooks/useThreadFolders";
+import { requestFolderName } from "./FolderNameDialog";
 import { useOpenPanelPullRequestUrl } from "../hooks/useOpenPanelPullRequestUrl";
 import { writeTextToClipboard } from "../hooks/useCopyToClipboard";
 import {
@@ -777,6 +779,7 @@ function OpenCommandPaletteDialog(props: {
   const availableSettingsSearchItems = useAvailableSettingsSearchItems();
   const { activeDraftThread, activeThread, defaultProjectRef, handleNewThread } =
     useHandleNewThread();
+  const threadFolders = useThreadFolders();
   const paletteRouteTarget = useThreadRouteTarget();
   const projects = useProjects();
   const referenceThreadRef =
@@ -1654,6 +1657,25 @@ function OpenCommandPaletteDialog(props: {
       icon: <MessageSquareDashedIcon className={ITEM_ICON_CLASS} />,
       shortcutCommand: "chat.newWithoutProject",
       run: () => startScratchThread(scratchTargetEnvironmentId),
+    });
+  }
+
+  if (threadFolders.supported) {
+    actionItems.push({
+      kind: "action",
+      value: "action:new-folder",
+      searchTerms: ["new folder", "folder", "group", "sidebar"],
+      title: "New folder",
+      icon: <FolderIcon className={ITEM_ICON_CLASS} />,
+      run: async () => {
+        const name = await requestFolderName({
+          title: "New folder",
+          description: "Group threads in the sidebar under one heading.",
+          confirmLabel: "Create",
+          takenNames: threadFolders.folders.map((folder) => folder.name),
+        });
+        if (name !== null) await threadFolders.createFolder(name);
+      },
     });
   }
 

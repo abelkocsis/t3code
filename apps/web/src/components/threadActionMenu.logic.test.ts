@@ -12,6 +12,8 @@ const baseState: ThreadActionMenuState = {
   projectFilter: null,
   threadWindowAction: null,
   isPinned: false,
+  folderId: null,
+  folders: [],
   isSettled: false,
   autoSettleEnabled: true,
   isSnoozed: false,
@@ -23,6 +25,7 @@ const baseState: ThreadActionMenuState = {
     autoSettleOptOut: true,
     snooze: true,
     pinning: true,
+    folders: true,
     titleRegeneration: true,
   },
   snoozePresets: [
@@ -66,6 +69,7 @@ describe("buildThreadActionMenuItems", () => {
       const expected = reversed
         ? [
             "unpin",
+            "folder",
             "unsettle",
             "unsnooze",
             "rename",
@@ -76,6 +80,7 @@ describe("buildThreadActionMenuItems", () => {
           ]
         : [
             "pin",
+            "folder",
             "settle",
             "snooze",
             "rename",
@@ -113,10 +118,42 @@ describe("buildThreadActionMenuItems", () => {
           autoSettleOptOut: false,
           snooze: false,
           pinning: false,
+          folders: false,
           titleRegeneration: false,
         },
       }),
     ).toEqual(["rename", "mark-unread", "copy", "project-settings", "archive", "delete"]);
+  });
+
+  it("offers every folder, checks the current one, and hides removal when ungrouped", () => {
+    const grouped = buildThreadActionMenuItems({
+      ...baseState,
+      folderId: "f2",
+      folders: [
+        { id: "f1", name: "Inbox" },
+        { id: "f2", name: "Release" },
+      ],
+    }).find((item) => item.id === "folder");
+    expect(grouped?.children?.map((child) => child.id)).toEqual([
+      "folder:set:f1",
+      "folder:set:f2",
+      "folder:new",
+      "folder:clear",
+    ]);
+    expect(grouped?.children?.find((child) => child.id === "folder:set:f2")).toMatchObject({
+      checked: true,
+    });
+    const ungrouped = buildThreadActionMenuItems({
+      ...baseState,
+      folders: [{ id: "f1", name: "Inbox" }],
+    }).find((item) => item.id === "folder");
+    expect(ungrouped?.children?.map((child) => child.id)).toEqual(["folder:set:f1", "folder:new"]);
+  });
+
+  it("hides the folder submenu on servers without folders", () => {
+    expect(
+      allIds({ ...baseState, supports: { ...baseState.supports, folders: false } }),
+    ).not.toContain("folder");
   });
 
   it("groups project settings with utility actions before archive", () => {
@@ -222,6 +259,7 @@ describe("buildThreadActionMenuItems", () => {
           autoSettleOptOut: false,
           snooze: false,
           pinning: false,
+          folders: false,
           titleRegeneration: false,
         },
       }),

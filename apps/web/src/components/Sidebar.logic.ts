@@ -118,7 +118,27 @@ export const animateSidebarLayoutChanges: AnimateLayoutChanges = (args) =>
 // status, so its rows only drag out as chat context, never between sidebar
 // sections.
 
-export type SidebarSection = "pinned" | "active" | "working" | "snoozed" | "settled";
+/**
+ * A folder is a section, like the shelves: it has a header, it holds rows,
+ * and a drop between its boundaries moves a thread into it. Modelling it
+ * this way keeps one set of drag rules for the whole list.
+ */
+export type SidebarFolderSection = `folder:${string}`;
+export type SidebarSection =
+  | "pinned"
+  | "active"
+  | "working"
+  | "snoozed"
+  | "settled"
+  | SidebarFolderSection;
+
+export function sidebarFolderSection(folderId: string): SidebarFolderSection {
+  return `folder:${folderId}`;
+}
+
+export function folderIdOfSection(section: SidebarSection): string | null {
+  return section.startsWith("folder:") ? section.slice("folder:".length) : null;
+}
 
 export function resolveSidebarThreadSection(input: {
   readonly snoozed: boolean;
@@ -140,7 +160,25 @@ export type SidebarListMarker =
   | "pinned-divider"
   | "working-header"
   | "snoozed-header"
-  | "settled-header";
+  | "settled-header"
+  /** A folder's own header and its stand-in row, one pair per folder. */
+  | `folder-header:${string}`
+  | `folder-placeholder:${string}`;
+
+export function folderHeaderMarker(folderId: string): SidebarListMarker {
+  return `folder-header:${folderId}`;
+}
+
+export function folderPlaceholderMarker(folderId: string): SidebarListMarker {
+  return `folder-placeholder:${folderId}`;
+}
+
+/** The folder a marker belongs to, or null for the fixed boundaries. */
+export function folderIdOfMarker(marker: SidebarListMarker): string | null {
+  if (marker.startsWith("folder-header:")) return marker.slice("folder-header:".length);
+  if (marker.startsWith("folder-placeholder:")) return marker.slice("folder-placeholder:".length);
+  return null;
+}
 
 export function sidebarMarkerId(marker: SidebarListMarker): string {
   return `${SIDEBAR_MARKER_PREFIX}${marker}`;
@@ -159,7 +197,10 @@ function sectionAtSidebarSlot(items: readonly SidebarListItem[], index: number):
   for (let i = 0; i < index && i < items.length; i += 1) {
     const item = items[i]!;
     if (item.kind !== "marker") continue;
-    if (item.marker === "pinned-divider") section = "active";
+    const folderId = folderIdOfMarker(item.marker);
+    if (folderId !== null) section = sidebarFolderSection(folderId);
+    else if (item.marker === "pinned-divider") section = "active";
+    else if (item.marker === "active-placeholder") section = "active";
     else if (item.marker === "working-header") section = "working";
     else if (item.marker === "snoozed-header") section = "snoozed";
     else if (item.marker === "settled-header") section = "settled";
@@ -168,9 +209,11 @@ function sectionAtSidebarSlot(items: readonly SidebarListItem[], index: number):
 }
 
 export type SidebarDropTarget = {
-  readonly section: "pinned" | "active" | "settled";
+  readonly section: "pinned" | "active" | "settled" | SidebarFolderSection;
   readonly pinnedOrder: readonly string[];
   readonly activeOrder: readonly string[];
+  /** The rows of the target folder after the move. Absent outside folders. */
+  readonly folderOrder?: readonly string[];
 };
 
 export function resolveSidebarDropTarget(
@@ -183,24 +226,73 @@ export function resolveSidebarDropTarget(
   if (activeIndex === -1 || overIndex === -1 || items[activeIndex]?.kind !== "thread") return null;
   const moved = items.filter((_, index) => index !== activeIndex);
   moved.splice(overIndex, 0, items[activeIndex]!);
-  const section = sectionAtSidebarSlot(moved, overIndex);
+  // The inbox's stand-in row names its own section: it sits below the
+  // folders, and reading only the slots above it would hand the drop to the
+  // last folder. The hovered slot is read from the unmoved list, so the
+  // answer does not depend on which way the row travelled.
+  const hovered = items[overIndex];
+  const section =
+    hovered?.kind === "marker" && hovered.marker === "active-placeholder"
+      ? "active"
+      : sectionAtSidebarSlot(moved, overIndex);
   if (section === "working" || section === "snoozed") return null;
   const pinnedOrder: string[] = [];
   const activeOrder: string[] = [];
+  const folderOrder: string[] = [];
   let currentSection: SidebarSection = "pinned";
   for (const item of moved) {
     if (item.kind === "marker") {
-      if (item.marker === "pinned-divider") currentSection = "active";
-      else if (
+      const markerFolderId = folderIdOfMarker(item.marker);
+      if (markerFolderId !== null) currentSection = sidebarFolderSection(markerFolderId);
+      else if (item.marker === "pinned-divider" || item.marker === "active-placeholder") {
+        currentSection = "active";
+      } else if (
         item.marker === "working-header" ||
         item.marker === "snoozed-header" ||
         item.marker === "settled-header"
       )
         break;
     } else if (currentSection === "pinned") pinnedOrder.push(item.key);
-    else activeOrder.push(item.key);
+    // A folder arranges its own rows, so they stay out of the inbox's order.
+    else if (currentSection === "active") activeOrder.push(item.key);
+    else if (currentSection === section) folderOrder.push(item.key);
   }
-  return { section, pinnedOrder, activeOrder };
+  return folderIdOfSection(section) === null
+    ? { section, pinnedOrder, activeOrder }
+    : { section, pinnedOrder, activeOrder, folderOrder };
+}
+
+/** The folder a list id belongs to: its heading, its stand-in row, or a row. */
+export function folderIdOfListId(items: readonly SidebarListItem[], id: string): string | null {
+  const item = items.find((candidate) => sidebarListItemId(candidate) === id);
+  if (item === undefined) return null;
+  if (item.kind === "marker") return folderIdOfMarker(item.marker);
+  return folderIdOfSection(item.section);
+}
+
+/** The folder a drag id names, when the id is a folder heading. */
+export function folderIdOfDragId(id: string): string | null {
+  const marker = id.startsWith(SIDEBAR_MARKER_PREFIX)
+    ? (id.slice(SIDEBAR_MARKER_PREFIX.length) as SidebarListMarker)
+    : null;
+  if (marker === null || !marker.startsWith("folder-header:")) return null;
+  return folderIdOfMarker(marker);
+}
+
+/**
+ * Where a dragged folder heading lands: the index it takes in the folder
+ * order, or null when the drop changes nothing. Folders are reordered on
+ * their own, so this never touches a thread.
+ */
+export function planSidebarFolderDrop(input: {
+  readonly folderIds: readonly string[];
+  readonly activeFolderId: string;
+  readonly overFolderId: string | null;
+}): number | null {
+  const from = input.folderIds.indexOf(input.activeFolderId);
+  const to = input.overFolderId === null ? -1 : input.folderIds.indexOf(input.overFolderId);
+  if (from < 0 || to < 0 || from === to) return null;
+  return to;
 }
 
 export type SidebarThreadDropPlan =
@@ -223,16 +315,38 @@ export type SidebarThreadDropPlan =
       readonly unpin: boolean;
       readonly unsettle: boolean;
       readonly unsnooze: boolean;
+      /** The row came out of a folder, so the move clears its membership. */
+      readonly clearFolder: boolean;
+    }
+  /** Within one folder. Folder rows share the inbox's key space, so the
+      active key writes. */
+  | {
+      readonly kind: "reorder-folder";
+      readonly folderId: string;
+      readonly order: readonly string[];
+      readonly assignments: ReadonlyArray<{ readonly id: string; readonly orderKey: string }>;
+    }
+  /** Into another folder, at the dropped spot. `assignments` is empty when
+      the server cannot store the key; the row then joins by membership alone. */
+  | {
+      readonly kind: "move-to-folder";
+      readonly folderId: string;
+      readonly order: readonly string[];
+      readonly assignments: ReadonlyArray<{ readonly id: string; readonly orderKey: string }>;
+      readonly unpin: boolean;
+      readonly unsettle: boolean;
+      readonly unsnooze: boolean;
     }
   | { readonly kind: "settle" };
 
-export type SidebarDropVerb = "pin" | "unpin" | "settle" | "unsettle" | "wake";
+export type SidebarDropVerb = "pin" | "unpin" | "settle" | "unsettle" | "wake" | "file";
 
 export function resolveSidebarDropVerb(
   from: SidebarSection,
   to: SidebarSection | null,
 ): SidebarDropVerb | null {
   if (to === null || to === from || to === "working" || to === "snoozed") return null;
+  if (folderIdOfSection(to) !== null) return "file";
   if (to === "pinned") return "pin";
   if (to === "settled") return "settle";
   if (from === "pinned") return "unpin";
@@ -277,6 +391,8 @@ export function planSidebarThreadDrop(input: {
   readonly activeKeysById: ReadonlyMap<string, string | null | undefined>;
   readonly activeReorderableKeys?: ReadonlySet<string>;
   readonly activeTimeOrdered?: boolean;
+  /** The rows of the lifted row's folder in displayed order before the drop. */
+  readonly folderOrder?: readonly string[];
 }): SidebarThreadDropPlan {
   const {
     activeKey,
@@ -290,10 +406,53 @@ export function planSidebarThreadDrop(input: {
     activeOrder,
     activeKeysById,
     activeReorderableKeys,
+    folderOrder = [],
   } = input;
   if (activeSection === "working") return { kind: "none" };
   if (input.supportsSettlement === false && (target.section === "settled" || activeSettled)) {
     return { kind: "none" };
+  }
+  const targetFolderId = folderIdOfSection(target.section);
+  if (targetFolderId !== null) {
+    const order = target.folderOrder ?? [];
+    if (targetFolderId !== folderIdOfSection(activeSection)) {
+      const planned = planPinnedReorder({
+        orderedIds: order,
+        keysById: activeKeysById,
+        movedId: activeKey,
+      });
+      const storable =
+        activeReorderableKeys === undefined ||
+        planned.every(({ id }) => activeReorderableKeys.has(id));
+      return {
+        kind: "move-to-folder",
+        folderId: targetFolderId,
+        order,
+        assignments: storable ? planned : [],
+        unpin: activePinned,
+        unsettle: activeSettled,
+        unsnooze: activeSection === "snoozed",
+      };
+    }
+    if (
+      order.length === 0 ||
+      (order.length === folderOrder.length &&
+        order.every((key, index) => key === folderOrder[index]))
+    ) {
+      return { kind: "none" };
+    }
+    const assignments = planPinnedReorder({
+      orderedIds: order,
+      keysById: activeKeysById,
+      movedId: activeKey,
+    });
+    if (
+      assignments.length === 0 ||
+      (activeReorderableKeys && assignments.some(({ id }) => !activeReorderableKeys.has(id)))
+    ) {
+      return { kind: "none" };
+    }
+    return { kind: "reorder-folder", folderId: targetFolderId, order, assignments };
   }
   const arrange = (
     order: readonly string[],
@@ -321,6 +480,7 @@ export function planSidebarThreadDrop(input: {
               unpin: activePinned,
               unsettle: activeSettled,
               unsnooze: activeSection === "snoozed",
+              clearFolder: folderIdOfSection(activeSection) !== null,
             };
       }
       const order = target.activeOrder;
@@ -340,6 +500,7 @@ export function planSidebarThreadDrop(input: {
         unpin: activePinned,
         unsettle: activeSettled,
         unsnooze: activeSection === "snoozed",
+        clearFolder: folderIdOfSection(activeSection) !== null,
       };
     }
     case "settled":
@@ -369,6 +530,8 @@ export function planSidebarThreadDrop(input: {
           : assignments.filter((assignment) => assignment.id !== activeKey),
       };
     }
+    default:
+      return { kind: "none" };
   }
 }
 
