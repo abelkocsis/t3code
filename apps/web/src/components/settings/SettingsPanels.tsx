@@ -609,6 +609,10 @@ export function useSettingsRestore(onRestored?: () => void) {
     ...(settings.proactivePanelsEnabled !== DEFAULT_UNIFIED_SETTINGS.proactivePanelsEnabled
       ? ["Proactive panels"]
       : []),
+    ...(settings.pullRequestAutoMergeEnabled !==
+    DEFAULT_UNIFIED_SETTINGS.pullRequestAutoMergeEnabled
+      ? ["Pull request auto-merge"]
+      : []),
     ...(settings.showSkillsInSlashMenu !== DEFAULT_UNIFIED_SETTINGS.showSkillsInSlashMenu
       ? ["Show skills in slash menu"]
       : []),
@@ -733,6 +737,7 @@ export function useSettingsRestore(onRestored?: () => void) {
       diffIgnoreWhitespace: DEFAULT_UNIFIED_SETTINGS.diffIgnoreWhitespace,
       diffLayout: DEFAULT_UNIFIED_SETTINGS.diffLayout,
       proactivePanelsEnabled: DEFAULT_UNIFIED_SETTINGS.proactivePanelsEnabled,
+      pullRequestAutoMergeEnabled: DEFAULT_UNIFIED_SETTINGS.pullRequestAutoMergeEnabled,
       showSkillsInSlashMenu: DEFAULT_UNIFIED_SETTINGS.showSkillsInSlashMenu,
       composerCollapseOnScroll: DEFAULT_UNIFIED_SETTINGS.composerCollapseOnScroll,
       composerRichTextEnabled: DEFAULT_UNIFIED_SETTINGS.composerRichTextEnabled,
@@ -2663,6 +2668,34 @@ export function GeneralSettingsPanel() {
                 updateSettings({ proactivePanelsEnabled: Boolean(checked) })
               }
               aria-label="Proactive panels"
+            />
+          }
+        />
+
+        <SettingsRow
+          {...searchableSetting("pull-request-auto-merge")}
+          description="Offer auto-merge on pull requests whose merge is still blocked. An auto-merge that is already on always shows."
+          resetAction={
+            settings.pullRequestAutoMergeEnabled !==
+            DEFAULT_UNIFIED_SETTINGS.pullRequestAutoMergeEnabled ? (
+              <SettingResetButton
+                label="pull request auto-merge"
+                onClick={() =>
+                  updateSettings({
+                    pullRequestAutoMergeEnabled:
+                      DEFAULT_UNIFIED_SETTINGS.pullRequestAutoMergeEnabled,
+                  })
+                }
+              />
+            ) : null
+          }
+          control={
+            <Switch
+              checked={settings.pullRequestAutoMergeEnabled}
+              onCheckedChange={(checked) =>
+                updateSettings({ pullRequestAutoMergeEnabled: Boolean(checked) })
+              }
+              aria-label="Pull request auto-merge"
             />
           }
         />

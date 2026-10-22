@@ -16,6 +16,7 @@ import type {
   PullRequestLabel,
   PullRequestMergeCapabilities,
   PullRequestMergeMethod,
+  PullRequestMergeState,
   PullRequestOmittedFileStat,
   PullRequestMergeability,
   PullRequestReaction,
@@ -388,6 +389,8 @@ export interface GitHubPullRequestDetail extends GitHubPullRequestListItem {
   readonly checks: ReadonlyArray<PullRequestCheck>;
   readonly autoMergeEnabled?: boolean;
   readonly autoMergeMethod?: PullRequestMergeMethod;
+  /** Absent where the read did not ask GitHub for the merge state. */
+  readonly mergeState?: PullRequestMergeState;
 }
 
 export interface GitHubWorkflowRunApproval {
@@ -522,6 +525,30 @@ function toMergeability(value: string | null | undefined): PullRequestMergeabili
       return "mergeable";
     case "CONFLICTING":
       return "conflicting";
+    default:
+      return "unknown";
+  }
+}
+
+function toMergeState(value: string | null | undefined): PullRequestMergeState | undefined {
+  switch (value?.trim().toUpperCase()) {
+    case undefined:
+    case "":
+      return undefined;
+    case "CLEAN":
+      return "clean";
+    case "HAS_HOOKS":
+      return "has-hooks";
+    case "UNSTABLE":
+      return "unstable";
+    case "BLOCKED":
+      return "blocked";
+    case "BEHIND":
+      return "behind";
+    case "DIRTY":
+      return "dirty";
+    case "DRAFT":
+      return "draft";
     default:
       return "unknown";
   }
@@ -805,6 +832,7 @@ interface DetailFields extends ListItemFields {
   readonly body?: string | undefined;
   readonly changedFiles?: number | undefined;
   readonly closedAt?: string | null | undefined;
+  readonly mergeStateStatus?: string | null | undefined;
   /** The standing instruction and strategy GitHub will use once its requirements are met. */
   readonly autoMergeRequest?:
     | { readonly mergeMethod?: string | null | undefined }
@@ -814,6 +842,7 @@ interface DetailFields extends ListItemFields {
 
 function toDetail(raw: DetailFields): GitHubPullRequestDetail {
   const autoMergeMethod = toMergeMethod(raw.autoMergeRequest?.mergeMethod);
+  const mergeState = toMergeState(raw.mergeStateStatus);
   return {
     ...toListItem(raw),
     ...(typeof raw.isCrossRepository === "boolean"
@@ -830,6 +859,7 @@ function toDetail(raw: DetailFields): GitHubPullRequestDetail {
       ? {}
       : { autoMergeEnabled: raw.autoMergeRequest !== null }),
     ...(autoMergeMethod === undefined ? {} : { autoMergeMethod }),
+    ...(mergeState === undefined ? {} : { mergeState }),
   };
 }
 

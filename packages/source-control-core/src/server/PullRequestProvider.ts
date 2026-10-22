@@ -19,6 +19,7 @@ import type {
   PullRequestListState,
   PullRequestMergeCapabilities,
   PullRequestMergeMethod,
+  PullRequestMergeState,
   PullRequestMergeability,
   PullRequestOmittedFileStat,
   PullRequestReaction,
@@ -188,6 +189,8 @@ export interface ProviderChangeRequestDetail extends ProviderChangeRequest {
   readonly checks: ReadonlyArray<PullRequestCheck>;
   readonly mergeCapabilities: PullRequestMergeCapabilities;
   readonly viewerPermissions: PullRequestViewerPermissions;
+  /** Whether the host's rules let this merge now; absent from a host that does not say. */
+  readonly mergeState?: PullRequestMergeState;
   readonly baseComparison?: PullRequestBaseComparison;
   readonly behindBy?: number;
   readonly autoMergeEnabled?: boolean;

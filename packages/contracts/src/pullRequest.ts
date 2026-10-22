@@ -58,6 +58,23 @@ export type PullRequestChecksState = typeof PullRequestChecksState.Type;
 export const PullRequestMergeability = Schema.Literals(["mergeable", "conflicting", "unknown"]);
 export type PullRequestMergeability = typeof PullRequestMergeability.Type;
 
+/**
+ * Whether the host's own rules let the change request merge right now, as GitHub's
+ * `mergeStateStatus` reports it. "blocked" means a required review or a required check is
+ * missing; "unstable" means only checks the rules do not require are failing or running.
+ */
+export const PullRequestMergeState = Schema.Literals([
+  "clean",
+  "has-hooks",
+  "unstable",
+  "blocked",
+  "behind",
+  "dirty",
+  "draft",
+  "unknown",
+]);
+export type PullRequestMergeState = typeof PullRequestMergeState.Type;
+
 export const PullRequestMergeMethod = Schema.Literals(["merge", "squash", "rebase"]);
 export type PullRequestMergeMethod = typeof PullRequestMergeMethod.Type;
 
@@ -574,6 +591,13 @@ export const PullRequestDetail = Schema.Struct({
   checks: Schema.Array(PullRequestCheck),
   mergeCapabilities: PullRequestMergeCapabilities,
   viewer: Schema.optional(TrimmedNonEmptyString),
+  /**
+   * Where the review stands as the host's branch rules count it. Absent where the host does not
+   * summarise its reviews; null where no review is required.
+   */
+  reviewDecision: Schema.optional(Schema.NullOr(PullRequestReviewDecision)),
+  /** Absent where the host does not report it, which is every host but GitHub. */
+  mergeState: Schema.optional(PullRequestMergeState),
   baseComparison: Schema.optional(PullRequestBaseComparison),
   behindBy: Schema.optional(NonNegativeInt),
   /**

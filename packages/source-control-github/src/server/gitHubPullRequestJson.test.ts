@@ -538,6 +538,13 @@ describe("pull request detail decoding", () => {
     pullRequest?: Record<string, unknown>,
   ) => expectSuccess(decodePullRequestCoreJson(coreJson(rollup, pullRequest)));
 
+  it("reads the merge state GitHub reports, and leaves it out where it said nothing", () => {
+    expect(detailOf([]).mergeState).toBe("blocked");
+    expect(detailOf([], { mergeStateStatus: "HAS_HOOKS" }).mergeState).toBe("has-hooks");
+    expect(detailOf([], { mergeStateStatus: "CLEAN" }).mergeState).toBe("clean");
+    expect(detailOf([], { mergeStateStatus: "UNKNOWN" }).mergeState).toBe("unknown");
+  });
+
   /** The conversation the activity read carries, in the flat shape the tests below write. */
   const detailJson = JSON.stringify({
     comments: [{ id: "c1", body: "second", createdAt: "2026-07-04T00:00:00Z" }],

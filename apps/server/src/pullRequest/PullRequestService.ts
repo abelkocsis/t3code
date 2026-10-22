@@ -1598,6 +1598,12 @@ export const make = Effect.gen(function* () {
             mergeCapabilities: changeRequest.mergeCapabilities,
             viewerPermissions: changeRequest.viewerPermissions,
             ...(viewer === null || viewer.trim().length === 0 ? {} : { viewer }),
+            ...(changeRequest.reviewDecision === undefined
+              ? {}
+              : { reviewDecision: changeRequest.reviewDecision }),
+            ...(changeRequest.mergeState === undefined
+              ? {}
+              : { mergeState: changeRequest.mergeState }),
             ...(changeRequest.baseComparison === undefined
               ? {}
               : { baseComparison: changeRequest.baseComparison }),
