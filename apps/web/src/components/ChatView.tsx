@@ -377,6 +377,7 @@ import {
   primaryServerKeybindingsAtom,
   serverEnvironment,
 } from "../state/server";
+import { useForkThreadState } from "../state/fork";
 import { threadEnvironment } from "../state/threads";
 import { resolveProviderSkillsForCwd } from "@t3tools/client-runtime/providerSkills";
 import { vcsEnvironment } from "../state/vcs";
@@ -8956,6 +8957,10 @@ function PreviewSessionSync(props: { readonly threadRef: ScopedThreadRef }) {
 function ThreadVisitWatermark(props: { readonly threadRef: ScopedThreadRef }) {
   const serverThread = useThreadShell(props.threadRef);
   const threadKey = scopedThreadKey(props.threadRef);
+  // Fork: a factory task at a gate asks for attention from its stage change, which lives in
+  // the fork's row and moves no thread field. The visit stamps the later of the two, or
+  // opening the task would never clear its highlight.
+  const factoryUpdatedAt = useForkThreadState(props.threadRef)?.factory?.updatedAt ?? null;
   // A thread on screen while the user works in another application is not
   // read. The visit waits for focus, and focus returning records it at once,
   // so a turn that finishes while the user is away stays unseen for the
@@ -8972,7 +8977,11 @@ function ThreadVisitWatermark(props: { readonly threadRef: ScopedThreadRef }) {
   useEffect(() => {
     if (!windowFocused) return;
     if (!serverThread?.id) return;
-    const threadUpdatedAt = Date.parse(serverThread.updatedAt);
+    const visitStamp =
+      factoryUpdatedAt !== null && Date.parse(factoryUpdatedAt) > Date.parse(serverThread.updatedAt)
+        ? factoryUpdatedAt
+        : serverThread.updatedAt;
+    const threadUpdatedAt = Date.parse(visitStamp);
     if (Number.isNaN(threadUpdatedAt)) return;
     const effectiveLastVisitedAt = resolveThreadLastVisitedAt(
       serverThread.lastVisitedAt,
@@ -8986,14 +8995,14 @@ function ThreadVisitWatermark(props: { readonly threadRef: ScopedThreadRef }) {
       // lands. The dedupe also keeps a mark-unread on the open thread sticky:
       // the rewind leaves updatedAt untouched, so the already-dispatched key
       // skips a fresh visit until new activity lands or the thread is reopened.
-      const dispatchKey = `${threadKey}:${serverThread.updatedAt}`;
+      const dispatchKey = `${threadKey}:${visitStamp}`;
       if (lastDispatchedVisitRef.current === dispatchKey) return;
       const dispatch = () => {
         lastDispatchedVisitRef.current = dispatchKey;
         lastVisitDispatchAtRef.current = Date.now();
         void visitThreadMutation({
           environmentId: serverThread.environmentId,
-          input: { threadId: serverThread.id, visitedAt: serverThread.updatedAt },
+          input: { threadId: serverThread.id, visitedAt: visitStamp },
         });
       };
       const latestRunCompletedAtMs = serverThread.latestRun?.completedAt
@@ -9013,10 +9022,11 @@ function ThreadVisitWatermark(props: { readonly threadRef: ScopedThreadRef }) {
 
     markThreadVisited(
       scopedThreadKey(scopeThreadRef(serverThread.environmentId, serverThread.id)),
-      serverThread.updatedAt,
+      visitStamp,
     );
   }, [
     activeThreadLocalLastVisitedAt,
+    factoryUpdatedAt,
     markThreadVisited,
     threadKey,
     serverThread?.environmentId,

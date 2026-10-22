@@ -5,7 +5,12 @@ import {
 import { pendingSubagentRequestsByThread } from "@t3tools/client-runtime/state/threads";
 import { useAtomValue } from "@effect/atom-react";
 import { useNavigate, useParams } from "@tanstack/react-router";
-import type { EnvironmentId, OrchestrationV2ThreadShell, ThreadId } from "@t3tools/contracts";
+import type {
+  EnvironmentId,
+  OrchestrationV2ThreadShell,
+  ThreadFactory,
+  ThreadId,
+} from "@t3tools/contracts";
 import * as Option from "effect/Option";
 import {
   CircleAlertIcon,
@@ -17,6 +22,7 @@ import { useEffect, useRef } from "react";
 
 import { getClientSettings, useClientSettings } from "../hooks/useSettings";
 import { useEnvironmentIds } from "../state/environments";
+import { useForkThreadStates } from "../state/fork";
 import { environmentShell } from "../state/shell";
 import {
   hasDesktopNotifications,
@@ -26,6 +32,7 @@ import {
   threadNotificationTag,
   unlockNotificationAudio,
 } from "../threadNotifications";
+import { factoryAttention, factoryOf } from "./factory/factory.logic";
 import { resolveSidebarThreadStatus } from "./Sidebar.logic";
 import { toastManager } from "./ui/toast";
 
@@ -96,6 +103,8 @@ export function ThreadNotificationCoordinator() {
 interface NotificationState {
   readonly raw: OrchestrationV2ThreadShell;
   readonly subagentRequest: PendingSubagentRequest | null;
+  /** Fork: the factory row the reading was made from, so a stage change is a new reading. */
+  readonly factory: ThreadFactory | null;
   readonly attention: string | null;
   readonly completion: number | null;
 }
@@ -110,6 +119,8 @@ function EnvironmentNotifications({
   const shell = useAtomValue(environmentShell.stateValueAtom(environmentId));
   const threads =
     shell.status === "live" && Option.isSome(shell.snapshot) ? shell.snapshot.value.threads : null;
+  // Fork: factory tasks are read by their own state (see factoryAttention).
+  const forkThreadStates = useForkThreadStates();
   const mode = useClientSettings((settings) => settings.notificationMode);
   const inAppNotificationsEnabled = useClientSettings(
     (settings) => settings.inAppNotificationsEnabled,
@@ -131,25 +142,35 @@ function EnvironmentNotifications({
       if (rawThread.lineage.relationshipToParent === "subagent") continue;
       const prior = previous.current.get(rawThread.id);
       const subagentRequest = subagentRequests.get(rawThread.id) ?? null;
-      if (prior?.raw === rawThread && prior.subagentRequest === subagentRequest) {
+      const factory = factoryOf({ environmentId, id: rawThread.id }, forkThreadStates);
+      if (
+        prior?.raw === rawThread &&
+        prior.subagentRequest === subagentRequest &&
+        prior.factory === factory
+      ) {
         next.set(rawThread.id, prior);
         continue;
       }
       const thread = presentThreadShell(environmentId, rawThread, subagentRequest);
-      let status = resolveSidebarThreadStatus(thread);
+      // Fork: a factory task's agent finishes turns all the time, so the task's own reading
+      // replaces the thread's. Only a gate counts as a completion, stamped by the gate.
+      const fromFactory = factory ? factoryAttention(thread, factory) : null;
+      let status = fromFactory?.status ?? resolveSidebarThreadStatus(thread);
       if (status === "ready" && thread.latestRun?.status === "failed") status = "failed";
       const attention =
         status === "input" || status === "approval" || status === "failed" || status === "limited"
           ? `${thread.latestRun?.runId ?? ""}:${status}`
           : null;
-      const completedAt = Date.parse(thread.latestRun?.completedAt ?? "");
+      const completedAt = Date.parse(
+        fromFactory ? (fromFactory.gateAt ?? "") : (thread.latestRun?.completedAt ?? ""),
+      );
       const completion =
         status === "ready" &&
-        thread.latestRun?.status === "completed" &&
+        (fromFactory !== null || thread.latestRun?.status === "completed") &&
         Number.isFinite(completedAt)
           ? completedAt
           : (prior?.completion ?? null);
-      next.set(thread.id, { raw: rawThread, subagentRequest, attention, completion });
+      next.set(thread.id, { raw: rawThread, subagentRequest, factory, attention, completion });
       if (!prior || thread.archivedAt !== null) continue;
       const kind =
         attention && attention !== prior.attention
@@ -160,7 +181,9 @@ function EnvironmentNotifications({
       if (!kind) continue;
       const title =
         kind === "completion"
-          ? "Thread completed"
+          ? factory
+            ? "Factory task waiting on you"
+            : "Thread completed"
           : status === "approval"
             ? "Approval needed"
             : status === "limited"
@@ -241,6 +264,7 @@ function EnvironmentNotifications({
     activeEnvironmentId,
     activeThreadId,
     environmentId,
+    forkThreadStates,
     inAppNotificationsEnabled,
     mode,
     navigate,

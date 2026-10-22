@@ -16,11 +16,14 @@ import {
   buildReviewRequestMessage,
   collectFactoryTasks,
   countFactoryTasksWaiting,
+  factoryAttention,
+  factoryAttentionLabel,
   factoryJoinState,
   factoryProgress,
   factoryTaskKey,
   factoryTaskState,
   formatElapsed,
+  isFactoryGateUnseen,
   isReReviewRequest,
   moveFactoryTask,
   orderFactoryTasks,
@@ -131,6 +134,83 @@ describe("factoryProgress", () => {
   it("fills the bar only once merged", () => {
     expect(stageOf({ phase: "ready-to-merge" })).toMatchObject({ stage: 5, complete: false });
     expect(stageOf({ phase: "merged" })).toMatchObject({ stage: 5, complete: true });
+  });
+});
+
+describe("factoryAttention", () => {
+  const EARLIER = "2026-10-14T09:00:00.000Z";
+  const LATER = "2026-10-14T11:00:00.000Z";
+  const completed = (completedAt: string) =>
+    ({ status: "completed", completedAt }) as EnvironmentThreadShell["latestRun"];
+
+  it("keeps the agent's own question or approval request", () => {
+    expect(factoryAttention(thread({ hasPendingUserInput: true }), factory())).toEqual({
+      status: "input",
+      gateAt: null,
+    });
+    expect(factoryAttention(thread({ hasPendingApprovals: true }), factory())).toEqual({
+      status: "approval",
+      gateAt: null,
+    });
+  });
+
+  it("reads a finished turn between gates as working, not as news", () => {
+    expect(factoryAttention(thread({ latestRun: completed(LATER) }), factory())).toEqual({
+      status: "working",
+      gateAt: null,
+    });
+    expect(
+      factoryAttention(thread({ latestRun: completed(LATER) }), factory({ phase: "under-review" })),
+    ).toEqual({ status: "waiting", gateAt: null });
+  });
+
+  it("stamps a gate with the later of the stage change and the last finished turn", () => {
+    expect(
+      factoryAttention(
+        thread({ latestRun: completed(EARLIER) }),
+        factory({ phase: "ready-for-review", updatedAt: NOW }),
+      ),
+    ).toEqual({ status: "ready", gateAt: NOW });
+    expect(
+      factoryAttention(
+        thread({ latestRun: completed(LATER) }),
+        factory({ phase: "ready-to-merge", updatedAt: NOW }),
+      ),
+    ).toEqual({ status: "ready", gateAt: LATER });
+  });
+
+  it("reads a failure as failed and a finished task as nothing new", () => {
+    expect(
+      factoryAttention(
+        thread({ latestRun: { status: "failed" } as EnvironmentThreadShell["latestRun"] }),
+        factory(),
+      ),
+    ).toEqual({ status: "failed", gateAt: null });
+    expect(factoryAttention(thread(), factory({ phase: "merged" }))).toEqual({
+      status: "ready",
+      gateAt: null,
+    });
+  });
+});
+
+describe("isFactoryGateUnseen", () => {
+  it("counts a task nobody opened, and clears once the visit is newer than the gate", () => {
+    expect(isFactoryGateUnseen(NOW, undefined)).toBe(true);
+    expect(isFactoryGateUnseen(NOW, "2026-10-14T09:00:00.000Z")).toBe(true);
+    expect(isFactoryGateUnseen(NOW, "2026-10-14T11:00:00.000Z")).toBe(false);
+  });
+});
+
+describe("factoryAttentionLabel", () => {
+  it("says a task at a gate waits on the user, and names the stage otherwise", () => {
+    expect(factoryAttentionLabel(thread(), factory({ phase: "ready-for-review" }))).toEqual({
+      label: "Waiting on you",
+      waiting: true,
+    });
+    expect(factoryAttentionLabel(thread(), factory({ phase: "merged" }))).toEqual({
+      label: "Merged",
+      waiting: false,
+    });
   });
 });
 

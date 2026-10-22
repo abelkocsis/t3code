@@ -4,13 +4,21 @@ import {
   isThreadAttentionDismissed,
   isThreadAttentionUnseen,
   resolveThreadAttention,
+  type ThreadAttention,
 } from "@t3tools/client-runtime/state/thread-attention";
 
+import {
+  factoryAttention,
+  factoryAttentionLabel,
+  factoryOf,
+  isFactoryGateUnseen,
+} from "../components/factory/factory.logic";
 import {
   resolveSidebarThreadStatus,
   resolveThreadLastVisitedAt,
 } from "../components/Sidebar.logic";
 import { useProjects, useThreadShells } from "../state/entities";
+import { useForkThreadStates } from "../state/fork";
 import { useUiStateStore } from "../uiStateStore";
 
 export interface AttentionThreads {
@@ -34,6 +42,7 @@ export interface AttentionThreads {
 export function useAttentionThreads(): AttentionThreads {
   const threads = useThreadShells();
   const projects = useProjects();
+  const forkThreadStates = useForkThreadStates();
   const threadLastVisitedAtById = useUiStateStore((state) => state.threadLastVisitedAtById);
   const overlayDismissedAtById = useUiStateStore((state) => state.overlayDismissedAtById);
 
@@ -46,20 +55,34 @@ export function useAttentionThreads(): AttentionThreads {
 
   for (const thread of threads) {
     if (thread.lineage.relationshipToParent === "subagent") continue;
-    let status = resolveSidebarThreadStatus(thread);
+    // A factory task is read by its own state: its agent finishes turns all the time, so it
+    // asks for attention only at a gate, on a question, or on a failure.
+    const factory = factoryOf(thread, forkThreadStates);
+    const fromFactory = factory ? factoryAttention(thread, factory) : null;
+    let status = fromFactory?.status ?? resolveSidebarThreadStatus(thread);
     if (status === "ready" && thread.latestRun?.status === "failed") status = "failed";
     if (status === "working" || status === "waiting") {
       if (thread.archivedAt === null) workingCount += 1;
       continue;
     }
-    const attention = resolveThreadAttention({ ...thread, status });
-    if (attention === null) continue;
     const key = scopedThreadKey(scopeThreadRef(thread.environmentId, thread.id));
     const lastVisitedAt = resolveThreadLastVisitedAt(
       thread.lastVisitedAt,
       threadLastVisitedAtById[key],
     );
-    if (!isThreadAttentionUnseen({ attention, lastVisitedAt })) continue;
+    let attention: ThreadAttention;
+    if (fromFactory?.status === "ready") {
+      // The gate stamps the row, not the last turn, and a task nobody opened yet still counts.
+      if (fromFactory.gateAt === null) continue;
+      if (thread.archivedAt !== null || thread.settledOverride === "settled") continue;
+      if (!isFactoryGateUnseen(fromFactory.gateAt, lastVisitedAt)) continue;
+      attention = { phase: "completed", at: fromFactory.gateAt };
+    } else {
+      const resolved = resolveThreadAttention({ ...thread, status });
+      if (resolved === null) continue;
+      if (!isThreadAttentionUnseen({ attention: resolved, lastVisitedAt })) continue;
+      attention = resolved;
+    }
     if (isThreadAttentionDismissed({ attention, dismissedAt: overlayDismissedAtById[key] })) {
       dismissedCount += 1;
       continue;
@@ -71,6 +94,7 @@ export function useAttentionThreads(): AttentionThreads {
       projectTitle: projectTitleByKey.get(`${thread.environmentId}:${thread.projectId}`) ?? null,
       phase: attention.phase,
       at: attention.at,
+      factory: factory ? factoryAttentionLabel(thread, factory) : null,
     });
   }
 

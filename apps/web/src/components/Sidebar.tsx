@@ -11,7 +11,7 @@ import {
 } from "./chat/threadContextDrag";
 import { discardComposerDraft } from "../lib/discardComposerDraft";
 import { requestCustomSnooze } from "./CustomSnoozeDialog";
-import { factoryOf } from "./factory/factory.logic";
+import { factoryAttention, factoryOf, isFactoryGateUnseen } from "./factory/factory.logic";
 import { useFactoryMembership } from "./factory/useFactoryMembership";
 import { useSupportsMultiplePullRequests } from "~/hooks/useSupportsMultiplePullRequests";
 import { resolveThreadCurrentPullRequestLink } from "@t3tools/shared/threadPullRequests";
@@ -1914,8 +1914,15 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThreadRowP
     ? resolveThreadCurrentPullRequestLink(thread.pullRequests)
     : null;
 
-  const isUnread = hasUnseenCompletion({ ...thread, lastVisitedAt });
-  const status = resolveSidebarThreadStatus(thread);
+  // A factory task reads by its own state: its agent finishes turns all the time, so only
+  // a gate the user has not opened since counts as unread.
+  const attention = props.factory ? factoryAttention(thread, props.factory) : null;
+  const isUnread = attention
+    ? attention.gateAt !== null &&
+      thread.settledOverride !== "settled" &&
+      isFactoryGateUnseen(attention.gateAt, lastVisitedAt)
+    : hasUnseenCompletion({ ...thread, lastVisitedAt });
+  const status = attention?.status ?? resolveSidebarThreadStatus(thread);
   const lastVisitedDate = lastVisitedAt === undefined ? null : parseTimestampDate(lastVisitedAt);
   const wokeAtDate = props.wokeAt === null ? null : parseTimestampDate(props.wokeAt);
   const isWoke =

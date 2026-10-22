@@ -3,6 +3,7 @@ import type {
   EnvironmentProject,
   EnvironmentThreadShell,
 } from "@t3tools/client-runtime/state/models";
+import type { AttentionSourceStatus } from "@t3tools/client-runtime/state/thread-attention";
 import type {
   FactoryInput,
   ForkThreadState,
@@ -10,7 +11,11 @@ import type {
   ThreadPullRequestLink,
   ThreadPullRequestSnapshot,
 } from "@t3tools/contracts";
-import { FACTORY_COMPLETED_PHASES, factoryInputRepository } from "@t3tools/contracts";
+import {
+  FACTORY_COMPLETED_PHASES,
+  FACTORY_PHASE_LABELS,
+  factoryInputRepository,
+} from "@t3tools/contracts";
 import { visibleThreadPullRequests } from "@t3tools/shared/threadPullRequests";
 
 /**
@@ -94,6 +99,83 @@ export function factoryTaskState(
   }
   if (thread.latestRun?.status === "failed" || thread.runtime?.status === "failed") return "error";
   return phase === "under-review" ? "idle" : "working";
+}
+
+/**
+ * How the sidebar, the overlay, and notifications read a factory task, in place of the
+ * thread's own status. The agent finishes turns all the time without needing anyone, so a
+ * finished turn is not news on its own: the task asks for attention only when it waits on
+ * the human (a gate, held work, a question, an approval) or when it failed. In between, the
+ * agent or the server review loop is at work, and the task reads as working.
+ */
+export interface FactoryAttention {
+  readonly status: AttentionSourceStatus;
+  /**
+   * When the task started waiting on the human, set only with status "ready". The later of
+   * the stage change and the last finished turn: a visit after the gate opened counts as
+   * seen, and a turn the user started at the gate shows as new again. Null: nothing new.
+   */
+  readonly gateAt: string | null;
+}
+
+export function factoryAttention(
+  thread: EnvironmentThreadShell,
+  factory: ThreadFactory,
+  now: number = Date.now(),
+): FactoryAttention {
+  // The agent's own question or approval request is a real wait, read the usual way.
+  if (thread.hasPendingApprovals) return { status: "approval", gateAt: null };
+  if (thread.hasPendingUserInput) return { status: "input", gateAt: null };
+  switch (factoryTaskState(thread, factory, now)) {
+    case "waiting": {
+      const turnAt = thread.latestRun?.completedAt ?? null;
+      const gateAt =
+        turnAt !== null && Date.parse(turnAt) > Date.parse(factory.updatedAt)
+          ? turnAt
+          : factory.updatedAt;
+      return { status: "ready", gateAt };
+    }
+    case "working":
+      return { status: "working", gateAt: null };
+    case "idle":
+    case "snoozed":
+      return { status: "waiting", gateAt: null };
+    case "error":
+      return { status: "failed", gateAt: null };
+    case "done":
+      return { status: "ready", gateAt: null };
+  }
+}
+
+/**
+ * Whether the user has opened the task since its gate opened. A task nobody opened yet still
+ * counts: it was started from the Factory page and waits on someone all the same.
+ */
+export function isFactoryGateUnseen(
+  gateAt: string,
+  lastVisitedAt: string | null | undefined,
+): boolean {
+  if (lastVisitedAt == null) return true;
+  const gateAtMs = Date.parse(gateAt);
+  const lastVisitedAtMs = Date.parse(lastVisitedAt);
+  if (Number.isNaN(gateAtMs)) return false;
+  if (Number.isNaN(lastVisitedAtMs)) return true;
+  return gateAtMs > lastVisitedAtMs;
+}
+
+/**
+ * What the overlay says about a factory task that asks for attention. A task waiting on the
+ * human says so; otherwise the stage name is more useful than "Finished".
+ */
+export function factoryAttentionLabel(
+  thread: EnvironmentThreadShell,
+  factory: ThreadFactory,
+  now: number = Date.now(),
+): { readonly label: string; readonly waiting: boolean } {
+  const state = factoryTaskState(thread, factory, now);
+  if (state === "waiting") return { label: FACTORY_TASK_STATE_LABELS.waiting, waiting: true };
+  if (state === "error") return { label: FACTORY_TASK_STATE_LABELS.error, waiting: false };
+  return { label: FACTORY_PHASE_LABELS[factory.phase], waiting: false };
 }
 
 /** The stages of the progress bar under each task. */
