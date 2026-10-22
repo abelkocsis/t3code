@@ -77,6 +77,43 @@ export function sanitizeThreadTitle(raw: string): string {
   return `${normalized.slice(0, MAX_THREAD_TITLE_CHARS - 3).trimEnd()}...`;
 }
 
+const DAILY_SUMMARY_SOURCES = new Set(["thread", "commit", "pullRequest", "issue", "cliSession"]);
+const MAX_DAILY_SUMMARY_ITEMS = 20;
+const MAX_DAILY_SUMMARY_ITEM_CHARS = 500;
+
+/**
+ * Cleans the bullets a model returned for a daily summary: strips a leading
+ * bullet character and quotes, drops blanks and duplicates, caps the length of
+ * each item and the count, and maps an unknown source back to `thread`.
+ */
+export function sanitizeDailySummaryItems(
+  raw: ReadonlyArray<{ readonly text: string; readonly source: string }>,
+): ReadonlyArray<{ readonly text: string; readonly source: string }> {
+  const seen = new Set<string>();
+  const items: Array<{ text: string; source: string }> = [];
+  for (const candidate of raw) {
+    const text = candidate.text
+      .replace(/\s+/g, " ")
+      .trim()
+      .replace(/^[-*•]\s*/, "")
+      .replace(/^['"`]+|['"`]+$/g, "")
+      .trim();
+    if (text.length === 0) continue;
+    const key = text.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    items.push({
+      text:
+        text.length <= MAX_DAILY_SUMMARY_ITEM_CHARS
+          ? text
+          : `${text.slice(0, MAX_DAILY_SUMMARY_ITEM_CHARS - 3).trimEnd()}...`,
+      source: DAILY_SUMMARY_SOURCES.has(candidate.source) ? candidate.source : "thread",
+    });
+    if (items.length >= MAX_DAILY_SUMMARY_ITEMS) break;
+  }
+  return items;
+}
+
 function cliLabel(cliName: string): string {
   const capitalized = cliName.charAt(0).toUpperCase() + cliName.slice(1);
   return `${capitalized} CLI (\`${cliName}\`)`;

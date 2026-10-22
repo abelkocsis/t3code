@@ -9,12 +9,14 @@ import type { ProviderTextGeneration } from "./textGeneration.ts";
 import {
   buildBranchNamePrompt,
   buildCommitMessagePrompt,
+  buildDailySummaryPrompt,
   buildPrContentPrompt,
   buildReviewGuidePrompt,
   buildThreadTitlePrompt,
 } from "./textGenerationPrompts.ts";
 import {
   sanitizeCommitSubject,
+  sanitizeDailySummaryItems,
   sanitizePrTitle,
   sanitizeThreadTitle,
 } from "./textGenerationUtils.ts";
@@ -169,11 +171,29 @@ export function fromRunner(name: string, run: Runner): ProviderTextGeneration {
     });
   });
 
+  const generateDailySummary: ProviderTextGeneration["generateDailySummary"] = Effect.fn(
+    `${name}.generateDailySummary`,
+  )(function* (input) {
+    const generated = yield* run({
+      operation: "generateDailySummary",
+      cwd: input.cwd,
+      modelSelection: input.modelSelection,
+      ...buildDailySummaryPrompt({
+        day: input.day,
+        facts: input.facts,
+        keptItems: input.keptItems,
+        excludedItems: input.excludedItems,
+      }),
+    });
+    return { items: sanitizeDailySummaryItems(generated.items) };
+  });
+
   return {
     generateCommitMessage,
     generatePrContent,
     generateBranchName,
     generateThreadTitle,
     generateReviewGuide,
+    generateDailySummary,
   } satisfies ProviderTextGeneration;
 }

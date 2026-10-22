@@ -94,6 +94,32 @@ export type ReviewGuideGenerationResult = Omit<
   "headSha" | "generatedAt" | "modelSelection"
 >;
 
+export interface DailySummaryGenerationInput {
+  /**
+   * Where the provider CLI runs. The prompt carries every fact already, so any
+   * readable directory works; a project root keeps provider config sane.
+   */
+  cwd: string;
+  /** The day being summarised, as `YYYY-MM-DD` in the user's zone. */
+  day: string;
+  /** The evidence block the collectors assembled. */
+  facts: string;
+  /** Bullets the user kept from an earlier run of the same day. */
+  keptItems: ReadonlyArray<string>;
+  /** Bullets the user removed from the same day. */
+  excludedItems: ReadonlyArray<string>;
+  modelSelection: ModelSelection;
+}
+
+export interface DailySummaryGenerationItem {
+  text: string;
+  source: string;
+}
+
+export interface DailySummaryGenerationResult {
+  items: ReadonlyArray<DailySummaryGenerationItem>;
+}
+
 export interface ProviderTextGeneration {
   readonly generateCommitMessage: (
     input: CommitMessageGenerationInput,
@@ -114,4 +140,9 @@ export interface ProviderTextGeneration {
   readonly generateReviewGuide: (
     input: ReviewGuideGenerationInput,
   ) => Effect.Effect<ReviewGuideGenerationResult, TextGenerationError>;
+
+  /** One day of work written as standup bullets, from evidence the server collected. */
+  readonly generateDailySummary: (
+    input: DailySummaryGenerationInput,
+  ) => Effect.Effect<DailySummaryGenerationResult, TextGenerationError>;
 }

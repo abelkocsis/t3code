@@ -369,6 +369,7 @@ function createTextGeneration(
         title: "Update workflow",
       }),
     generateReviewGuide: () => Effect.succeed({ stops: [] }),
+    generateDailySummary: () => Effect.succeed({ items: [] }),
     ...overrides,
   };
 
@@ -418,6 +419,7 @@ function createTextGeneration(
         ),
       ),
     generateReviewGuide: (input) => implementation.generateReviewGuide(input),
+    generateDailySummary: (input) => implementation.generateDailySummary(input),
   };
 }
 

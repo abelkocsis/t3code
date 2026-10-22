@@ -463,3 +463,72 @@ export function buildThreadTitlePrompt(input: ThreadTitlePromptInput) {
 
   return { prompt, outputSchema };
 }
+
+export interface DailySummaryPromptInput {
+  /** The day being summarised, as `YYYY-MM-DD` in the user's zone. */
+  day: string;
+  /** The evidence block, already grouped and capped by the collectors. */
+  facts: string;
+  /** Bullets the user kept from an earlier run of this same day. */
+  keptItems: ReadonlyArray<string>;
+  /** Bullets the user removed from this day. They must not come back. */
+  excludedItems: ReadonlyArray<string>;
+}
+
+/**
+ * Writes the daily summary prompt.
+ *
+ * The prompt carries no summary from another day. A model reads an earlier
+ * summary as evidence however it is labelled, and then reports that day's work
+ * again under today's date. Only the current day's kept and excluded items
+ * appear, because both belong to the day being written.
+ */
+export function buildDailySummaryPrompt(input: DailySummaryPromptInput) {
+  const lines: string[] = [
+    "You write a developer's daily standup update.",
+    "Return a JSON object with key: items.",
+    "`items` is an array of objects with keys: text, source.",
+    "`source` is one of: thread, commit, pullRequest, issue, cliSession.",
+    "",
+    "Rules:",
+    "- Keep each item short. Twenty words maximum, one line, no paragraph.",
+    "- Say what the user achieved, in the past tense. Name the result, not the activity.",
+    "- Cut every clause the reader does not need. The user asks when they want detail.",
+    "- Do not chain clauses with `and`, `which`, `so` or `because`. Split them into separate items instead.",
+    "- Write one item per stream of work, not one per commit or per thread.",
+    "- Group work on the same repository, feature or incident into one item, or into a few short items.",
+    "- Keep the repository or project name when it tells the reader where the work landed.",
+    "- Keep pull request and issue numbers when the evidence shows them.",
+    "- Name a blocker when the evidence shows one. Keep it to one short item.",
+    "- Write plain sentences or fragments. No headings, no bold, no leading bullet character.",
+    "- Use only the evidence below. Never invent work, numbers or names.",
+    "- Report only what the user did. A pull request number in a commit subject is a reference, not proof that the user merged it.",
+    "- Report every stream of work the evidence shows, then stop. Eight items is the maximum.",
+    "- Never pad the list. Two well-supported items beat eight invented ones.",
+    `- The day is ${input.day}.`,
+  ];
+
+  if (input.keptItems.length > 0) {
+    lines.push(
+      "",
+      "The user kept these items from an earlier run of this day. Keep their meaning:",
+      ...input.keptItems.map((item) => `- ${limitSection(item, 500)}`),
+    );
+  }
+
+  if (input.excludedItems.length > 0) {
+    lines.push(
+      "",
+      "The user removed these items from this day. Do not report this work again:",
+      ...input.excludedItems.map((item) => `- ${limitSection(item, 500)}`),
+    );
+  }
+
+  lines.push("", "Evidence:", limitSection(input.facts, 120_000));
+
+  const outputSchema = Schema.Struct({
+    items: Schema.Array(Schema.Struct({ text: Schema.String, source: Schema.String })),
+  });
+
+  return { prompt: lines.join("\n"), outputSchema };
+}
