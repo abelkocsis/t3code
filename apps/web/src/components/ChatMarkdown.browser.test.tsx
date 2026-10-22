@@ -457,7 +457,7 @@ describe("ChatMarkdown favicon privacy", () => {
 });
 
 describe("ChatMarkdown streaming", () => {
-  it("runs only a complete single-line shell block after a click", async () => {
+  it("pastes only a complete shell block after a click", async () => {
     setup();
     const onRunShellCommand = vi.fn();
     const message = (text: string, isStreaming = false) => (
@@ -470,7 +470,7 @@ describe("ChatMarkdown streaming", () => {
     );
     await using screen = await render(message("```bash\necho hello\n```", true));
     const { container, rerender } = screen;
-    const runButtons = () => buttonsLabelled(container, "Run in terminal");
+    const runButtons = () => buttonsLabelled(container, "Paste into terminal");
     expect(runButtons()).toHaveLength(0);
 
     await rerender(message("```bash\necho hello\n```"));
@@ -483,16 +483,16 @@ describe("ChatMarkdown streaming", () => {
       "````bash\necho four\n````",
       "- Command\n\n  ```bash\n  echo list\n  ```",
       "```bash\r\necho crlf\r\n```\r",
+      "```bash\necho one\necho two\n```",
+      "```bash\necho hello\n\n```",
     ]) {
       await rerender(message(text));
       expect(runButtons()).toHaveLength(1);
     }
 
     for (const text of [
-      "```bash\necho one\necho two\n```",
       "```typescript\necho hello\n```",
       "```bash\n\n```",
-      "```bash\necho hello\n\n```",
       "```bash\necho hello\\\n```",
       "```bash\necho safe \u202e#\n```",
       "```bash\necho incomplete",

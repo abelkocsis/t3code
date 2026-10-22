@@ -39,9 +39,9 @@ import {
   MessageSquareIcon,
   MessageSquareWarningIcon,
   OctagonAlertIcon,
-  PlayIcon,
   PresentationIcon,
   SparklesIcon,
+  TerminalIcon,
   TriangleAlertIcon,
   WorkflowIcon,
   WrapTextIcon,
@@ -920,7 +920,8 @@ function MarkdownCodeBlock({
     !command.endsWith("\\") &&
     // Control and invisible format characters (bidi overrides, zero-width) can
     // make the rendered command differ from what the terminal would receive.
-    !/[\p{Cc}\p{Cf}]/u.test(code.slice(0, -1));
+    // Line breaks stay: a multi-line block is pasted, not run, so nothing fires.
+    !/[\p{Cc}\p{Cf}]/u.test(code.slice(0, -1).replace(/\n/g, ""));
 
   const handleCopy = () => {
     if (typeof navigator === "undefined" || navigator.clipboard == null) {
@@ -1028,13 +1029,13 @@ function MarkdownCodeBlock({
                     variant="ghost-muted"
                     size="icon-xs"
                     onClick={() => onRunShellCommand(command)}
-                    aria-label="Run in terminal"
+                    aria-label="Paste into terminal"
                   />
                 }
               >
-                <PlayIcon className="size-3" />
+                <TerminalIcon className="size-3" />
               </TooltipTrigger>
-              <TooltipPopup side="top">Run in terminal</TooltipPopup>
+              <TooltipPopup side="top">Paste into terminal</TooltipPopup>
             </Tooltip>
           ) : null}
           {viewToggle}

@@ -17,6 +17,13 @@ then copy. Cmd+A on macOS and Ctrl+Shift+A elsewhere select the same output.
 Ctrl+A still moves to the beginning of shell input on Windows and Linux.
 Jump to latest in the context menu returns to the current output.
 
+## Paste a command from the chat
+
+A shell code block in an agent reply has a **Paste into terminal** button. It
+opens the thread's terminal and places the command at the prompt without
+running it. Read the command, then press Enter to run it. A multi-line block
+arrives as one paste, so the whole block waits in the edit buffer.
+
 ## fish
 
 T3 Code starts fish with `no-query-term`, avoiding startup waits for terminal

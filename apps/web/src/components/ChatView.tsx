@@ -316,6 +316,7 @@ import { confirmTerminalClose } from "../lib/terminalCloseConfirm";
 import { isPreviewFocused } from "../lib/previewFocus";
 import { getTerminalFocusOwner } from "../lib/terminalFocus";
 import { findReusableProjectScriptTerminal } from "../lib/projectScriptTerminal";
+import { shellCommandPasteData } from "../markdown-shell-commands";
 import { resolveNewDraftStartFromOrigin } from "../lib/chatThreadActions";
 import {
   deriveLogicalProjectKeyFromSettings,
@@ -3588,7 +3589,8 @@ export default function ChatView(props: ChatViewProps) {
       worktreePath?: string | null;
       preferNewTerminal?: boolean;
       rememberAsLastInvoked?: boolean;
-      shellHistory?: "preserve" | "suppress";
+      /** Writes the command without Enter, so the user reads it at the prompt first. */
+      paste?: boolean;
     },
   ) => {
     if (!hasTerminalWriteAccess() || !activeThreadId || !activeProject || !activeThread) return;
@@ -3655,8 +3657,8 @@ export default function ChatView(props: ChatViewProps) {
 
     const writeResult = await terminalActions.writeToTerminal(
       targetTerminalId,
-      options?.shellHistory === "preserve"
-        ? `${script.command}\r`
+      options?.paste
+        ? shellCommandPasteData(script.command)
         : projectScriptTerminalInput(script.command),
     );
     if (!writeResult) return;
@@ -3694,6 +3696,7 @@ export default function ChatView(props: ChatViewProps) {
   useLayoutEffect(() => {
     runProjectScriptRef.current = runProjectScriptStable;
   }, [runProjectScriptStable]);
+  // The block lands at the prompt without Enter: the user reviews it, then runs it.
   const runShellCommand = (command: string) => {
     void runProjectScriptRef.current(
       {
@@ -3703,7 +3706,7 @@ export default function ChatView(props: ChatViewProps) {
         icon: "play",
         runOnWorktreeCreate: false,
       },
-      { rememberAsLastInvoked: false, shellHistory: "preserve" },
+      { rememberAsLastInvoked: false, paste: true },
     );
   };
   const runShellCommandStable = useStableCallback(runShellCommand);
