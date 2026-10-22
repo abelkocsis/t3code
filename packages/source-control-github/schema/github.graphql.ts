@@ -112,6 +112,16 @@ export const MergeableState = Schema.Literals(["CONFLICTING", "MERGEABLE", "UNKN
 export type MergeableState = typeof MergeableState.Type
 
 /**
+ * Array of allowed merge methods. Allowed values include `merge`, `squash`, and `rebase`. At least one option must be enabled.
+ *
+ * - `MERGE`: Add all commits from the head branch to the base branch with a merge commit.
+ * - `REBASE`: Add all commits from the head branch onto the base branch individually.
+ * - `SQUASH`: Combine all commits from the head branch into a single commit in the base branch.
+ */
+export const PullRequestAllowedMergeMethods = Schema.Literals(["MERGE", "REBASE", "SQUASH"])
+export type PullRequestAllowedMergeMethods = typeof PullRequestAllowedMergeMethods.Type
+
+/**
  * The possible methods for updating a pull request's head branch with the base branch.
  *
  * - `MERGE`: Update branch via merge
@@ -396,6 +406,14 @@ export declare namespace Typename {
   export type RepositoryOwner = "Organization" | "User"
   /** Every possible `__typename` of union `RequestedReviewer`. */
   export type RequestedReviewer = "Bot" | "EnterpriseTeam" | "Mannequin" | "Team" | "User"
+  /** Every possible `__typename` of union `RuleParameters`. */
+  export type RuleParameters =
+    | "BranchNamePatternParameters" | "CodeCoverageParameters" | "CodeQualityParameters" | "CodeScanningParameters"
+    | "CommitAuthorEmailPatternParameters" | "CommitMessagePatternParameters" | "CommitterEmailPatternParameters"
+    | "CopilotCodeReviewParameters" | "FileExtensionRestrictionParameters" | "FilePathRestrictionParameters"
+    | "MaxFilePathLengthParameters" | "MaxFileSizeParameters" | "MergeQueueParameters" | "PullRequestParameters"
+    | "RequiredDeploymentsParameters" | "RequiredStatusChecksParameters" | "TagNamePatternParameters"
+    | "UpdateParameters" | "WorkflowsParameters"
   /** Every possible `__typename` of union `SearchResultItem`. */
   export type SearchResultItem =
     | "App" | "Discussion" | "Issue" | "MarketplaceListing" | "Organization" | "PullRequest" | "Repository" | "User"

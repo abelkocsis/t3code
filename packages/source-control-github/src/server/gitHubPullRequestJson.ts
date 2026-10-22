@@ -50,6 +50,7 @@ import {
 } from "./pullRequestListings.graphql.ts";
 import type {
   ActorAvatars,
+  BaseRefRules,
   CheckContext,
   LabelCandidates,
   PullRequestActivity,
@@ -1097,6 +1098,35 @@ type CoreRequestedReviewer = NonNullable<
   >["nodes"]
 >[number];
 
+/**
+ * Every pull request rule on the base branch applies at once, so only the methods they all allow
+ * merge: the repository settings can allow a merge commit while a ruleset on the base branch
+ * allows only squash, and GitHub refuses the method the ruleset leaves out. A base ref that was
+ * not read, or an install without rulesets, keeps the repository settings as they are.
+ */
+function toMergeCapabilities(
+  repository: {
+    readonly mergeCommitAllowed: boolean;
+    readonly squashMergeAllowed: boolean;
+    readonly rebaseMergeAllowed: boolean;
+  },
+  baseRef: BaseRefRules | null | undefined,
+): PullRequestMergeCapabilities {
+  const allowedByRules = (method: GitHubSchema.PullRequestAllowedMergeMethods) =>
+    (baseRef?.rules?.nodes ?? []).every((rule) => {
+      const parameters = rule?.parameters;
+      if (parameters?.__typename !== "PullRequestParameters") return true;
+      return (
+        parameters.allowedMergeMethods === null || parameters.allowedMergeMethods.includes(method)
+      );
+    });
+  return {
+    merge: repository.mergeCommitAllowed && allowedByRules("MERGE"),
+    squash: repository.squashMergeAllowed && allowedByRules("SQUASH"),
+    rebase: repository.rebaseMergeAllowed && allowedByRules("REBASE"),
+  };
+}
+
 /** Null for a repository or number that names no pull request the viewer can see. */
 export function toPullRequestCore(result: PullRequestCore.Result): GitHubPullRequestCore | null {
   const repository = result.repository;
@@ -1139,11 +1169,7 @@ export function toPullRequestCore(result: PullRequestCore.Result): GitHubPullReq
       canTriage: toCanTriage(repository.viewerPermission),
       ...toPullRequestViewerFields(pr),
       canMergeNow: IMMEDIATELY_MERGEABLE.has(pr.mergeStateStatus),
-      mergeCapabilities: {
-        merge: repository.mergeCommitAllowed,
-        squash: repository.squashMergeAllowed,
-        rebase: repository.rebaseMergeAllowed,
-      },
+      mergeCapabilities: toMergeCapabilities(repository, pr.baseRef),
       autoMergeAllowed: repository.autoMergeAllowed,
     },
     comparison:
@@ -1687,11 +1713,7 @@ export function toViewerPermissions(
   const repository = result.repository;
   if (repository == null) return null;
   return {
-    mergeCapabilities: {
-      merge: repository.mergeCommitAllowed,
-      squash: repository.squashMergeAllowed,
-      rebase: repository.rebaseMergeAllowed,
-    },
+    mergeCapabilities: toMergeCapabilities(repository, repository.pullRequest?.baseRef),
     autoMergeAllowed: repository.autoMergeAllowed,
     canWrite: toCanWrite(repository.viewerPermission),
     canDeleteBranch: toCanWrite(repository.pullRequest?.headRepository?.viewerPermission),

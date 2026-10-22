@@ -82,6 +82,51 @@ export const CheckContext = Schema.Union([
 ])
 export type CheckContext = typeof CheckContext.Type
 
+/** Require all commits be made to a non-target branch and submitted via a pull request before they can be merged. */
+export const PullRequestParameters = Schema.Struct({
+  __typename: Schema.Literal("PullRequestParameters"),
+  /**
+   * Array of allowed merge methods. Allowed values include `merge`, `squash`, and
+   * `rebase`. At least one option must be enabled.
+   */
+  allowedMergeMethods: Schema.NullOr(Schema.Array(GraphQL.enumLiterals(Shared.PullRequestAllowedMergeMethods.literals)))
+})
+export interface PullRequestParameters extends Schema.Struct.Type<typeof PullRequestParameters.fields> {}
+
+/** Types which can be parameters for `RepositoryRule` objects. */
+export const RuleParametersOther = Schema.Struct({
+  __typename: GraphQL.otherTypename<Shared.Typename.RuleParameters>()(["PullRequestParameters"])
+})
+export interface RuleParametersOther extends Schema.Struct.Type<typeof RuleParametersOther.fields> {}
+
+/** A repository rule. */
+export const RepositoryRule = Schema.Struct({
+  /** The parameters for this rule. */
+  parameters: Schema.NullOr(Schema.Union([
+    PullRequestParameters,
+    RuleParametersOther
+  ]))
+})
+export interface RepositoryRule extends Schema.Struct.Type<typeof RepositoryRule.fields> {}
+
+/** The connection type for RepositoryRule. */
+export const RepositoryRuleConnection = Schema.Struct({
+  /** A list of nodes. */
+  nodes: Schema.NullOr(Schema.Array(Schema.NullOr(RepositoryRule)))
+})
+export interface RepositoryRuleConnection extends Schema.Struct.Type<typeof RepositoryRuleConnection.fields> {}
+
+/**
+ * `fragment BaseRefRules on Ref`
+ *
+ * Represents a Git reference.
+ */
+export const BaseRefRules = Schema.Struct({
+  /** A list of rules from active Repository and Organization rulesets that apply to this ref. */
+  rules: Schema.NullOr(RepositoryRuleConnection)
+})
+export interface BaseRefRules extends Schema.Struct.Type<typeof BaseRefRules.fields> {}
+
 /** A user is an individual's account on GitHub that owns repositories and can make new content. */
 export const ViewerUser = Schema.Struct({
   /** Identifies the primary key from the database. */
@@ -230,11 +275,12 @@ export const Comparison = Schema.Struct({
 export interface Comparison extends Schema.Struct.Type<typeof Comparison.fields> {}
 
 /** Represents a Git reference. */
-export const BaseRefRef = Schema.Struct({
+export const PullRequestCoreRepositoryPullRequestBaseRefRef = Schema.Struct({
   /** Compares the current ref as a base ref to another head ref, if the comparison can be made. */
-  compare: Schema.NullOr(Comparison)
+  compare: Schema.NullOr(Comparison),
+  ...BaseRefRules.fields
 })
-export interface BaseRefRef extends Schema.Struct.Type<typeof BaseRefRef.fields> {}
+export interface PullRequestCoreRepositoryPullRequestBaseRefRef extends Schema.Struct.Type<typeof PullRequestCoreRepositoryPullRequestBaseRefRef.fields> {}
 
 /** A user is an individual's account on GitHub that owns repositories and can make new content. */
 export const RequestedReviewerUser = Schema.Struct({
@@ -418,7 +464,7 @@ export const PullRequestCoreRepositoryPullRequestPullRequest = Schema.Struct({
    */
   viewerCanUpdateBranch: Schema.Boolean,
   /** Identifies the base Ref associated with the pull request. */
-  baseRef: Schema.NullOr(BaseRefRef),
+  baseRef: Schema.NullOr(PullRequestCoreRepositoryPullRequestBaseRefRef),
   /** A list of review requests associated with the pull request. */
   reviewRequests: Schema.NullOr(PullRequestCoreRepositoryPullRequestReviewRequestsReviewRequestConnection),
   /** A list of labels associated with the object. */
@@ -457,9 +503,10 @@ export const PullRequestCore = GraphQL.query("PullRequestCore", {
       { name: "requestedReviewers", body: "Int!" }
     ],
     selections: [
-      { name: "repository", body: ["(owner:$", "owner", " name:$", "name", "){mergeCommitAllowed squashMergeAllowed rebaseMergeAllowed autoMergeAllowed viewerPermission pullRequest(number:$", "number", "){number title url body state isDraft mergeable mergeStateStatus reviewDecision additions deletions changedFiles createdAt updatedAt mergedAt closedAt headRefName baseRefName headRefOid isCrossRepository headRepositoryOwner{__typename login}headRepository{nameWithOwner viewerPermission}headRef{id}author{__typename login avatarUrl...on User{id name}}autoMergeRequest{mergeMethod}viewerCanUpdate viewerDidAuthor viewerCanUpdateBranch baseRef{compare(headRef:$", "headRef", "){behindBy}}reviewRequests(first:$", "requestedReviewers", "){nodes{requestedReviewer{__typename...on User{login name}...on Bot{login}...on Team{slug combinedSlug teamName:name teamAvatarUrl:avatarUrl}}}}labels(first:100){nodes{name color}}commits(last:1){nodes{commit{statusCheckRollup{contexts(first:100){nodes{__typename...", "CheckContext", "}pageInfo{hasNextPage}}}}}}}}"] }
+      { name: "repository", body: ["(owner:$", "owner", " name:$", "name", "){mergeCommitAllowed squashMergeAllowed rebaseMergeAllowed autoMergeAllowed viewerPermission pullRequest(number:$", "number", "){number title url body state isDraft mergeable mergeStateStatus reviewDecision additions deletions changedFiles createdAt updatedAt mergedAt closedAt headRefName baseRefName headRefOid isCrossRepository headRepositoryOwner{__typename login}headRepository{nameWithOwner viewerPermission}headRef{id}author{__typename login avatarUrl...on User{id name}}autoMergeRequest{mergeMethod}viewerCanUpdate viewerDidAuthor viewerCanUpdateBranch baseRef{compare(headRef:$", "headRef", "){behindBy}...BaseRefRules}reviewRequests(first:$", "requestedReviewers", "){nodes{requestedReviewer{__typename...on User{login name}...on Bot{login}...on Team{slug combinedSlug teamName:name teamAvatarUrl:avatarUrl}}}}labels(first:100){nodes{name color}}commits(last:1){nodes{commit{statusCheckRollup{contexts(first:100){nodes{__typename...", "CheckContext", "}pageInfo{hasNextPage}}}}}}}}"] }
     ],
     fragments: [
+      { name: "BaseRefRules", body: ["on Ref{rules(first:100){nodes{parameters{__typename...on PullRequestParameters{allowedMergeMethods}}}}}"] },
       { name: "CheckContext", body: ["on StatusCheckRollupContext{__typename...on StatusContext{context state targetUrl createdAt description isRequired(pullRequestNumber:$", "number", ")@include(if:$", "required", ")}...on CheckRun{name status conclusion startedAt completedAt detailsUrl isRequired(pullRequestNumber:$", "number", ")@include(if:$", "required", ")checkSuite{workflowRun{workflow{name}}}}}"] }
     ]
   },
@@ -1016,7 +1063,9 @@ export const ViewerPermissionsRepositoryPullRequestPullRequest = Schema.Struct({
   /** Did the viewer author this comment. */
   viewerDidAuthor: Schema.Boolean,
   /** The repository associated with this pull request's head Ref. */
-  headRepository: Schema.NullOr(ViewerPermissionsRepositoryPullRequestHeadRepositoryRepository)
+  headRepository: Schema.NullOr(ViewerPermissionsRepositoryPullRequestHeadRepositoryRepository),
+  /** Identifies the base Ref associated with the pull request. */
+  baseRef: Schema.NullOr(BaseRefRules)
 })
 export interface ViewerPermissionsRepositoryPullRequestPullRequest extends Schema.Struct.Type<typeof ViewerPermissionsRepositoryPullRequestPullRequest.fields> {}
 
@@ -1046,9 +1095,11 @@ export const ViewerPermissions = GraphQL.query("ViewerPermissions", {
       { name: "number", body: "Int!" }
     ],
     selections: [
-      { name: "repository", body: ["(owner:$", "owner", " name:$", "name", "){mergeCommitAllowed squashMergeAllowed rebaseMergeAllowed autoMergeAllowed viewerPermission pullRequest(number:$", "number", "){viewerCanUpdate viewerDidAuthor headRepository{viewerPermission}}}"] }
+      { name: "repository", body: ["(owner:$", "owner", " name:$", "name", "){mergeCommitAllowed squashMergeAllowed rebaseMergeAllowed autoMergeAllowed viewerPermission pullRequest(number:$", "number", "){viewerCanUpdate viewerDidAuthor headRepository{viewerPermission}baseRef{...BaseRefRules}}}"] }
     ],
-    fragments: []
+    fragments: [
+      { name: "BaseRefRules", body: ["on Ref{rules(first:100){nodes{parameters{__typename...on PullRequestParameters{allowedMergeMethods}}}}}"] }
+    ]
   },
   variables: {
     owner: Schema.String,
@@ -1410,6 +1461,13 @@ export declare namespace PullRequestMergeMessage {
   export type Result = typeof PullRequestMergeMessage.result.Type
 }
 
+/** Represents a Git reference. */
+export const PullRequestActionStateRepositoryPullRequestBaseRefRef = Schema.Struct({
+  /** Compares the current ref as a base ref to another head ref, if the comparison can be made. */
+  compare: Schema.NullOr(Comparison)
+})
+export interface PullRequestActionStateRepositoryPullRequestBaseRefRef extends Schema.Struct.Type<typeof PullRequestActionStateRepositoryPullRequestBaseRefRef.fields> {}
+
 /** A repository pull request. */
 export const PullRequestActionStateRepositoryPullRequestPullRequest = Schema.Struct({
   /** The Node ID of the PullRequest object */
@@ -1421,7 +1479,7 @@ export const PullRequestActionStateRepositoryPullRequestPullRequest = Schema.Str
   /** Detailed information about the current pull request merge state status. */
   mergeStateStatus: GraphQL.enumLiterals(Shared.MergeStateStatus.literals),
   /** Identifies the base Ref associated with the pull request. */
-  baseRef: Schema.NullOr(BaseRefRef)
+  baseRef: Schema.NullOr(PullRequestActionStateRepositoryPullRequestBaseRefRef)
 })
 export interface PullRequestActionStateRepositoryPullRequestPullRequest extends Schema.Struct.Type<typeof PullRequestActionStateRepositoryPullRequestPullRequest.fields> {}
 

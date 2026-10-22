@@ -1274,6 +1274,54 @@ describe("repository access decoding", () => {
     ).toEqual({ merge: true, squash: false, rebase: true });
   });
 
+  it("keeps only the merge methods every base branch rule allows", () => {
+    const rules = (
+      ...allowed: ReadonlyArray<ReadonlyArray<"MERGE" | "SQUASH" | "REBASE"> | null>
+    ) => ({
+      rules: {
+        nodes: [
+          ...allowed.map((allowedMergeMethods) => ({
+            parameters: { __typename: "PullRequestParameters", allowedMergeMethods },
+          })),
+          { parameters: { __typename: "RequiredStatusChecksParameters" } },
+          { parameters: null },
+          null,
+        ],
+      },
+    });
+    const withRules = (baseRef: unknown) =>
+      expectSuccess(
+        decodeViewerPermissionsJson(
+          JSON.stringify({
+            data: {
+              repository: {
+                mergeCommitAllowed: true,
+                squashMergeAllowed: true,
+                rebaseMergeAllowed: true,
+                autoMergeAllowed: true,
+                viewerPermission: "WRITE",
+                pullRequest: {
+                  viewerCanUpdate: true,
+                  viewerDidAuthor: false,
+                  headRepository: null,
+                  baseRef,
+                },
+              },
+            },
+          }),
+        ),
+      ).mergeCapabilities;
+
+    expect(withRules(rules(["MERGE", "SQUASH", "REBASE"], null, ["SQUASH"]))).toEqual({
+      merge: false,
+      squash: true,
+      rebase: false,
+    });
+    // Rules that say nothing about merging, or no base ref at all, leave the settings alone.
+    expect(withRules(rules())).toEqual({ merge: true, squash: true, rebase: true });
+    expect(withRules(null)).toEqual({ merge: true, squash: true, rebase: true });
+  });
+
   it("fails rather than defaulting open when a setting is missing", () => {
     const decoded = decodeViewerPermissionsJson(
       JSON.stringify({ data: { repository: { pullRequest: null, mergeCommitAllowed: true } } }),
@@ -1327,7 +1375,12 @@ describe("viewer permission decoding", () => {
         decodeViewerPermissionsJson(
           viewerJson({
             viewerPermission: "READ",
-            pullRequest: { viewerCanUpdate: true, viewerDidAuthor: true, headRepository: null },
+            pullRequest: {
+              viewerCanUpdate: true,
+              viewerDidAuthor: true,
+              headRepository: null,
+              baseRef: null,
+            },
           }),
         ),
       ),
@@ -1348,7 +1401,12 @@ describe("viewer permission decoding", () => {
         decodeViewerPermissionsJson(
           viewerJson({
             viewerPermission: "READ",
-            pullRequest: { viewerCanUpdate: false, viewerDidAuthor: false, headRepository: null },
+            pullRequest: {
+              viewerCanUpdate: false,
+              viewerDidAuthor: false,
+              headRepository: null,
+              baseRef: null,
+            },
           }),
         ),
       ),
@@ -1387,7 +1445,12 @@ describe("viewer permission decoding", () => {
       decodeViewerPermissionsJson(
         viewerJson({
           viewerPermission: "TRIAGE",
-          pullRequest: { viewerCanUpdate: false, viewerDidAuthor: false, headRepository: null },
+          pullRequest: {
+            viewerCanUpdate: false,
+            viewerDidAuthor: false,
+            headRepository: null,
+            baseRef: null,
+          },
         }),
       ),
     );

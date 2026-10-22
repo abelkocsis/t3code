@@ -52,6 +52,20 @@ fragment CheckContext on StatusCheckRollupContext {
 
 # The detail of a pull request with the viewer's standing on it. Pull refs let the comparison
 # (`$headRef` is `refs/pull/<number>/head`) share this read without first resolving a fork branch.
+# The rulesets on the base branch. A pull request rule can narrow the merge methods below what
+# the repository settings allow, and GitHub refuses a merge that uses one it leaves out.
+fragment BaseRefRules on Ref {
+  rules(first: 100) {
+    nodes {
+      parameters {
+        ... on PullRequestParameters {
+          allowedMergeMethods
+        }
+      }
+    }
+  }
+}
+
 query PullRequestCore(
   $owner: String!
   $name: String!
@@ -117,6 +131,7 @@ query PullRequestCore(
         compare(headRef: $headRef) {
           behindBy
         }
+        ...BaseRefRules
       }
       reviewRequests(first: $requestedReviewers) {
         nodes {
@@ -376,6 +391,9 @@ query ViewerPermissions($owner: String!, $name: String!, $number: Int!) {
       viewerDidAuthor
       headRepository {
         viewerPermission
+      }
+      baseRef {
+        ...BaseRefRules
       }
     }
   }
