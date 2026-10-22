@@ -490,6 +490,9 @@ export const ClientSettingsSchema = Schema.Struct({
   // Compact sidebar rows. Off, live threads keep the full card and only
   // parked threads collapse; on, every thread is a one-line row.
   sidebarCompactThreadRows: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(false))),
+  // The thread details card beside the chat (machine, editor, scripts, git
+  // actions) and its title-bar toggle. Off hides both.
+  threadDetailsCardEnabled: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(true))),
   sidebarProjectGroupingMode: SidebarProjectGroupingMode.pipe(
     Schema.withDecodingDefault(Effect.succeed(DEFAULT_SIDEBAR_PROJECT_GROUPING_MODE)),
   ),
@@ -1764,6 +1767,7 @@ export const ClientSettingsPatch = Schema.Struct({
   legacySidebarEnabled: Schema.optionalKey(Schema.Boolean),
   sidebarWorkingShelfEnabled: Schema.optionalKey(Schema.Boolean),
   sidebarCompactThreadRows: Schema.optionalKey(Schema.Boolean),
+  threadDetailsCardEnabled: Schema.optionalKey(Schema.Boolean),
   sidebarProjectGroupingMode: Schema.optionalKey(SidebarProjectGroupingMode),
   sidebarProjectGroupingOverrides: Schema.optionalKey(
     Schema.Record(TrimmedNonEmptyString, SidebarProjectGroupingMode),

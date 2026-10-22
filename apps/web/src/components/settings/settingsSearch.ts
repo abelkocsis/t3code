@@ -349,6 +349,12 @@ export const SETTINGS_SEARCH_ITEMS = [
     searchTerms: ["hide fold running monitoring threads inbox sidebar shelf"],
   },
   {
+    id: "thread-details-card",
+    title: "Thread details card",
+    to: "/settings/general",
+    searchTerms: ["details panel machine editor scripts git actions card hide toggle"],
+  },
+  {
     id: "compact-thread-rows",
     title: "Compact thread rows",
     to: "/settings/general",

@@ -2389,6 +2389,20 @@ export function GeneralSettingsPanel() {
         />
 
         <SettingsRow
+          {...searchableSetting("thread-details-card")}
+          description="Show the thread details card with the machine, editor, project scripts and git actions, and its toggle in the title bar."
+          control={
+            <Switch
+              checked={settings.threadDetailsCardEnabled}
+              onCheckedChange={(checked) =>
+                updateSettings({ threadDetailsCardEnabled: Boolean(checked) })
+              }
+              aria-label="Thread details card"
+            />
+          }
+        />
+
+        <SettingsRow
           serverScoped
           settingKeys={["compactIdleThreads"]}
           {...searchableSetting("compact-idle-threads")}
