@@ -57,6 +57,8 @@ export function useSetThreadFactory() {
   });
   return (environmentId: EnvironmentId, threadId: ThreadId, factory: ThreadFactory | null) =>
     setThreadFactory({ environmentId, input: { threadId, factory } });
+}
+
 /** The fork's row for one thread, or null when the fork has not touched it. */
 export function useForkThreadState(threadRef: ScopedThreadRef | null): ForkThreadState | null {
   const states = useForkThreadStates();

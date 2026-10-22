@@ -70,6 +70,22 @@ const ForkThreadFactory = Effect.gen(function* () {
  * import does. A pristine upstream database has no such column and nothing to import.
  */
 const ImportLegacyThreadFactory = Effect.gen(function* () {
+  const sql = yield* SqlClient.SqlClient;
+  const tables = yield* sql<{ readonly name: string }>`
+    SELECT name FROM sqlite_schema WHERE type = 'table' AND name = 'projection_threads'
+  `;
+  if (tables.length === 0) return;
+  const columns = yield* sql<{ readonly name: string }>`PRAGMA table_info(projection_threads)`;
+  if (!columns.some((column) => column.name === "factory_json")) return;
+  yield* sql`
+    INSERT INTO fork_thread_state (thread_id, folder_id, updated_at, factory_json)
+    SELECT thread_id, NULL, updated_at, factory_json
+    FROM projection_threads
+    WHERE factory_json IS NOT NULL
+    ON CONFLICT (thread_id) DO UPDATE SET factory_json = excluded.factory_json
+  `;
+});
+
 const ForkThreadStateSlackThread = Effect.gen(function* () {
   const sql = yield* SqlClient.SqlClient;
   yield* sql`ALTER TABLE fork_thread_state ADD COLUMN slack_thread_json TEXT`;
@@ -87,13 +103,6 @@ const ImportLegacySlackThread = Effect.gen(function* () {
   `;
   if (tables.length === 0) return;
   const columns = yield* sql<{ readonly name: string }>`PRAGMA table_info(projection_threads)`;
-  if (!columns.some((column) => column.name === "factory_json")) return;
-  yield* sql`
-    INSERT INTO fork_thread_state (thread_id, folder_id, updated_at, factory_json)
-    SELECT thread_id, NULL, updated_at, factory_json
-    FROM projection_threads
-    WHERE factory_json IS NOT NULL
-    ON CONFLICT (thread_id) DO UPDATE SET factory_json = excluded.factory_json
   if (!columns.some((column) => column.name === "slack_thread_json")) return;
   yield* sql`
     INSERT INTO fork_thread_state (thread_id, folder_id, slack_thread_json, updated_at)

@@ -69,7 +69,7 @@ function states(
   return new Map(
     entries.map(([shell, state]) => [
       scopedThreadKey(scopeThreadRef(shell.environmentId, shell.id)),
-      { threadId: shell.id, folderId: null, factory: state, updatedAt: NOW },
+      { threadId: shell.id, folderId: null, factory: state, slackThread: null, updatedAt: NOW },
     ]),
   );
 }

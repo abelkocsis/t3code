@@ -103,6 +103,9 @@ it.layer(layer)("ForkThreadStateStore", (it) => {
       `;
       const listed = yield* store.list;
       assert.strictEqual(listed.find((state) => state.threadId === "thread-broken")?.factory, null);
+    }),
+  );
+
   it.effect("links a Slack thread without touching the folder, and reads one row back", () =>
     Effect.gen(function* () {
       const store = yield* ForkThreadStateStore.ForkThreadStateStore;

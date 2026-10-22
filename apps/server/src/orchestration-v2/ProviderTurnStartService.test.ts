@@ -678,6 +678,7 @@ function makeLocalCommandHarness(input: {
                 : {
                     threadId,
                     folderId: null,
+                    factory: null,
                     slackThread: input.slackThread,
                     updatedAt: "2026-09-04T12:00:00Z",
                   },
