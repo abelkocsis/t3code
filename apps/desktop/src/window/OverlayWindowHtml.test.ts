@@ -86,6 +86,11 @@ describe("buildOverlayDataUrl", () => {
     expect(html).toContain('id="exit"');
   });
 
+  it("heads factory tasks apart from plain threads", () => {
+    expect(html).toContain('item.section === "factory"');
+    expect(html).toContain('"Factory" : "Threads"');
+  });
+
   it("keeps its strict policy, which a new script block would break", () => {
     expect(html).toContain("script-src 'unsafe-inline'");
   });

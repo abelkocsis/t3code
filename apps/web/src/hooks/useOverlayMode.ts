@@ -55,15 +55,23 @@ export function useOverlayMode(): void {
     stepAway,
     dismissedCount,
   });
+  // Plain threads first, then factory tasks; the overlay heads the two groups when both
+  // have rows.
+  const ordered = [
+    ...resolved.items.filter((item) => !item.factory),
+    ...resolved.items.filter((item) => item.factory),
+  ];
   const state: DesktopOverlayState = {
     mode: resolved.mode,
-    items: resolved.items.map((item) => ({
+    items: ordered.map((item) => ({
       environmentId: item.environmentId,
       threadId: item.threadId,
       threadTitle: item.threadTitle,
       projectTitle: item.projectTitle,
-      phase: item.phase,
-      phaseLabel: shortAttentionLabel(item.phase),
+      // A factory task at a gate waits on the user, so it takes the waiting colour.
+      phase: item.factory?.waiting ? "waiting_for_approval" : item.phase,
+      phaseLabel: item.factory?.label ?? shortAttentionLabel(item.phase),
+      section: item.factory ? "factory" : "threads",
     })),
     workingCount: resolved.workingCount,
     dismissedCount: resolved.dismissedCount,

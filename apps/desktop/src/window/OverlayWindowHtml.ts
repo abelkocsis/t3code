@@ -118,6 +118,11 @@ export const buildOverlayDataUrl = (): string => {
       }
       .item:hover .dismiss { opacity: 1; }
       .item .dismiss:hover { background: rgba(255, 255, 255, 0.14); color: var(--fg); }
+      .section {
+        font-size: 10px; font-weight: 700; letter-spacing: 0.07em; text-transform: uppercase;
+        color: var(--muted); padding: 4px 2px 0;
+      }
+      #shell.stepaway .section { font-size: 14px; padding: 6px 2px 0; }
       .waiting_for_approval { color: var(--amber); }
       .waiting_for_input { color: var(--indigo); }
       .completed { color: var(--emerald); }
@@ -264,7 +269,26 @@ export const buildOverlayDataUrl = (): string => {
                 ? "Nothing running"
                 : "Nothing else running";
           items.replaceChildren();
+          // The two groups get headings only when both have rows; one group alone needs none.
+          var sectionOf = function (item) {
+            return item.section === "factory" ? "factory" : "threads";
+          };
+          var hasFactory = state.items.some(function (item) {
+            return sectionOf(item) === "factory";
+          });
+          var hasThreads = state.items.some(function (item) {
+            return sectionOf(item) === "threads";
+          });
+          var showSections = hasFactory && hasThreads;
+          var lastSection = null;
           state.items.forEach(function (item) {
+            if (showSections && sectionOf(item) !== lastSection) {
+              lastSection = sectionOf(item);
+              var heading = document.createElement("div");
+              heading.className = "section";
+              heading.textContent = lastSection === "factory" ? "Factory" : "Threads";
+              items.appendChild(heading);
+            }
             var row = document.createElement("div");
             row.className = "item";
             var bar = document.createElement("div");
