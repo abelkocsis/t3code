@@ -29,6 +29,16 @@ import {
   ChatGptHandoffState,
 } from "./providerSetup.ts";
 import * as Schema from "effect/Schema";
+import {
+  StandupError,
+  StandupGenerateInput,
+  StandupSaveInput,
+  StandupState,
+  StandupStateInput,
+  StandupSummary,
+  StandupUpdateItemsInput,
+} from "./standup.ts";
+import { TodoError, TodoList, TodoListInput } from "./todos.ts";
 import * as Rpc from "effect/rpc/Rpc";
 import * as RpcGroup from "effect/rpc/RpcGroup";
 import * as RpcMiddleware from "effect/rpc/RpcMiddleware";
@@ -490,6 +500,12 @@ export const WS_METHODS = {
   forkThreadStateSubscribe: "fork.threadState.subscribe",
   forkThreadSetFolder: "fork.threadState.setFolder",
   serverGetStorageCleanupReport: "server.getStorageCleanupReport",
+  serverGetStandupState: "server.getStandupState",
+  serverGenerateStandupSummary: "server.generateStandupSummary",
+  serverUpdateStandupItems: "server.updateStandupItems",
+  serverSaveStandupSummary: "server.saveStandupSummary",
+  serverGetTodoList: "server.getTodoList",
+  serverSetTodoList: "server.setTodoList",
   serverGetDatabaseStorage: "server.getDatabaseStorage",
   serverGetSettings: "server.getSettings",
   serverUpdateSettings: "server.updateSettings",
@@ -767,6 +783,60 @@ const WsServerGetStorageCleanupReportRpc = Rpc.make(WS_METHODS.serverGetStorageC
   success: Schema.NullOr(StorageCleanupReport),
   stream: true,
   error: EnvironmentAuthorizationError,
+});
+
+/**
+ * Loads the day the panel should open on, the days that already hold a stored
+ * summary, and the stored summary for the requested day. It never runs the
+ * model, so opening the panel on a generated day costs nothing.
+ */
+const WsServerGetStandupStateRpc = Rpc.make(WS_METHODS.serverGetStandupState, {
+  payload: StandupStateInput,
+  success: StandupState,
+  error: Schema.Union([EnvironmentAuthorizationError, StandupError]),
+});
+
+/**
+ * Collects the day's work and asks the model to write the bullets. This is the
+ * only method that spends tokens, so the client calls it on an explicit open of
+ * an ungenerated day, or on the Regenerate button.
+ */
+const WsServerGenerateStandupSummaryRpc = Rpc.make(WS_METHODS.serverGenerateStandupSummary, {
+  payload: StandupGenerateInput,
+  success: StandupSummary,
+  error: Schema.Union([EnvironmentAuthorizationError, StandupError]),
+});
+
+/** Replaces the item list, which covers excluding a bullet, editing one and adding one. */
+const WsServerUpdateStandupItemsRpc = Rpc.make(WS_METHODS.serverUpdateStandupItems, {
+  payload: StandupUpdateItemsInput,
+  success: StandupSummary,
+  error: Schema.Union([EnvironmentAuthorizationError, StandupError]),
+});
+
+/** Records the text the user copied out, so the panel shows what was sent. */
+const WsServerSaveStandupSummaryRpc = Rpc.make(WS_METHODS.serverSaveStandupSummary, {
+  payload: StandupSaveInput,
+  success: StandupSummary,
+  error: Schema.Union([EnvironmentAuthorizationError, StandupError]),
+});
+
+/** Reads the environment's to-do list. Costs a file read and nothing else. */
+const WsServerGetTodoListRpc = Rpc.make(WS_METHODS.serverGetTodoList, {
+  payload: Schema.Struct({}),
+  success: TodoList,
+  error: Schema.Union([EnvironmentAuthorizationError, TodoError]),
+});
+
+/**
+ * Replaces the list. Every edit is a replacement, so the last client to write
+ * wins: the list is short, one person owns it, and merging two orders would
+ * cost more than it saves.
+ */
+const WsServerSetTodoListRpc = Rpc.make(WS_METHODS.serverSetTodoList, {
+  payload: TodoListInput,
+  success: TodoList,
+  error: Schema.Union([EnvironmentAuthorizationError, TodoError]),
 });
 
 const WsServerGetDatabaseStorageRpc = Rpc.make(WS_METHODS.serverGetDatabaseStorage, {
@@ -1900,7 +1970,7 @@ export class RpcScopeAuthorization extends RpcMiddleware.Service<RpcScopeAuthori
   { error: EnvironmentAuthorizationError },
 ) {}
 
-export const WsRpcGroup = RpcGroup.make(
+export const UpstreamWsRpcGroup = RpcGroup.make(
   WsServerProbeRpc,
   WsServerGetConfigRpc,
   WsServerRefreshProvidersRpc,
@@ -2102,3 +2172,22 @@ export const WsRpcGroup = RpcGroup.make(
   WsOrchestrationV2SubscribeThreadRpc,
   WsOrchestrationV2SubscribeCommandOutputRpc,
 ).middleware(RpcScopeAuthorization);
+
+/**
+ * The fork's own procedures, kept in a second group.
+ *
+ * The upstream group sits at TypeScript's type-instantiation depth limit; one
+ * more handler in its `toLayer` call fails to compile. The server builds one
+ * handler layer per group and serves the merged group, so the depth of each
+ * stays where upstream left it.
+ */
+export const ForkWsRpcGroup = RpcGroup.make(
+  WsServerGetStandupStateRpc,
+  WsServerGenerateStandupSummaryRpc,
+  WsServerUpdateStandupItemsRpc,
+  WsServerSaveStandupSummaryRpc,
+  WsServerGetTodoListRpc,
+  WsServerSetTodoListRpc,
+).middleware(RpcScopeAuthorization);
+
+export const WsRpcGroup = UpstreamWsRpcGroup.merge(ForkWsRpcGroup);
