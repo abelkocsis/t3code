@@ -96,15 +96,20 @@ type Step = "pick" | "compose";
  * starts from an issue often has no project for it yet. The chosen issue names
  * the repository; a project whose git remote names that repository is reused,
  * and the repository is cloned when there is none.
+ *
+ * With `onPick`, the dialog only picks: one issue, handed to the caller instead
+ * of a thread. The Factory page uses this to fill its task field.
  */
 export function IssuePickerDialog({
   open,
   onOpenChange,
   environmentId,
+  onPick,
 }: {
   readonly open: boolean;
   readonly onOpenChange: (open: boolean) => void;
   readonly environmentId: EnvironmentId;
+  readonly onPick?: ((issue: SourceControlIssueSummary) => void) | undefined;
 }) {
   const { environments } = useEnvironments();
   const projects = useProjects();
@@ -392,7 +397,19 @@ export function IssuePickerDialog({
   };
 
   const startLabel = details.length <= 1 ? "Start work" : `Start work on ${details.length} issues`;
-  const nextLabel = selected.length <= 1 ? "Next" : `Next with ${selected.length} issues`;
+  const nextLabel = onPick
+    ? "Use issue"
+    : selected.length <= 1
+      ? "Next"
+      : `Next with ${selected.length} issues`;
+
+  /** Pick mode: hand the one chosen issue over and close. */
+  const pick = () => {
+    const issue = selected[0];
+    if (!onPick || issue === undefined) return;
+    onPick(issue);
+    close();
+  };
 
   return (
     <Dialog
@@ -404,13 +421,15 @@ export function IssuePickerDialog({
     >
       <DialogPopup className="sm:max-w-2xl">
         <DialogHeader>
-          <DialogTitle>Start from a GitHub issue</DialogTitle>
+          <DialogTitle>{onPick ? "Pick a GitHub issue" : "Start from a GitHub issue"}</DialogTitle>
           <DialogDescription>
-            {step === "compose"
-              ? "This is the thread's first message. Edit it as you like; Start work puts it in the composer."
-              : repository === null
-                ? "Search every repository you can read, or paste an issue link. Picking an issue locks the list to its repository."
-                : `Picking more issues from ${repository}. A different repository starts the selection again.`}
+            {onPick
+              ? "Search every repository you can read, or paste an issue link."
+              : step === "compose"
+                ? "This is the thread's first message. Edit it as you like; Start work puts it in the composer."
+                : repository === null
+                  ? "Search every repository you can read, or paste an issue link. Picking an issue locks the list to its repository."
+                  : `Picking more issues from ${repository}. A different repository starts the selection again.`}
           </DialogDescription>
         </DialogHeader>
         {step === "pick" ? (
@@ -454,7 +473,10 @@ export function IssuePickerDialog({
                         checked={selectedKeys.has(issueKey(issue))}
                         resets={selectionWouldReset(selected, issue)}
                         onToggle={() =>
-                          setSelected((current) => toggleIssueSelection(current, issue))
+                          setSelected((current) =>
+                            // Pick mode takes one issue, so a click replaces the choice.
+                            onPick ? [issue] : toggleIssueSelection(current, issue),
+                          )
                         }
                       />
                     ))}
@@ -545,7 +567,7 @@ export function IssuePickerDialog({
                 Cancel
               </Button>
               <Button
-                onClick={() => void compose()}
+                onClick={() => (onPick ? pick() : void compose())}
                 disabled={selected.length === 0 || phase === "loading"}
               >
                 {phase === "loading" ? (

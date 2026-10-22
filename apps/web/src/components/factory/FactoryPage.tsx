@@ -55,6 +55,7 @@ import {
   FolderIcon,
   FolderPlusIcon,
   GripVerticalIcon,
+  CircleDotIcon,
   ListChecksIcon,
   MessageSquareIcon,
   MilestoneIcon,
@@ -166,6 +167,7 @@ import {
 import { TaskModelPicker } from "./TaskModelPicker";
 import { useFactoryMembership } from "./useFactoryMembership";
 import { useStartFactoryTask } from "./useStartFactoryTask";
+import { IssuePickerDialog } from "../issues/IssuePickerDialog";
 
 // The same two panels the right panel hosts beside a thread, loaded on first open.
 const TodoPanel = lazy(() =>
@@ -1858,6 +1860,7 @@ function StartTaskForm() {
   const [chosenProjectKey, setChosenProjectKey] = useState(startTaskDraft.chosenProjectKey);
   const [starting, setStarting] = useState(false);
   const [modelSelection, setModelSelection] = useState(startTaskDraft.modelSelection);
+  const [pickingIssue, setPickingIssue] = useState(false);
 
   useEffect(() => {
     startTaskDraft = { text, chosenProjectKey, modelSelection };
@@ -1900,6 +1903,26 @@ function StartTaskForm() {
         disabled={starting}
       />
       <div className="flex flex-wrap items-center gap-2">
+        {/* The picker searches the account's issues; its link lands in the field above. */}
+        {environmentId !== null ? (
+          <>
+            <Button
+              size="xs"
+              variant="ghost"
+              disabled={starting}
+              onClick={() => setPickingIssue(true)}
+            >
+              <CircleDotIcon aria-hidden className="size-3.5" />
+              Pick an issue
+            </Button>
+            <IssuePickerDialog
+              open={pickingIssue}
+              onOpenChange={setPickingIssue}
+              environmentId={project?.environmentId ?? environmentId}
+              onPick={(issue) => setText(issue.url)}
+            />
+          </>
+        ) : null}
         {input ? <Badge variant="secondary">{INPUT_KIND_LABELS[input.kind]}</Badge> : null}
         {resolution?.kind === "resolved" ? (
           <span className="text-xs text-muted-foreground">Project: {resolution.project.title}</span>
