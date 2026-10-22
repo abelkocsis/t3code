@@ -239,6 +239,47 @@ export function LimitWindows({
   );
 }
 
+/**
+ * The same windows stacked two lines to a row: label, countdown and percent
+ * over a full-width bar. The grid above needs about 20rem of width; this fits
+ * the composer's context meter popover, where the bar is the thing worth the space.
+ */
+export function LimitWindowsStacked({
+  driver,
+  windows,
+  now,
+}: {
+  readonly driver: ServerProvider["driver"];
+  readonly windows: ReadonlyArray<ServerProviderUsageWindow>;
+  readonly now: number;
+}) {
+  const color = barColor(driver);
+  const paceOptions = useLimitPaceOptions();
+  return (
+    <div className="flex flex-col gap-1.5">
+      {windows.map((window) => {
+        const pace = paceOf(window, now, paceOptions);
+        const resetsIn = formatResetsIn(window, now);
+        return (
+          <div key={window.id} className="flex flex-col">
+            <div className="flex min-w-0 items-center gap-2 text-2xs leading-4">
+              <span className="truncate text-muted-foreground">{window.label}</span>
+              <span className="ms-auto flex shrink-0 items-center gap-1.5 text-muted-foreground tabular-nums">
+                {resetsIn ? <span>{resetsIn}</span> : null}
+                {pace ? <PaceIcon pace={pace} /> : null}
+              </span>
+              <span className="shrink-0 font-medium text-foreground tabular-nums">
+                {remainingPercent(window)}% left
+              </span>
+            </div>
+            <WindowBar color={color} window={window} now={now} />
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
 const OUTCOME_TEXT: Record<ProviderConsumeResetCreditOutcome, string> = {
   reset: "Reset applied. Your windows have cleared.",
   nothingToReset: "Nothing to reset right now.",

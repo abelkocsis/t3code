@@ -43,6 +43,7 @@ import type {
   ServerProvider,
   ThreadId,
   SnapShotSource,
+  UsageLimitSourceSnapshots,
 } from "@t3tools/contracts";
 import {
   EnvironmentRequestInvalidError,
@@ -1355,6 +1356,9 @@ const ComposerFooterPrimaryActions = memo(function ComposerFooterPrimaryActions(
   canOperateThread: boolean;
   activeContextWindow: ContextWindowSnapshot | null;
   reserveContextWindowMeter: boolean;
+  usageLimitProviderInstanceId: ProviderInstanceId;
+  providers: ReadonlyArray<ServerProvider>;
+  usageLimitSources: UsageLimitSourceSnapshots;
   activeThreadModelDisplayName: string | null;
   isPreparingWorktree: boolean;
   pendingAction: {
@@ -1397,6 +1401,9 @@ const ComposerFooterPrimaryActions = memo(function ComposerFooterPrimaryActions(
         <ContextWindowMeter
           usage={props.activeContextWindow}
           modelDisplayName={props.activeThreadModelDisplayName}
+          usageLimitProviderInstanceId={props.usageLimitProviderInstanceId}
+          providers={props.providers}
+          usageLimitSources={props.usageLimitSources}
           onCompact={props.onCompactContext}
           compactDisabled={props.compactDisabled}
           compactDisabledReason={props.compactDisabledReason}
@@ -1582,6 +1589,8 @@ export interface ChatComposerProps {
   activeProjectId: ProjectId | null;
 
   activeContextWindow: ContextWindowSnapshot | null;
+  /** Hub accounts the context meter folds into the selected provider's usage limits. */
+  usageLimitSources: UsageLimitSourceSnapshots;
   compactThreadUnavailable: boolean;
   compactDisabled: boolean;
   compactDisabledReason: string | null;
@@ -1950,6 +1959,7 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
     reportedModelSelection,
     activeProjectId,
     activeContextWindow,
+    usageLimitSources,
     compactThreadUnavailable,
     compactDisabled,
     compactDisabledReason,
@@ -7362,6 +7372,9 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
                       settings.contextWindowMeterEnabled ? activeContextWindow : null
                     }
                     reserveContextWindowMeter={reserveContextWindowMeter}
+                    usageLimitProviderInstanceId={selectedInstanceId}
+                    providers={providerStatuses}
+                    usageLimitSources={usageLimitSources}
                     activeThreadModelDisplayName={activeThreadModelDisplayName}
                     pendingAction={pendingPrimaryAction}
                     isRunning={phase === "running"}
