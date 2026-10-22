@@ -417,6 +417,7 @@ describe("resolveWorktreeCleanup", () => {
         worktreeAfterDays: 8,
         worktreeSettledAfterDays: 2,
         worktreeKeepWhen: "any-local-files",
+        worktreeIgnorePatterns: [],
         worktreeOnDelete: true,
         logsAfterDays: 3,
       },
@@ -425,6 +426,7 @@ describe("resolveWorktreeCleanup", () => {
     expect(inherited).toMatchObject({
       worktreeSettledAfterDays: 2,
       worktreeKeepWhen: "any-local-files",
+      worktreeIgnorePatterns: [],
     });
     const off = applyServerSettingsPatch(machine, {
       projectSettingsOverrides: {
@@ -438,6 +440,7 @@ describe("resolveWorktreeCleanup", () => {
       worktreeOnMerge: false,
       worktreeUnchanged: false,
       worktreeKeepWhen: "any-local-files",
+      worktreeIgnorePatterns: [],
     });
     expect(resolveWorktreeCleanup(off, otherProjectId)).toEqual(inherited);
     const custom = applyServerSettingsPatch(off, {
@@ -478,6 +481,7 @@ describe("resolveWorktreeCleanup", () => {
       worktreeOnMerge: true,
       worktreeUnchanged: false,
       worktreeKeepWhen: "uncommitted-changes",
+      worktreeIgnorePatterns: [],
     });
     expect(
       resolveWorktreeCleanup(applyServerSettingsPatch(edited, { worktreeCleanup: null }), null)

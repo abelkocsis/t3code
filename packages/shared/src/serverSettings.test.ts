@@ -64,9 +64,10 @@ describe("serverSettings helpers", () => {
       worktreeAfterDays: null,
       worktreeSettledAfterDays: null,
       worktreeOnMerge: true,
-      worktreeOnDelete: false,
+      worktreeOnDelete: true,
       worktreeUnchanged: false,
       worktreeKeepWhen: "uncommitted-changes",
+      worktreeIgnorePatterns: [],
       browserArtifactsAfterDays: null,
       logsAfterDays: 30,
     });

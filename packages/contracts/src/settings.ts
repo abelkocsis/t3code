@@ -948,9 +948,18 @@ export const WorktreeKeepWhen = Schema.Literals([
 ]);
 export type WorktreeKeepWhen = typeof WorktreeKeepWhen.Type;
 
+/**
+ * Gitignore-style patterns for ignored paths, such as build output, that do
+ * not keep a worktree when the keep rule is "any-local-files".
+ */
+const WorktreeIgnorePatterns = Schema.Array(TrimmedNonEmptyString);
+
 export const WorktreeCleanupRules = Schema.Struct({
   worktreeKeepWhen: WorktreeKeepWhen.pipe(
     Schema.withDecodingDefault(Effect.succeed("uncommitted-changes")),
+  ),
+  worktreeIgnorePatterns: WorktreeIgnorePatterns.pipe(
+    Schema.withDecodingDefault(Effect.succeed([])),
   ),
   worktreeAfterDays: StorageRetentionDays,
   worktreeSettledAfterDays: SettledWorktreeRetentionDays.pipe(
@@ -1116,12 +1125,16 @@ export const StorageCleanupSettings = Schema.Struct({
   worktreeKeepWhen: WorktreeKeepWhen.pipe(
     Schema.withDecodingDefault(Effect.succeed("uncommitted-changes")),
   ),
+  worktreeIgnorePatterns: WorktreeIgnorePatterns.pipe(
+    Schema.withDecodingDefault(Effect.succeed([])),
+  ),
   worktreeAfterDays: StorageRetentionDays.pipe(Schema.withDecodingDefault(Effect.succeed(null))),
   worktreeSettledAfterDays: SettledWorktreeRetentionDays.pipe(
     Schema.withDecodingDefault(Effect.succeed(null)),
   ),
-  worktreeOnMerge: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(false))),
-  worktreeOnDelete: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(false))),
+  // Merged and deleted-thread worktrees go by default; the other rules stay opt-in.
+  worktreeOnMerge: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(true))),
+  worktreeOnDelete: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(true))),
   worktreeUnchanged: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(false))),
   browserArtifactsAfterDays: StorageRetentionDays.pipe(
     Schema.withDecodingDefault(Effect.succeed(null)),
@@ -1486,6 +1499,7 @@ export const ServerSettingsPatch = Schema.Struct({
           mode: Schema.Literal("custom"),
           rules: Schema.Struct({
             worktreeKeepWhen: Schema.optionalKey(WorktreeKeepWhen),
+            worktreeIgnorePatterns: Schema.optionalKey(WorktreeIgnorePatterns),
             worktreeAfterDays: Schema.optionalKey(StorageRetentionDays),
             worktreeSettledAfterDays: Schema.optionalKey(SettledWorktreeRetentionDays),
             worktreeOnMerge: Schema.optionalKey(Schema.Boolean),
@@ -1499,6 +1513,7 @@ export const ServerSettingsPatch = Schema.Struct({
   storageCleanup: Schema.optionalKey(
     Schema.Struct({
       worktreeKeepWhen: Schema.optionalKey(WorktreeKeepWhen),
+      worktreeIgnorePatterns: Schema.optionalKey(WorktreeIgnorePatterns),
       worktreeAfterDays: Schema.optionalKey(StorageRetentionDays),
       worktreeSettledAfterDays: Schema.optionalKey(SettledWorktreeRetentionDays),
       worktreeOnMerge: Schema.optionalKey(Schema.Boolean),

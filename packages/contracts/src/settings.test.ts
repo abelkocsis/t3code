@@ -52,15 +52,16 @@ describe("ServerSettings response streaming", () => {
 });
 
 describe("storage cleanup settings", () => {
-  it("keeps cleanup disabled for existing installations", () => {
+  it("removes only merged and deleted-thread worktrees by default", () => {
     expect(decodeServerSettings({}).worktreeCleanup).toBeNull();
     expect(decodeServerSettings({}).storageCleanup).toEqual({
       worktreeAfterDays: null,
       worktreeSettledAfterDays: null,
-      worktreeOnMerge: false,
-      worktreeOnDelete: false,
+      worktreeOnMerge: true,
+      worktreeOnDelete: true,
       worktreeUnchanged: false,
       worktreeKeepWhen: "uncommitted-changes",
+      worktreeIgnorePatterns: [],
       browserArtifactsAfterDays: null,
       logsAfterDays: null,
     });

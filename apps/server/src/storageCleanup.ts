@@ -525,17 +525,97 @@ const make = Effect.gen(function* () {
     }
     if (count > 0) return `has uncommitted changes (${count} ${count === 1 ? "file" : "files"})`;
     if (rules.worktreeKeepWhen !== "any-local-files") return null;
-    const ignored = yield* git.execute({
-      operation: "StorageCleanup.ignoredFiles",
-      cwd,
-      args: ["ls-files", "--others", "--ignored", "--exclude-standard", "--directory", "-z"],
-      maxOutputBytes: 64 * 1024,
-    });
+    const listIgnored = (operation: string, excludes: ReadonlyArray<string>) =>
+      git.execute({
+        operation,
+        cwd,
+        args: ["ls-files", "--others", "--ignored", ...excludes, "--directory", "-z"],
+        maxOutputBytes: 64 * 1024,
+      });
+    const ignored = yield* listIgnored("StorageCleanup.ignoredFiles", ["--exclude-standard"]);
     if (ignored.stdoutTruncated) return "ignored files exceed the inspection limit";
-    const file = ignored.stdout
+    const entries = ignored.stdout
       .split("\0")
-      .find((entry) => entry !== "" && !/(^|\/)node_modules\/$/.test(entry));
+      .filter((entry) => entry !== "" && !/(^|\/)node_modules\/$/.test(entry));
+    if (entries.length === 0 || rules.worktreeIgnorePatterns.length === 0)
+      return entries.length === 0 ? null : `has ignored files (${entries[0]})`;
+    // Git applies the patterns, so they match exactly like .gitignore lines.
+    // Build output such as target/ or dist/ then no longer keeps the worktree.
+    const matched = yield* listIgnored(
+      "StorageCleanup.ignorePatternFiles",
+      rules.worktreeIgnorePatterns.map((pattern) => `--exclude=${pattern}`),
+    );
+    if (matched.stdoutTruncated) return "ignored files exceed the inspection limit";
+    const allowed = matched.stdout.split("\0").filter((entry) => entry !== "");
+    const file = entries.find(
+      (entry) =>
+        !allowed.some(
+          (prefix) => entry === prefix || (prefix.endsWith("/") && entry.startsWith(prefix)),
+        ),
+    );
     return file === undefined ? null : `has ignored files (${file})`;
+  });
+
+  /**
+   * Whether the default branch holds one commit with exactly this branch's
+   * changes, which is what a squash merge leaves behind. Git-only, so it works
+   * for every source control host and when the host reports no head commit.
+   * Any doubt is "no".
+   */
+  const squashMerged = Effect.fn("StorageCleanup.squashMerged")(function* (
+    cwd: string,
+    head: string,
+    base: string,
+  ) {
+    const run = (operation: string, args: ReadonlyArray<string>, stdin?: string) =>
+      git.execute({
+        operation,
+        cwd,
+        args: [...args],
+        maxOutputBytes: 16 * 1024 * 1024,
+        ...(stdin !== undefined ? { stdin } : {}),
+      });
+    const forkPoint = (yield* run("StorageCleanup.squashForkPoint", [
+      "merge-base",
+      head,
+      base,
+    ])).stdout.trim();
+    if (forkPoint === "") return false;
+    const files = yield* run("StorageCleanup.squashFiles", [
+      "diff",
+      "--no-renames",
+      "--name-only",
+      "-z",
+      forkPoint,
+      head,
+    ]);
+    const paths = files.stdout.split("\0").filter((entry) => entry !== "");
+    if (files.stdoutTruncated || paths.length === 0) return false;
+    const diff = yield* run("StorageCleanup.squashDiff", ["diff", "--no-renames", forkPoint, head]);
+    if (diff.stdoutTruncated) return false;
+    const branchPatchId = (yield* run(
+      "StorageCleanup.squashPatchId",
+      ["patch-id", "--stable"],
+      diff.stdout,
+    )).stdout.split(" ")[0];
+    if (!branchPatchId) return false;
+    // The pathspec keeps the log small; a commit that also touched other
+    // files still holds every change of the branch.
+    const log = yield* run("StorageCleanup.squashLog", [
+      "log",
+      "-p",
+      "--no-merges",
+      "--no-renames",
+      `${forkPoint}..${base}`,
+      ...(paths.length <= 1000 ? ["--", ...paths] : []),
+    ]);
+    if (log.stdoutTruncated) return false;
+    const patchIds = yield* run(
+      "StorageCleanup.squashLogPatchIds",
+      ["patch-id", "--stable"],
+      log.stdout,
+    );
+    return patchIds.stdout.split("\n").some((line) => line.split(" ")[0] === branchPatchId);
   });
 
   const submoduleRemoval = Effect.fn("StorageCleanup.submoduleRemoval")(
@@ -863,6 +943,14 @@ const make = Effect.gen(function* () {
               headSha: head.commitSha,
               integrated,
             });
+            // The host could not prove the squash; look for the branch's patch
+            // in the default branch itself.
+            if (
+              !eligible &&
+              pullRequest?.state === "merged" &&
+              (yield* squashMerged(worktreePath, head.commitSha, base.commitSha))
+            )
+              eligible = true;
             if (eligible) removalReason = "pull request was merged";
           }
         }
@@ -971,7 +1059,10 @@ const make = Effect.gen(function* () {
         if (
           Object.keys(settings).some(
             (key) =>
-              current[key as keyof typeof settings] !== settings[key as keyof typeof settings],
+              !Equal.equals(
+                current[key as keyof typeof settings],
+                settings[key as keyof typeof settings],
+              ),
           )
         )
           return keep("settings changed since check");

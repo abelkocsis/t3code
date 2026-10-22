@@ -140,6 +140,14 @@ export const SETTINGS_SEARCH_ITEMS = [
     ],
   },
   {
+    id: "storage-worktree-ignore-patterns",
+    targetId: "storage-worktrees",
+    title: "Ignore matching gitignored files",
+    to: "/settings/storage",
+    scope: "project-defaults",
+    searchTerms: ["gitignore patterns build output target dist ignored files cleanup worktree"],
+  },
+  {
     id: "storage-delete-now",
     title: "Delete now",
     to: "/settings/storage",

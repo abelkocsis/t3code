@@ -4,6 +4,7 @@ import type {
   WorktreeCleanupRules,
 } from "@t3tools/contracts";
 import { resolveWorktreeCleanup } from "@t3tools/shared/projectSettings";
+import * as Equal from "effect/Equal";
 import { useRef, useState } from "react";
 import { useAtomValue } from "@effect/atom-react";
 import {
@@ -21,6 +22,7 @@ import { toastManager } from "../ui/toast";
 import { Input } from "../ui/input";
 import { Select, SelectItem, SelectPopup, SelectTrigger, SelectValue } from "../ui/select";
 import { Switch } from "../ui/switch";
+import { Textarea } from "../ui/textarea";
 import {
   NumberField,
   NumberFieldDecrement,
@@ -441,9 +443,13 @@ export function StorageSettingsPanel() {
   const ruleStatus = (key: keyof StorageCleanupSettings) =>
     targets.some(
       (target) =>
-        ({ ...target.settings.storageCleanup, ...resolveWorktreeCleanup(target.settings, null) })[
-          key
-        ] !== settings[key],
+        !Equal.equals(
+          {
+            ...target.settings.storageCleanup,
+            ...resolveWorktreeCleanup(target.settings, null),
+          }[key],
+          settings[key],
+        ),
     )
       ? "Mixed across selected machines"
       : undefined;
@@ -610,7 +616,7 @@ export function StorageSettingsPanel() {
             <SettingsRow
               title="Delete merged worktrees"
               status={ruleStatus("worktreeOnMerge")}
-              description="Remove worktrees whose pull request is merged and whose commits are included in the default branch."
+              description="Remove worktrees whose pull request is merged and whose changes are in the default branch, including squash merges."
               serverScoped={!isProjectScope}
               control={
                 <Switch
@@ -675,6 +681,32 @@ export function StorageSettingsPanel() {
                   </Select>
                 }
               />
+            )}
+            {settings.worktreeKeepWhen === "any-local-files" && (
+              <SettingsRow
+                {...searchableSetting("storage-worktree-ignore-patterns")}
+                status={ruleStatus("worktreeIgnorePatterns")}
+                description="Ignored paths that match these patterns, such as build output, no longer keep the worktree. One .gitignore pattern per line."
+                serverScoped={!isProjectScope}
+              >
+                <div className="mt-3 max-w-2xl pb-3.5">
+                  <Textarea
+                    key={settings.worktreeIgnorePatterns.join("\n")}
+                    defaultValue={settings.worktreeIgnorePatterns.join("\n")}
+                    onBlur={(event) => {
+                      const worktreeIgnorePatterns = event.target.value
+                        .split("\n")
+                        .map((line) => line.trim())
+                        .filter((line) => line !== "");
+                      if (!Equal.equals(worktreeIgnorePatterns, settings.worktreeIgnorePatterns))
+                        updateWorktree({ worktreeIgnorePatterns });
+                    }}
+                    rows={3}
+                    placeholder={"target/\ndist/"}
+                    aria-label="Ignore matching gitignored files"
+                  />
+                </div>
+              </SettingsRow>
             )}
           </>
         )}
