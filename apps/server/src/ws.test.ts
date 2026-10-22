@@ -86,6 +86,8 @@ import * as SourceControlDiscovery from "./sourceControl/SourceControlDiscovery.
 import * as SourceControlRepositoryService from "./sourceControl/SourceControlRepositoryService.ts";
 import * as StorageCleanup from "./storageCleanup.ts";
 import * as ForkThreadStateStore from "./fork/ForkThreadStateStore.ts";
+import * as StandupService from "./standup/StandupService.ts";
+import * as TodoStore from "./todos/TodoStore.ts";
 import * as DatabaseStorage from "./persistence/DatabaseStorage.ts";
 import * as TerminalManager from "./terminal/Manager.ts";
 import * as ThreadLaunchService from "./orchestration-v2/ThreadLaunchService.ts";
@@ -503,6 +505,8 @@ const layerUnusedConfigRpcServices = Layer.mergeAll(
   Layer.mock(SourceControlRepositoryService.SourceControlRepositoryService)({}),
   Layer.mock(StorageCleanup.StorageCleanup)({}),
   Layer.mock(ForkThreadStateStore.ForkThreadStateStore)({}),
+  Layer.mock(StandupService.StandupService)({}),
+  Layer.mock(TodoStore.TodoStore)({}),
   Layer.mock(DatabaseStorage.DatabaseStorage)({}),
   Layer.mock(TerminalManager.TerminalManager)({}),
   Layer.mock(ThreadLaunchService.ThreadLaunchService)({}),
