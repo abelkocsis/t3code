@@ -183,6 +183,14 @@ section; each keeps its folder and returns to it. A settled thread stays in its 
 a compact row. Folders live on your servers, so every client that connects sees them, and
 they need a server that supports them. Mobile shows the threads, but not the folders.
 
+## Choose the row size
+
+The sidebar shows each live thread as a card with its project, title, branch, and status.
+Settled and snoozed threads always collapse to one line. To collapse every thread to one
+line and fit more of them on screen, turn on **Compact thread rows** in
+**Settings → General**. A compact row keeps the project icon, the title, and the status,
+and it drops the branch and the change counts. The setting is per device.
+
 ## Settle finished work
 
 Choose **Settle thread** from its menu to move finished work out of the active list

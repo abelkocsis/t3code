@@ -2995,6 +2995,7 @@ export default function Sidebar() {
   const confirmThreadDelete = useClientSettings((s) => s.confirmThreadDelete);
   const confirmThreadArchive = useClientSettings((s) => s.confirmThreadArchive);
   const timestampFormat = useClientSettings((s) => s.timestampFormat);
+  const compactThreadRows = useClientSettings((s) => s.sidebarCompactThreadRows);
   const projectGroupingSettings = useClientSettings(selectProjectGroupingSettings);
   const forkThreadStates = useForkThreadStates();
   const { addToFactory, removeFromFactory } = useFactoryMembership();
@@ -5425,7 +5426,7 @@ export default function Sidebar() {
                           section === "pinned" ||
                           section === "working" ||
                           inFolder;
-                        const rowVariant = isCard ? "card" : "slim";
+                        const rowVariant = isCard && !compactThreadRows ? "card" : "slim";
                         return (
                           <SortableThreadRow
                             key={threadKey}

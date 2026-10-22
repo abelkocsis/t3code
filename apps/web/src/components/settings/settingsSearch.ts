@@ -349,6 +349,12 @@ export const SETTINGS_SEARCH_ITEMS = [
     searchTerms: ["hide fold running monitoring threads inbox sidebar shelf"],
   },
   {
+    id: "compact-thread-rows",
+    title: "Compact thread rows",
+    to: "/settings/general",
+    searchTerms: ["sidebar density slim one line card thread rows compact"],
+  },
+  {
     id: "auto-settle-inactive-threads",
     title: "Auto-settle inactive threads",
     to: "/settings/general",

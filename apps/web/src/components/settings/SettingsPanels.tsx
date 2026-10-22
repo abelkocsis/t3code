@@ -578,6 +578,9 @@ export function useSettingsRestore(onRestored?: () => void) {
     ...(settings.sidebarWorkingShelfEnabled !== DEFAULT_UNIFIED_SETTINGS.sidebarWorkingShelfEnabled
       ? ["Working section"]
       : []),
+    ...(settings.sidebarCompactThreadRows !== DEFAULT_UNIFIED_SETTINGS.sidebarCompactThreadRows
+      ? ["Compact thread rows"]
+      : []),
     ...(settings.sidebarAutoSettleAfterDays !== DEFAULT_UNIFIED_SETTINGS.sidebarAutoSettleAfterDays
       ? ["Auto-settle inactive threads"]
       : []),
@@ -756,6 +759,7 @@ export function useSettingsRestore(onRestored?: () => void) {
       sidebarProjectGroupingMode: DEFAULT_UNIFIED_SETTINGS.sidebarProjectGroupingMode,
       sidebarProjectSortOrder: DEFAULT_UNIFIED_SETTINGS.sidebarProjectSortOrder,
       sidebarWorkingShelfEnabled: DEFAULT_UNIFIED_SETTINGS.sidebarWorkingShelfEnabled,
+      sidebarCompactThreadRows: DEFAULT_UNIFIED_SETTINGS.sidebarCompactThreadRows,
       sidebarAutoSettleAfterDays: DEFAULT_UNIFIED_SETTINGS.sidebarAutoSettleAfterDays,
       sidebarAutoSettleKeepPullRequests: DEFAULT_UNIFIED_SETTINGS.sidebarAutoSettleKeepPullRequests,
       sidebarAutoSettleOnMerge: DEFAULT_UNIFIED_SETTINGS.sidebarAutoSettleOnMerge,
@@ -2353,6 +2357,33 @@ export function GeneralSettingsPanel() {
                 updateSettings({ sidebarWorkingShelfEnabled: Boolean(checked) })
               }
               aria-label="Working section (beta)"
+            />
+          }
+        />
+
+        <SettingsRow
+          {...searchableSetting("compact-thread-rows")}
+          description="Show every thread as a one-line row. Off, live threads keep the full card with branch and change counts."
+          resetAction={
+            settings.sidebarCompactThreadRows !==
+            DEFAULT_UNIFIED_SETTINGS.sidebarCompactThreadRows ? (
+              <SettingResetButton
+                label="compact thread rows"
+                onClick={() =>
+                  updateSettings({
+                    sidebarCompactThreadRows: DEFAULT_UNIFIED_SETTINGS.sidebarCompactThreadRows,
+                  })
+                }
+              />
+            ) : null
+          }
+          control={
+            <Switch
+              checked={settings.sidebarCompactThreadRows}
+              onCheckedChange={(checked) =>
+                updateSettings({ sidebarCompactThreadRows: Boolean(checked) })
+              }
+              aria-label="Compact thread rows"
             />
           }
         />
