@@ -30,6 +30,8 @@ import { useThreadSelectionStore } from "../threadSelectionStore";
 import { stackedThreadToast, toastManager } from "~/components/ui/toast";
 import { primaryServerKeybindingsAtom } from "~/state/server";
 import { useThreadRouteTarget } from "../hooks/useThreadRouteTarget";
+import { isThreadWindow, usePoppedOutThreadKeys } from "../threadWindows";
+import { scopedThreadKey } from "@t3tools/client-runtime/environment";
 
 function ChatRouteGlobalShortcuts() {
   const clearSelection = useThreadSelectionStore((state) => state.clearSelection);
@@ -209,13 +211,24 @@ function ChatRouteLayout() {
   // Both thread routes render here, not in their own leaf components, so the
   // draft-to-thread promotion keeps one ChatView mounted across the swap.
   const threadTarget = useThreadRouteTarget();
+  const poppedOutThreadKeys = usePoppedOutThreadKeys();
+  // A thread with its own window does not render here; ThreadWindowRouting
+  // focuses that window and leaves the route.
+  const threadPoppedOut =
+    threadTarget?.kind === "server" &&
+    poppedOutThreadKeys.has(scopedThreadKey(threadTarget.threadRef));
   return (
     <>
-      <ChatRouteGlobalShortcuts />
-      {threadTarget?.kind === "server" ? (
+      {/* Its shortcuts start threads, which happens in the main window. */}
+      {isThreadWindow ? null : <ChatRouteGlobalShortcuts />}
+      {threadTarget?.kind === "server" && !threadPoppedOut ? (
         <ThreadLinkPrompt threadRef={threadTarget.threadRef} />
       ) : null}
-      {threadTarget ? <ThreadRouteView target={threadTarget} /> : <Outlet />}
+      {threadPoppedOut ? null : threadTarget ? (
+        <ThreadRouteView target={threadTarget} />
+      ) : (
+        <Outlet />
+      )}
     </>
   );
 }

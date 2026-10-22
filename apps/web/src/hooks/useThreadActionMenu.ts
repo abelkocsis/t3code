@@ -46,6 +46,8 @@ import { useCopyToClipboard } from "./useCopyToClipboard";
 import { useNewThreadHandler } from "./useHandleNewThread";
 import { useClientSettings } from "./useSettings";
 import { useThreadActions } from "./useThreadActions";
+import { openThreadInWindow } from "../lib/threadWindowActions";
+import { canOpenThreadWindows, isThreadWindow, popBackThreadWindow } from "../threadWindows";
 
 function failureToast(title: string, error: unknown) {
   toastManager.add(
@@ -132,6 +134,7 @@ export function useThreadActionMenu(input: {
         canOperate: readEnvironmentScope(threadRef.environmentId, AuthOrchestrationOperateScope),
         branch: thread.branch ?? null,
         projectFilter: null,
+        threadWindowAction: isThreadWindow ? "pop-back" : canOpenThreadWindows ? "open" : null,
         isPinned: thread.pinnedAt != null,
         isSettled: supports.settlement && thread.settledOverride === "settled",
         autoSettleEnabled: thread.autoSettleDisabledAt == null,
@@ -177,6 +180,12 @@ export function useThreadActionMenu(input: {
         }
       };
       switch (action) {
+        case "open-in-window":
+          openThreadInWindow(threadRef);
+          return;
+        case "pop-back":
+          popBackThreadWindow();
+          return;
         case "project-settings": {
           const project = projects.find(
             (candidate) =>

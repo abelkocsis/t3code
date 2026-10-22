@@ -79,6 +79,7 @@ import { afterEach, beforeEach, describe, expect, it, onTestFinished, vi } from 
 
 import {
   COMPOSER_DRAFT_STORAGE_KEY,
+  adoptThreadWindowDraft,
   subscribeComposerDraftModelReconciliation,
   deriveEffectiveComposerModelState,
   clearComposerDraftsEnvironment,
@@ -503,6 +504,38 @@ describe("composerDraftStore unsent draft marker", () => {
     expect(partializeComposerDraftStoreState(useComposerDraftStore.getState())).not.toHaveProperty(
       "rewindingThreadKeys",
     );
+  });
+});
+
+describe("composerDraftStore thread window drafts", () => {
+  const threadId = ThreadId.make("thread-window-draft");
+  const threadRef = scopeThreadRef(TEST_ENVIRONMENT_ID, threadId);
+  const threadKey = threadKeyFor(threadId, TEST_ENVIRONMENT_ID);
+
+  beforeEach(() => {
+    resetComposerDraftStore();
+  });
+
+  it("takes in the draft a thread window sent, and clears it when the window sends none", () => {
+    useComposerDraftStore.getState().setPrompt(threadRef, "typed in the thread window");
+    // What a thread window sends: the saved form, after a trip through JSON.
+    const sent: unknown = JSON.parse(
+      JSON.stringify(
+        partializeComposerDraftStoreState(useComposerDraftStore.getState()).draftsByThreadKey[
+          threadKey
+        ],
+      ),
+    );
+    resetComposerDraftStore();
+    useComposerDraftStore.getState().setPrompt(threadRef, "stale main window draft");
+
+    adoptThreadWindowDraft(threadKey, sent);
+    expect(useComposerDraftStore.getState().getComposerDraft(threadRef)?.prompt).toBe(
+      "typed in the thread window",
+    );
+
+    adoptThreadWindowDraft(threadKey, null);
+    expect(useComposerDraftStore.getState().getComposerDraft(threadRef)).toBeNull();
   });
 });
 

@@ -43,6 +43,19 @@ in a new thread's model picker to add or remove them. A regular click returns to
 single model. Choose a base branch and send. Each selection starts a separate thread
 and worktree while you stay in the new thread composer. This requires a Git project.
 
+## Open a thread in its own window
+
+In the desktop app, you can put threads side by side. Right-click a thread in the
+sidebar and choose **Open in new window**. You can also click the window button
+at the top right of the chat, or use the thread title menu or the command palette.
+The new window shows the chat and the right panel, without the sidebar and
+without the browser preview.
+
+A thread shows in one window at a time. When you click it in the sidebar, T3 Code
+brings its window forward. To move it back, click the button at the top left of
+its window, or choose **Pop back to main window** from the thread title menu.
+Thread windows do not reopen after a restart.
+
 ## Pin and reorder threads
 
 Pin a thread from its menu to keep it above your active work.

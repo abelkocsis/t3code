@@ -58,6 +58,7 @@ import {
 import { useLocation, useNavigate } from "@tanstack/react-router";
 import {
   ArrowLeftIcon,
+  ExternalLinkIcon,
   ChartNoAxesColumnIcon,
   CheckIcon,
   ChevronRightIcon,
@@ -253,6 +254,8 @@ import {
 import type { Project } from "../types";
 import { PullRequestGlyph } from "~/components/pullRequest/pullRequestIcons";
 import { readPullRequestListPreferences } from "~/components/pullRequest/pullRequestListPreferences";
+import { openThreadInWindow } from "~/lib/threadWindowActions";
+import { canOpenThreadWindows } from "~/threadWindows";
 import { useThreadRouteTarget } from "../hooks/useThreadRouteTarget";
 
 const EMPTY_BROWSE_ENTRIES: FilesystemBrowseResult["entries"] = [];
@@ -1741,6 +1744,21 @@ function OpenCommandPaletteDialog(props: {
         },
       });
     }
+  }
+
+  if (activeThread !== null && canOpenThreadWindows) {
+    const threadRef = scopeThreadRef(activeThread.environmentId, activeThread.id);
+    actionItems.push({
+      kind: "action",
+      value: "action:open-in-window",
+      searchTerms: ["window", "pop out", "popout", "new window", "detach", "side by side"],
+      title: "Open in new window",
+      description: "Show this thread in its own window",
+      icon: <ExternalLinkIcon className={ITEM_ICON_CLASS} />,
+      run: async () => {
+        openThreadInWindow(threadRef);
+      },
+    });
   }
 
   if (activeThread !== null) {

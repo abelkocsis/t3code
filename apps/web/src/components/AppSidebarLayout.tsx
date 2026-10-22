@@ -8,8 +8,10 @@ import {
   type ReactNode,
 } from "react";
 import { useLocation, useNavigate } from "@tanstack/react-router";
+import { SquareArrowDownLeftIcon } from "lucide-react";
 
 import { isElectron } from "../env";
+import { isThreadWindow, popBackThreadWindow } from "../threadWindows";
 import { getLocalStorageItem, removeLocalStorageItem } from "../hooks/useLocalStorage";
 import {
   isRichTextBoldShortcut,
@@ -36,6 +38,8 @@ import ThreadSidebar from "./Sidebar";
 import { SettingsSidebarNav } from "./settings/SettingsSidebarNav";
 import { SidebarBrandWidthProbe, SidebarChromeHeader } from "./sidebar/SidebarChrome";
 import { MainAppLocationTracker } from "./sidebar/mainAppLocation";
+import { ThreadWindowRouting } from "./ThreadWindowRouting";
+import { Button } from "./ui/button";
 import { useSidebarStageBackdropVariant } from "./SidebarStageBackdrop";
 import { useProjects } from "../state/entities";
 import {
@@ -199,6 +203,33 @@ function SidebarControl() {
   );
 }
 
+// A thread window has no sidebar. Its titlebar control sits where the sidebar
+// toggle would be, and puts the thread back in the main window.
+function PopBackControl() {
+  return (
+    <div
+      className="fixed left-[var(--workspace-controls-left)] top-[var(--workspace-controls-top)] z-50 ml-px flex h-[var(--workspace-topbar-height)] items-center [-webkit-app-region:no-drag]"
+      data-sidebar-control=""
+    >
+      <Tooltip>
+        <TooltipTrigger
+          render={
+            <Button
+              size="icon-sm"
+              variant="ghost"
+              aria-label="Pop back to main window"
+              onClick={popBackThreadWindow}
+            />
+          }
+        >
+          <SquareArrowDownLeftIcon className="size-4" />
+        </TooltipTrigger>
+        <TooltipPopup side="bottom">Pop back to main window</TooltipPopup>
+      </Tooltip>
+    </div>
+  );
+}
+
 function NavigationHistoryShortcuts() {
   const keybindings = useAtomValue(primaryServerKeybindingsAtom);
   const routeThreadRef = useThreadRouteRef();
@@ -320,44 +351,54 @@ export function AppSidebarLayout({ children }: { children: ReactNode }) {
       <SidebarProvider
         className="h-dvh! min-h-0!"
         data-panel-animations={routePanelAnimationsActive ? "true" : "false"}
-        defaultOpen
+        defaultOpen={!isThreadWindow}
         style={sidebarProviderStyle}
       >
         <SidebarBrandWidthProbe onWidthChange={setBrandWidth} />
         <ProjectProjectionRetention />
-        <Sidebar
-          side="left"
-          collapsible="offcanvas"
-          data-app-sidebar=""
-          role="navigation"
-          aria-label={isOnSettings ? "Settings" : "Threads"}
-          resizable={{
-            maxWidth: sidebarMaximumWidth,
-            minWidth: sidebarMinimumWidth,
-            shouldAcceptWidth: ({ currentWidth, nextWidth, wrapper }) =>
-              nextWidth <= currentWidth ||
-              wrapper.clientWidth - nextWidth >= THREAD_MAIN_CONTENT_MIN_WIDTH,
-            storageKey: THREAD_SIDEBAR_WIDTH_STORAGE_KEY,
-            onResize: setSidebarWidth,
-          }}
-          style={windowControlsInsetStyle}
-        >
-          {isOnSettings ? (
-            <>
-              <SidebarChromeHeader isElectron={isElectron} />
-              <SettingsSidebarNav pathname={pathname} />
-            </>
-          ) : legacySidebarEnabled ? (
-            <LegacyThreadSidebar />
-          ) : (
-            <ThreadSidebar />
-          )}
-          <SidebarRail onDoubleClick={resetSidebarWidth} />
-        </Sidebar>
-        {children}
-        <SidebarControl />
-        <NavigationHistoryShortcuts />
-        <MainAppLocationTracker />
+        <ThreadWindowRouting />
+        {isThreadWindow ? (
+          <>
+            {children}
+            <PopBackControl />
+          </>
+        ) : (
+          <>
+            <Sidebar
+              side="left"
+              collapsible="offcanvas"
+              data-app-sidebar=""
+              role="navigation"
+              aria-label={isOnSettings ? "Settings" : "Threads"}
+              resizable={{
+                maxWidth: sidebarMaximumWidth,
+                minWidth: sidebarMinimumWidth,
+                shouldAcceptWidth: ({ currentWidth, nextWidth, wrapper }) =>
+                  nextWidth <= currentWidth ||
+                  wrapper.clientWidth - nextWidth >= THREAD_MAIN_CONTENT_MIN_WIDTH,
+                storageKey: THREAD_SIDEBAR_WIDTH_STORAGE_KEY,
+                onResize: setSidebarWidth,
+              }}
+              style={windowControlsInsetStyle}
+            >
+              {isOnSettings ? (
+                <>
+                  <SidebarChromeHeader isElectron={isElectron} />
+                  <SettingsSidebarNav pathname={pathname} />
+                </>
+              ) : legacySidebarEnabled ? (
+                <LegacyThreadSidebar />
+              ) : (
+                <ThreadSidebar />
+              )}
+              <SidebarRail onDoubleClick={resetSidebarWidth} />
+            </Sidebar>
+            {children}
+            <SidebarControl />
+            <NavigationHistoryShortcuts />
+            <MainAppLocationTracker />
+          </>
+        )}
       </SidebarProvider>
     </PanelAnimationSuppressionProvider>
   );

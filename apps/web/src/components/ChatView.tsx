@@ -176,6 +176,8 @@ import {
 } from "@t3tools/client-runtime/state/runtime";
 import { AsyncResult } from "effect/reactivity";
 import { isElectron } from "../env";
+import { openThreadInWindow } from "../lib/threadWindowActions";
+import { canOpenThreadWindows } from "../threadWindows";
 import { readLocalApi } from "../localApi";
 import { useDiffPanelStore } from "../diffPanelStore";
 import { useActiveThreadRef } from "../hooks/useActiveThreadRef";
@@ -8041,6 +8043,10 @@ export default function ChatView(props: ChatViewProps) {
     rightPanelAvailable: activeProject !== null,
     rightPanelOpen,
     rightPanelShortcutLabel: shortcutLabelForCommand(keybindings, "rightPanel.toggle"),
+    onOpenInWindow:
+      canOpenThreadWindows && isServerThread && activeThreadRef
+        ? () => openThreadInWindow(activeThreadRef)
+        : undefined,
     onToggleTerminal: toggleTerminalVisibilityStable,
     onToggleThreadPanel: toggleThreadPanelStable,
     onToggleRightPanel: toggleRightPanelStable,

@@ -36,6 +36,7 @@ import {
 } from "../WorkspaceBreadcrumb";
 import { observeResize } from "~/lib/observeResize";
 import { cn } from "~/lib/utils";
+import { canOpenThreadWindows } from "~/threadWindows";
 import { useClientSettings } from "../../hooks/useSettings";
 
 interface ChatHeaderProps {
@@ -271,8 +272,17 @@ export const ChatHeader = memo(function ChatHeader({
       className={cn(
         "flex min-w-0 flex-1 items-center gap-2 sm:gap-3",
         // The fixed panel toggles sit over this row. Desktop adds the step
-        // away toggle, so it reserves one more button of width.
-        rightPanelOpen ? (isElectron ? "pr-18" : "pr-10") : isElectron ? "pr-32" : "pr-24",
+        // away toggle, and a thread in the main window adds the open in new
+        // window control: one more 32px toggle and its 4px gap each.
+        rightPanelOpen
+          ? isElectron
+            ? "pr-18"
+            : "pr-10"
+          : isElectron
+            ? canOpenThreadWindows && isServerThread
+              ? "pr-41"
+              : "pr-32"
+            : "pr-24",
       )}
       onContextMenu={handleHeaderContextMenu}
     >

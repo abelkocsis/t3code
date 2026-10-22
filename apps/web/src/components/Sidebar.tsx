@@ -187,6 +187,8 @@ import {
   buildThreadActionMenuItems,
   threadActionRequiresOperate,
 } from "./threadActionMenu.logic";
+import { openThreadInWindow } from "../lib/threadWindowActions";
+import { canOpenThreadWindows } from "../threadWindows";
 import {
   animateSidebarLayoutChanges,
   applySidebarThreadDrop,
@@ -4252,6 +4254,7 @@ export default function Sidebar() {
                     isActive: projectScopeKey === threadProjectGroup.projectKey,
                   }
                 : null,
+              threadWindowAction: canOpenThreadWindows ? "open" : null,
               isPinned,
               isSettled,
               autoSettleEnabled: thread.autoSettleDisabledAt == null,
@@ -4282,6 +4285,9 @@ export default function Sidebar() {
           return;
         }
         switch (clicked.value) {
+          case "open-in-window":
+            openThreadInWindow(threadRef);
+            return;
           case "filter-by-project":
             if (threadProjectGroup) {
               setProjectScopeKey(

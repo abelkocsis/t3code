@@ -1,4 +1,10 @@
-import { CoffeeIcon, PanelBottomIcon, PanelRightIcon, SquareMenuIcon } from "lucide-react";
+import {
+  CoffeeIcon,
+  ExternalLinkIcon,
+  PanelBottomIcon,
+  PanelRightIcon,
+  SquareMenuIcon,
+} from "lucide-react";
 import { Maximize2, Minimize2 } from "lucide";
 import { MorphIcon } from "~/components/MorphIcon";
 import { memo, type ReactElement } from "react";
@@ -25,6 +31,8 @@ export interface PanelLayoutControlsProps {
   rightPanelOpen: boolean;
   rightPanelShortcutLabel: string | null;
   rightPanelUnavailableLabel?: string;
+  /** Opens the thread in its own window. Absent where a thread cannot have one. */
+  onOpenInWindow?: (() => void) | undefined;
   onToggleTerminal: () => void;
   onToggleThreadPanel: () => void;
   onToggleRightPanel: () => void;
@@ -45,6 +53,7 @@ export const PanelLayoutControls = memo(function PanelLayoutControls({
   rightPanelOpen,
   rightPanelShortcutLabel,
   rightPanelUnavailableLabel = "Right panel is unavailable",
+  onOpenInWindow,
   onToggleTerminal,
   onToggleThreadPanel,
   onToggleRightPanel,
@@ -86,6 +95,7 @@ export const PanelLayoutControls = memo(function PanelLayoutControls({
             )
           : threadPanelTooltip(threadPanelToggle)
         : null}
+      {onOpenInWindow ? <OpenInWindowControl onOpen={onOpenInWindow} /> : null}
       {showTerminalControl ? (
         <Tooltip>
           <TooltipTrigger render={<span className="flex shrink-0" />}>
@@ -165,6 +175,30 @@ function StepAwayToggle() {
           ? "Leave step away mode"
           : "Step away mode: a large overlay you can read from across the room"}
       </TooltipPopup>
+    </Tooltip>
+  );
+}
+
+/**
+ * Opens the thread in its own window, beside the main one. It is an action, but
+ * it uses the row's toggle so that it looks like its neighbours.
+ */
+function OpenInWindowControl({ onOpen }: { onOpen: () => void }) {
+  return (
+    <Tooltip>
+      <TooltipTrigger render={<span className="flex shrink-0" />}>
+        <Toggle
+          className="shrink-0 [-webkit-app-region:no-drag]"
+          pressed={false}
+          onPressedChange={onOpen}
+          aria-label="Open in new window"
+          variant="ghost"
+          size="sm"
+        >
+          <ExternalLinkIcon className="size-4" />
+        </Toggle>
+      </TooltipTrigger>
+      <TooltipPopup side="bottom">Open in new window</TooltipPopup>
     </Tooltip>
   );
 }

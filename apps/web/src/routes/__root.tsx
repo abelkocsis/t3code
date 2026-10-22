@@ -56,6 +56,7 @@ import {
   toastManager,
 } from "../components/ui/toast";
 import { isElectron } from "../env";
+import { isThreadWindow } from "../threadWindows";
 import { cn } from "../lib/utils";
 import { applyAppearanceFontVariables } from "~/appearanceFonts";
 import { applyAppearanceContrast } from "~/appearanceContrast";
@@ -209,13 +210,22 @@ function RootRouteView() {
     );
   }
 
-  const appShell = (
+  // A thread window shows one thread. The command palette stays in the main
+  // window, because its actions start threads and open other pages.
+  const appShell = isThreadWindow ? (
+    <AppSidebarLayout>
+      <Outlet />
+    </AppSidebarLayout>
+  ) : (
     <CommandPalette>
       <AppSidebarLayout>
         <Outlet />
       </AppSidebarLayout>
     </CommandPalette>
   );
+  // Notices, the dock badge, activation, and app-wide prompts run once, in
+  // the main window.
+  const mainWindow = !isThreadWindow;
 
   return (
     <ToastProvider>
@@ -227,41 +237,45 @@ function RootRouteView() {
         <GlassAppearanceSync />
         <FontAppearanceSync />
         <ProviderAuthCallbackCoordinator />
-        <ChatGptWelcomeCoordinator />
+        {mainWindow ? <ChatGptWelcomeCoordinator /> : null}
         <FirstRunGate
           enabled={primaryEnvironmentAuthenticated}
           hostedStatic={authGateState.status === "hosted-static"}
         >
           {primaryEnvironmentAuthenticated ? <AuthenticatedTracingBootstrap /> : null}
-          {primaryEnvironmentAuthenticated ? <DesktopAppActivationCoordinator /> : null}
-          {primaryEnvironmentAuthenticated ? <DesktopWebLinkCoordinator /> : null}
-          {isElectron ? <RunningThreadKeepAlive /> : null}
-          {isElectron ? <OverlayModeCoordinator /> : null}
-          <RelayClientInstallDialog />
-          <ConnectOnboardingDialog />
-          <SshPasswordPromptDialog />
-          <SnapShotCoordinator />
-          <ThreadNotificationCoordinator />
+          {primaryEnvironmentAuthenticated && mainWindow ? (
+            <DesktopAppActivationCoordinator />
+          ) : null}
+          {primaryEnvironmentAuthenticated && mainWindow ? <DesktopWebLinkCoordinator /> : null}
+          {isElectron && mainWindow ? <RunningThreadKeepAlive /> : null}
+          {isElectron && mainWindow ? <OverlayModeCoordinator /> : null}
+          {mainWindow ? <RelayClientInstallDialog /> : null}
+          {mainWindow ? <ConnectOnboardingDialog /> : null}
+          {mainWindow ? <SshPasswordPromptDialog /> : null}
+          {mainWindow ? <SnapShotCoordinator /> : null}
+          {mainWindow ? <ThreadNotificationCoordinator /> : null}
           <ReopenClosedViewShortcut />
           <ConfirmDialogHost />
           <CustomSnoozeDialogHost />
           <SlowRpcRequestToastCoordinator />
           <HostFreezeToastCoordinator />
-          <PermissionUpdateNotice />
-          {primaryEnvironmentAuthenticated ? <LegacyThreadMigrationToast /> : null}
-          <ProjectCloneToastCoordinator />
+          {mainWindow ? <PermissionUpdateNotice /> : null}
+          {primaryEnvironmentAuthenticated && mainWindow ? <LegacyThreadMigrationToast /> : null}
+          {mainWindow ? <ProjectCloneToastCoordinator /> : null}
           <AddProjectToMachineDialogHost />
-          <PullRequestGuideRunCoordinator />
+          {mainWindow ? <PullRequestGuideRunCoordinator /> : null}
           <HostedStaticEnvironmentBootstrap />
           {primaryEnvironmentAuthenticated ? (
             <EventRouter skipInitialBootstrapNavigation={returningFromWelcome} />
           ) : null}
-          {primaryEnvironmentAuthenticated ? <ProviderUpdateLaunchNotification /> : null}
-          {isElectron ? <DesktopUpdateLaunchNotice /> : null}
+          {primaryEnvironmentAuthenticated && mainWindow ? (
+            <ProviderUpdateLaunchNotification />
+          ) : null}
+          {isElectron && mainWindow ? <DesktopUpdateLaunchNotice /> : null}
           {appShell}
           {/* Above the router: a theme draft is judged by walking the app, so the
               editor has to survive navigation away from settings. */}
-          <ThemeEditorHost />
+          {mainWindow ? <ThemeEditorHost /> : null}
         </FirstRunGate>
       </AnchoredToastProvider>
     </ToastProvider>

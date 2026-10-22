@@ -2,6 +2,7 @@ import { Debouncer } from "@tanstack/react-pacer";
 import type { PullRequestMergeMethod } from "@t3tools/contracts";
 import { create } from "zustand";
 import { normalizeProjectPathForComparison } from "./lib/projectPaths";
+import { isThreadWindow } from "./threadWindows";
 
 export const PERSISTED_STATE_KEY = "t3code:ui-state:v1";
 const THREAD_CHANGED_FILES_EXPANSION_VERSION = 2;
@@ -490,7 +491,11 @@ export const useUiStateStore = create<UiStateStore>((set) => ({
     ),
 }));
 
-useUiStateStore.subscribe((state) => debouncedPersistState.maybeExecute(state));
+// Only the main window saves UI state. A thread window reads it at start; its
+// thread visits reach the main window through the server.
+if (!isThreadWindow) {
+  useUiStateStore.subscribe((state) => debouncedPersistState.maybeExecute(state));
+}
 
 if (typeof window !== "undefined" && typeof window.addEventListener === "function") {
   window.addEventListener("beforeunload", () => {

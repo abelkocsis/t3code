@@ -82,7 +82,8 @@ import {
 import { create } from "zustand";
 import { persist, type PersistStorage, type StorageValue } from "zustand/middleware";
 import { useShallow } from "zustand/react/shallow";
-import { createDeferredStorage, createMemoryStorage } from "./lib/storage";
+import { createDeferredStorage, createMemoryStorage, type StateStorage } from "./lib/storage";
+import { onThreadWindowMessage, postToMainWindow, threadWindowRef } from "./threadWindows";
 import { getDefaultServerModel } from "./providerModels";
 import {
   replaceComposerContextReferences,
@@ -114,16 +115,43 @@ type ComposerPersistState =
   | { capturedState: ComposerDraftStoreState }
   | PersistedComposerDraftStoreState;
 
+function toPersistedComposerState(
+  value: StorageValue<ComposerPersistState>,
+): PersistedComposerDraftStoreState {
+  return "capturedState" in value.state
+    ? partializeComposerDraftStoreState(value.state.capturedState)
+    : value.state;
+}
+
+const threadWindowThreadKey = threadWindowRef === null ? null : scopedThreadKey(threadWindowRef);
+
+// A thread window saves no drafts. It reads the saved drafts, and sends its own
+// thread's draft to the main window, which saves it.
+function createThreadWindowComposerStorage(threadKey: string): StateStorage {
+  let lastSent: string | null = null;
+  return {
+    getItem: (name) => (typeof localStorage !== "undefined" ? localStorage.getItem(name) : null),
+    setItem: (_name, serializedDraft) => {
+      if (serializedDraft === lastSent) return;
+      lastSent = serializedDraft;
+      postToMainWindow({ kind: "composer-draft", threadKey, draft: JSON.parse(serializedDraft) });
+    },
+    removeItem: () => {},
+  };
+}
+
 const composerDebouncedStorage = createDeferredStorage<StorageValue<ComposerPersistState>>(
-  typeof localStorage !== "undefined" ? localStorage : createMemoryStorage(),
+  threadWindowThreadKey !== null
+    ? createThreadWindowComposerStorage(threadWindowThreadKey)
+    : typeof localStorage !== "undefined"
+      ? localStorage
+      : createMemoryStorage(),
   (value) =>
-    JSON.stringify({
-      state:
-        "capturedState" in value.state
-          ? partializeComposerDraftStoreState(value.state.capturedState)
-          : value.state,
-      version: value.version,
-    }),
+    threadWindowThreadKey !== null
+      ? JSON.stringify(
+          toPersistedComposerState(value).draftsByThreadKey[threadWindowThreadKey] ?? null,
+        )
+      : JSON.stringify({ state: toPersistedComposerState(value), version: value.version }),
   COMPOSER_PERSIST_DEBOUNCE_MS,
 );
 
@@ -4384,3 +4412,31 @@ export function finalizePromotedDraftThreadByRef(threadRef: ScopedThreadRef): vo
   }
   clearBackgroundDraftSubmissionByRef(threadRef);
 }
+
+/** Writes pending draft changes to storage now, so another window reads them. */
+export function flushComposerDraftStorage(): void {
+  composerDebouncedStorage.flush();
+}
+
+/** Takes in the saved form of a draft that a thread window sent; null clears the draft. */
+export function adoptThreadWindowDraft(threadKey: string, draft: unknown): void {
+  const persistedDraft = normalizeCurrentPersistedComposerDraftStoreState({
+    draftsByThreadKey: draft === null ? {} : { [threadKey]: draft },
+    draftThreadsByThreadKey: {},
+    logicalProjectDraftThreadKeyByLogicalProjectKey: {},
+  }).draftsByThreadKey[threadKey];
+  useComposerDraftStore.setState((state) => {
+    const draftsByThreadKey = { ...state.draftsByThreadKey };
+    if (persistedDraft === undefined) {
+      delete draftsByThreadKey[threadKey];
+    } else {
+      draftsByThreadKey[threadKey] = toHydratedThreadDraft(persistedDraft);
+    }
+    return { draftsByThreadKey };
+  });
+}
+
+// The main window saves the draft that a thread window sends for its thread.
+onThreadWindowMessage((message) => {
+  if (message.kind === "composer-draft") adoptThreadWindowDraft(message.threadKey, message.draft);
+});
