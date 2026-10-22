@@ -14,6 +14,7 @@ import {
   ForwardCompatibleOptional,
   OmittedWhenNull,
   ProjectId,
+  ThreadFolderId,
   ThreadId,
   TrimmedNonEmptyString,
   TrimmedString,
@@ -81,6 +82,16 @@ export type SidebarThreadPreviewCount = typeof SidebarThreadPreviewCount.Type;
 const DEFAULT_SIDEBAR_THREAD_PREVIEW_COUNT: SidebarThreadPreviewCount = 6;
 export const MIN_SIDEBAR_AUTO_SETTLE_AFTER_DAYS = 1;
 export const MAX_SIDEBAR_AUTO_SETTLE_AFTER_DAYS = 90;
+/**
+ * One sidebar folder. Threads point at the id, so a rename is a single write
+ * here and a folder with no threads still exists until it is deleted.
+ */
+export const THREAD_FOLDER_NAME_MAX_LENGTH = 48;
+export const SidebarFolder = Schema.Struct({
+  id: ThreadFolderId,
+  name: TrimmedNonEmptyString.check(Schema.isMaxLength(THREAD_FOLDER_NAME_MAX_LENGTH)),
+});
+export type SidebarFolder = typeof SidebarFolder.Type;
 export const SidebarAutoSettleAfterDays = Schema.Number.check(
   Schema.isBetween({
     minimum: MIN_SIDEBAR_AUTO_SETTLE_AFTER_DAYS,
@@ -1218,6 +1229,8 @@ export const ServerSettings = Schema.Struct({
     Schema.withDecodingDefault(Effect.succeed(false)),
   ),
   sidebarAutoSettleOnMerge: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(true))),
+  /** Sidebar folders in the order the user made them. */
+  sidebarFolders: Schema.Array(SidebarFolder).pipe(Schema.withDecodingDefault(Effect.succeed([]))),
   backgroundActivity: BackgroundActivitySettings,
 
   automaticGitFetchInterval: Schema.DurationFromMillis.pipe(
@@ -1537,6 +1550,7 @@ export const ServerSettingsPatch = Schema.Struct({
   compactIdleThreads: Schema.optionalKey(Schema.Boolean),
   sidebarAutoSettleKeepPullRequests: Schema.optionalKey(Schema.Boolean),
   sidebarAutoSettleOnMerge: Schema.optionalKey(Schema.Boolean),
+  sidebarFolders: Schema.optionalKey(Schema.Array(SidebarFolder)),
   autoResumeLimitedThreads: Schema.optionalKey(Schema.Boolean),
   snoozeLimitedThreads: Schema.optionalKey(Schema.Boolean),
   backgroundActivity: Schema.optionalKey(
