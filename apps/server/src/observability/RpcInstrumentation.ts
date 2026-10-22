@@ -57,6 +57,8 @@ const RPC_AGGREGATES = {
   [WS_METHODS.serverRemoveKeybinding]: "server",
   [WS_METHODS.serverRunStorageCleanup]: "server",
   [WS_METHODS.serverGetStorageCleanupReport]: "server",
+  [WS_METHODS.forkThreadStateSubscribe]: "server",
+  [WS_METHODS.forkThreadSetFolder]: "server",
   [WS_METHODS.serverGetDatabaseStorage]: "server",
   [WS_METHODS.serverGetSettings]: "server",
   [WS_METHODS.serverUpdateSettings]: "server",

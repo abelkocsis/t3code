@@ -239,6 +239,10 @@
       "types": "./src/state/server.ts",
       "default": "./src/state/server.ts"
     },
+    "./state/fork": {
+      "types": "./src/state/fork.ts",
+      "default": "./src/state/fork.ts"
+    },
     "./state/outdatedServerUpdate": {
       "types": "./src/state/outdatedServerUpdate.ts",
       "default": "./src/state/outdatedServerUpdate.ts"

@@ -260,6 +260,8 @@ const makeEntityId = <Brand extends string>(brand: Parameters<typeof Schema.bran
 };
 
 export const ThreadId = makeEntityId("ThreadId");
+export const ThreadFolderId = makeEntityId("ThreadFolderId");
+export type ThreadFolderId = typeof ThreadFolderId.Type;
 export type ThreadId = typeof ThreadId.Type;
 export const ProjectId = makeEntityId("ProjectId");
 export type ProjectId = typeof ProjectId.Type;

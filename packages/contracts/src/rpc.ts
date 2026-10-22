@@ -5,6 +5,13 @@ import {
 } from "./orchestrationV2.ts";
 import { OrchestrationDispatchCommandError } from "./orchestrationDispatch.ts";
 import {
+  ForkThreadSetFolderInput,
+  ForkThreadState,
+  ForkThreadStateError,
+  ForkThreadStateStreamEvent,
+  ForkThreadStateSubscribeInput,
+} from "./fork.ts";
+import {
   McpAppCallToolInput,
   McpAppCallToolResult,
   McpAppReadResourceInput,
@@ -480,6 +487,8 @@ export const WS_METHODS = {
   serverUpsertKeybinding: "server.upsertKeybinding",
   serverRemoveKeybinding: "server.removeKeybinding",
   serverRunStorageCleanup: "server.runStorageCleanup",
+  forkThreadStateSubscribe: "fork.threadState.subscribe",
+  forkThreadSetFolder: "fork.threadState.setFolder",
   serverGetStorageCleanupReport: "server.getStorageCleanupReport",
   serverGetDatabaseStorage: "server.getDatabaseStorage",
   serverGetSettings: "server.getSettings",
@@ -734,6 +743,18 @@ const WsServerCommitDesktopUpdateRpc = Rpc.make(WS_METHODS.serverCommitDesktopUp
   payload: DesktopUpdateCommitInput,
   success: ServerSelfUpdateResult,
   error: Schema.Union([ServerSelfUpdateError, EnvironmentAuthorizationError]),
+});
+
+const WsForkThreadStateSubscribeRpc = Rpc.make(WS_METHODS.forkThreadStateSubscribe, {
+  payload: ForkThreadStateSubscribeInput,
+  success: ForkThreadStateStreamEvent,
+  stream: true,
+  error: Schema.Union([ForkThreadStateError, EnvironmentAuthorizationError]),
+});
+const WsForkThreadSetFolderRpc = Rpc.make(WS_METHODS.forkThreadSetFolder, {
+  payload: ForkThreadSetFolderInput,
+  success: ForkThreadState,
+  error: Schema.Union([ForkThreadStateError, EnvironmentAuthorizationError]),
 });
 
 const WsServerRunStorageCleanupRpc = Rpc.make(WS_METHODS.serverRunStorageCleanup, {
@@ -1906,6 +1927,8 @@ export const WsRpcGroup = RpcGroup.make(
   WsServerRemoveKeybindingRpc,
   WsServerRunStorageCleanupRpc,
   WsServerGetStorageCleanupReportRpc,
+  WsForkThreadStateSubscribeRpc,
+  WsForkThreadSetFolderRpc,
   WsServerGetDatabaseStorageRpc,
   WsServerGetSettingsRpc,
   WsServerUpdateSettingsRpc,
