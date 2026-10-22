@@ -11,11 +11,14 @@
 import * as Schema from "effect/Schema";
 
 import { ThreadFolderId, ThreadId } from "./baseSchemas.ts";
+import { ThreadFactory } from "./factory.ts";
 
 export const ForkThreadState = Schema.Struct({
   threadId: ThreadId,
   /** The sidebar folder holding this thread. Folder names live in server settings. */
   folderId: Schema.NullOr(ThreadFolderId),
+  /** Set while the thread runs as a code-factory task. Null for a plain thread. */
+  factory: Schema.NullOr(ThreadFactory),
   updatedAt: Schema.String,
 });
 export type ForkThreadState = typeof ForkThreadState.Type;
@@ -24,6 +27,7 @@ export type ForkThreadState = typeof ForkThreadState.Type;
 export const emptyForkThreadState = (threadId: ThreadId): ForkThreadState => ({
   threadId,
   folderId: null,
+  factory: null,
   updatedAt: "1970-01-01T00:00:00.000Z",
 });
 
@@ -52,6 +56,13 @@ export const ForkThreadSetFolderInput = Schema.Struct({
   folderId: Schema.NullOr(ThreadFolderId),
 });
 export type ForkThreadSetFolderInput = typeof ForkThreadSetFolderInput.Type;
+
+export const ForkThreadSetFactoryInput = Schema.Struct({
+  threadId: ThreadId,
+  /** Null takes the thread off the Factory page; the thread itself stays. */
+  factory: Schema.NullOr(ThreadFactory),
+});
+export type ForkThreadSetFactoryInput = typeof ForkThreadSetFactoryInput.Type;
 
 export class ForkThreadStateError extends Schema.TaggedError<ForkThreadStateError>()(
   "ForkThreadStateError",

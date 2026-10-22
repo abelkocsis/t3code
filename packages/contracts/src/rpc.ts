@@ -5,6 +5,7 @@ import {
 } from "./orchestrationV2.ts";
 import { OrchestrationDispatchCommandError } from "./orchestrationDispatch.ts";
 import {
+  ForkThreadSetFactoryInput,
   ForkThreadSetFolderInput,
   ForkThreadState,
   ForkThreadStateError,
@@ -504,6 +505,7 @@ export const WS_METHODS = {
   serverRunStorageCleanup: "server.runStorageCleanup",
   forkThreadStateSubscribe: "fork.threadState.subscribe",
   forkThreadSetFolder: "fork.threadState.setFolder",
+  forkThreadSetFactory: "fork.threadState.setFactory",
   serverGetStorageCleanupReport: "server.getStorageCleanupReport",
   serverGetStandupState: "server.getStandupState",
   serverGenerateStandupSummary: "server.generateStandupSummary",
@@ -776,6 +778,11 @@ const WsForkThreadStateSubscribeRpc = Rpc.make(WS_METHODS.forkThreadStateSubscri
 });
 const WsForkThreadSetFolderRpc = Rpc.make(WS_METHODS.forkThreadSetFolder, {
   payload: ForkThreadSetFolderInput,
+  success: ForkThreadState,
+  error: Schema.Union([ForkThreadStateError, EnvironmentAuthorizationError]),
+});
+const WsForkThreadSetFactoryRpc = Rpc.make(WS_METHODS.forkThreadSetFactory, {
+  payload: ForkThreadSetFactoryInput,
   success: ForkThreadState,
   error: Schema.Union([ForkThreadStateError, EnvironmentAuthorizationError]),
 });
@@ -2199,6 +2206,7 @@ export const UpstreamWsRpcGroup = RpcGroup.make(
  * stays where upstream left it.
  */
 export const ForkWsRpcGroup = RpcGroup.make(
+  WsForkThreadSetFactoryRpc,
   WsSourceControlSearchIssuesRpc,
   WsSourceControlIssueDetailsRpc,
   WsForkThreadStateSubscribeRpc,

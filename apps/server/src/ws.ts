@@ -1201,6 +1201,8 @@ const layerForkWsRpc = ServerForkWsRpcGroup.toLayer(
       [WS_METHODS.forkThreadStateSubscribe]: () => forkThreadState.subscribe,
       [WS_METHODS.forkThreadSetFolder]: (input) =>
         forkThreadState.setFolder(input.threadId, input.folderId),
+      [WS_METHODS.forkThreadSetFactory]: (input) =>
+        forkThreadState.setFactory(input.threadId, input.factory),
       [WS_METHODS.serverGetStandupState]: (input) => standup.getState(input),
       [WS_METHODS.serverGenerateStandupSummary]: (input) => standup.generate(input),
       [WS_METHODS.serverUpdateStandupItems]: (input) => standup.updateItems(input),

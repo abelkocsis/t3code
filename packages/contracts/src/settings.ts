@@ -45,6 +45,7 @@ import {
   ProviderInstanceId,
   ProviderDriverKind,
 } from "./providerInstance.ts";
+import { DEFAULT_FACTORY_PROMPT_TEMPLATE, FactoryFolder } from "./factory.ts";
 import { PullRequestMergeMethod } from "./pullRequest.ts";
 
 export const TimestampFormat = Schema.Literals(["locale", "12-hour", "24-hour"]);
@@ -461,6 +462,10 @@ export const ClientSettingsSchema = Schema.Struct({
   ).pipe(Schema.withDecodingDefault(Effect.succeed({}))),
 
   pullRequestLinksOpenInApp: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(true))),
+  /** Factory page: the pull request button opens the browser instead of the thread's panel. */
+  factoryPullRequestOpensInBrowser: Schema.Boolean.pipe(
+    Schema.withDecodingDefault(Effect.succeed(false)),
+  ),
 
   planModeEnabled: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(false))),
   contextWindowMeterEnabled: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(false))),
@@ -1240,6 +1245,17 @@ export const ServerSettings = Schema.Struct({
     Schema.withDecodingDefault(Effect.succeed(DEFAULT_SIDEBAR_AUTO_SETTLE_AFTER_DAYS)),
   ),
   compactIdleThreads: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(false))),
+  /** Folders on the Factory page. Separate from the sidebar folders; tasks name them by id. */
+  factoryFolders: Schema.Array(FactoryFolder).pipe(Schema.withDecodingDefault(Effect.succeed([]))),
+  /** The first message of a factory task. `{{input}}` stands for the task input. */
+  factoryPromptTemplate: TrimmedString.pipe(
+    Schema.withDecodingDefault(Effect.succeed(DEFAULT_FACTORY_PROMPT_TEMPLATE)),
+  ),
+  /**
+   * Token saving for every factory task. The server still watches pull requests and CI, but
+   * holds review work until the human starts it from the Factory page.
+   */
+  factoryTokenSaving: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(false))),
   snoozeLimitedThreads: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(false))),
   autoResumeLimitedThreads: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(false))),
   sidebarAutoSettleKeepPullRequests: Schema.Boolean.pipe(
@@ -1567,6 +1583,9 @@ export const ServerSettingsPatch = Schema.Struct({
   easDeviceHosts: Schema.optionalKey(EasDeviceHostConfigs),
   sidebarAutoSettleAfterDays: Schema.optionalKey(Schema.NullOr(SidebarAutoSettleAfterDays)),
   compactIdleThreads: Schema.optionalKey(Schema.Boolean),
+  factoryFolders: Schema.optionalKey(Schema.Array(FactoryFolder)),
+  factoryPromptTemplate: Schema.optionalKey(TrimmedString),
+  factoryTokenSaving: Schema.optionalKey(Schema.Boolean),
   sidebarAutoSettleKeepPullRequests: Schema.optionalKey(Schema.Boolean),
   sidebarAutoSettleOnMerge: Schema.optionalKey(Schema.Boolean),
   sidebarFolders: Schema.optionalKey(Schema.Array(SidebarFolder)),
@@ -1729,6 +1748,7 @@ export const ClientSettingsPatch = Schema.Struct({
     Schema.Record(TrimmedNonEmptyString, PullRequestMergeMethod),
   ),
   pullRequestLinksOpenInApp: Schema.optionalKey(Schema.Boolean),
+  factoryPullRequestOpensInBrowser: Schema.optionalKey(Schema.Boolean),
   planModeEnabled: Schema.optionalKey(Schema.Boolean),
   contextWindowMeterEnabled: Schema.optionalKey(Schema.Boolean),
   composerCollapseOnScroll: Schema.optionalKey(Schema.Boolean),

@@ -1,6 +1,6 @@
 /**
- * The fork's per-thread row: which folder a thread sits in, and later any other
- * state the fork keeps beside upstream's thread record.
+ * The fork's per-thread row: which folder a thread sits in, and its code-factory
+ * task state when it runs as one.
  *
  * Writes go to `fork_thread_state` and then to a PubSub, so every client
  * subscribed over the wire sees the row change. The table is small, one row
@@ -13,6 +13,7 @@ import * as Context from "effect/Context";
 import * as DateTime from "effect/DateTime";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
+import * as Option from "effect/Option";
 import * as PubSub from "effect/PubSub";
 import * as Schema from "effect/Schema";
 import * as SqlClient from "effect/sql/SqlClient";
@@ -20,6 +21,7 @@ import * as Stream from "effect/Stream";
 
 import {
   ForkThreadStateError,
+  ThreadFactory,
   ThreadFolderId,
   ThreadId,
   type ForkThreadState,
@@ -29,13 +31,19 @@ import {
 const Row = Schema.Struct({
   thread_id: ThreadId,
   folder_id: Schema.NullOr(ThreadFolderId),
+  factory_json: Schema.NullOr(Schema.String),
   updated_at: Schema.String,
 });
 const decodeRows = Schema.decodeUnknownEffect(Schema.Array(Row));
+const decodeFactory = Schema.decodeUnknownOption(Schema.fromJsonString(ThreadFactory));
+const encodeFactory = Schema.encodeSync(Schema.fromJsonString(ThreadFactory));
 
+// A row whose JSON no longer decodes, for example one imported from a much older fork,
+// reads as a plain thread rather than failing every subscription.
 const toState = (row: typeof Row.Type): ForkThreadState => ({
   threadId: row.thread_id,
   folderId: row.folder_id,
+  factory: row.factory_json === null ? null : Option.getOrNull(decodeFactory(row.factory_json)),
   updatedAt: row.updated_at,
 });
 
@@ -46,6 +54,10 @@ export class ForkThreadStateStore extends Context.Service<
     readonly setFolder: (
       threadId: ThreadId,
       folderId: ThreadFolderId | null,
+    ) => Effect.Effect<ForkThreadState, ForkThreadStateError>;
+    readonly setFactory: (
+      threadId: ThreadId,
+      factory: ThreadFactory | null,
     ) => Effect.Effect<ForkThreadState, ForkThreadStateError>;
     /** The whole table, then one event per change, for as long as the stream is read. */
     readonly subscribe: Stream.Stream<ForkThreadStateStreamEvent, ForkThreadStateError>;
@@ -63,7 +75,8 @@ const make = Effect.gen(function* () {
   const changes = yield* PubSub.unbounded<ForkThreadState>();
 
   const list = sql`
-    SELECT thread_id, folder_id, updated_at FROM fork_thread_state ORDER BY updated_at
+    SELECT thread_id, folder_id, factory_json, updated_at
+    FROM fork_thread_state ORDER BY updated_at
   `.pipe(
     Effect.flatMap(decodeRows),
     Effect.map((rows) => rows.map(toState)),
@@ -72,12 +85,28 @@ const make = Effect.gen(function* () {
 
   const read = (threadId: ThreadId) =>
     sql`
-      SELECT thread_id, folder_id, updated_at FROM fork_thread_state WHERE thread_id = ${threadId}
+      SELECT thread_id, folder_id, factory_json, updated_at
+      FROM fork_thread_state WHERE thread_id = ${threadId}
     `.pipe(
       Effect.flatMap(decodeRows),
       Effect.map((rows) => rows.map(toState)[0] ?? null),
       Effect.mapError(sqlError("read")),
     );
+
+  const publishRow = Effect.fn("ForkThreadStateStore.publishRow")(function* (
+    operation: string,
+    threadId: ThreadId,
+  ) {
+    const state = yield* read(threadId);
+    if (state === null) {
+      return yield* new ForkThreadStateError({
+        operation,
+        message: "The row vanished between write and read.",
+      });
+    }
+    yield* PubSub.publish(changes, state);
+    return state;
+  });
 
   const setFolder = Effect.fn("ForkThreadStateStore.setFolder")(function* (
     threadId: ThreadId,
@@ -91,15 +120,23 @@ const make = Effect.gen(function* () {
         folder_id = excluded.folder_id,
         updated_at = excluded.updated_at
     `.pipe(Effect.mapError(sqlError("setFolder")));
-    const state = yield* read(threadId);
-    if (state === null) {
-      return yield* new ForkThreadStateError({
-        operation: "setFolder",
-        message: "The row vanished between write and read.",
-      });
-    }
-    yield* PubSub.publish(changes, state);
-    return state;
+    return yield* publishRow("setFolder", threadId);
+  });
+
+  const setFactory = Effect.fn("ForkThreadStateStore.setFactory")(function* (
+    threadId: ThreadId,
+    factory: ThreadFactory | null,
+  ) {
+    const updatedAt = DateTime.formatIso(yield* DateTime.now);
+    const json = factory === null ? null : encodeFactory(factory);
+    yield* sql`
+      INSERT INTO fork_thread_state (thread_id, folder_id, factory_json, updated_at)
+      VALUES (${threadId}, NULL, ${json}, ${updatedAt})
+      ON CONFLICT (thread_id) DO UPDATE SET
+        factory_json = excluded.factory_json,
+        updated_at = excluded.updated_at
+    `.pipe(Effect.mapError(sqlError("setFactory")));
+    return yield* publishRow("setFactory", threadId);
   });
 
   // Subscribe before the snapshot so a write between the two still arrives.
@@ -120,7 +157,7 @@ const make = Effect.gen(function* () {
     ),
   );
 
-  return ForkThreadStateStore.of({ list, setFolder, subscribe });
+  return ForkThreadStateStore.of({ list, setFolder, setFactory, subscribe });
 });
 
 export const layer = Layer.effect(ForkThreadStateStore, make);

@@ -5,7 +5,7 @@ import * as Layer from "effect/Layer";
 import * as SqlClient from "effect/sql/SqlClient";
 import * as Stream from "effect/Stream";
 
-import { ThreadFolderId, ThreadId } from "@t3tools/contracts";
+import { ThreadFolderId, ThreadId, type ThreadFactory } from "@t3tools/contracts";
 
 import * as Sqlite from "../persistence/Sqlite.ts";
 import * as ForkThreadStateStore from "./ForkThreadStateStore.ts";
@@ -15,6 +15,13 @@ const layer = ForkThreadStateStore.layer.pipe(Layer.provideMerge(Sqlite.layerMem
 const threadA = ThreadId.make("thread-a");
 const threadB = ThreadId.make("thread-b");
 const folderX = ThreadFolderId.make("folder-x");
+const factory: ThreadFactory = {
+  input: { kind: "free-text", value: "Add a range cap" },
+  phase: "implementation",
+  summary: "Writing the code.",
+  startedAt: "2026-10-14T10:00:00.000Z",
+  updatedAt: "2026-10-14T10:00:00.000Z",
+};
 
 it.layer(layer)("ForkThreadStateStore", (it) => {
   it.effect("records the fork ledger apart from upstream's", () =>
@@ -65,6 +72,37 @@ it.layer(layer)("ForkThreadStateStore", (it) => {
         [threadA, null],
         [threadB, folderX],
       ]);
+    }),
+  );
+
+  it.effect("sets and clears the factory state without touching the folder", () =>
+    Effect.gen(function* () {
+      const store = yield* ForkThreadStateStore.ForkThreadStateStore;
+      const threadC = ThreadId.make("thread-c");
+      yield* store.setFolder(threadC, folderX);
+      const flagged = yield* store.setFactory(threadC, factory);
+      assert.deepStrictEqual(flagged.factory, factory);
+      assert.strictEqual(flagged.folderId, folderX);
+
+      const listed = yield* store.list;
+      assert.deepStrictEqual(listed.find((state) => state.threadId === threadC)?.factory, factory);
+
+      const cleared = yield* store.setFactory(threadC, null);
+      assert.strictEqual(cleared.factory, null);
+      assert.strictEqual(cleared.folderId, folderX);
+    }),
+  );
+
+  it.effect("reads a row whose factory JSON no longer decodes as a plain thread", () =>
+    Effect.gen(function* () {
+      const sql = yield* SqlClient.SqlClient;
+      const store = yield* ForkThreadStateStore.ForkThreadStateStore;
+      yield* sql`
+        INSERT INTO fork_thread_state (thread_id, folder_id, factory_json, updated_at)
+        VALUES ('thread-broken', NULL, '{"phase":"nowhere"}', '2026-10-14T10:00:00.000Z')
+      `;
+      const listed = yield* store.list;
+      assert.strictEqual(listed.find((state) => state.threadId === "thread-broken")?.factory, null);
     }),
   );
 });

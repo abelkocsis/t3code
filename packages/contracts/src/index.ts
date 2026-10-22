@@ -60,6 +60,7 @@ export * from "./previewCapture.ts";
 export * from "./resourceTelemetry.ts";
 export * from "./usage.ts";
 export * from "./scheduledTask.ts";
+export * from "./factory.ts";
 export * from "./fork.ts";
 export * from "./standup.ts";
 export * from "./todos.ts";
