@@ -70,14 +70,12 @@ import {
   FolderIcon,
   FolderPlusIcon,
   MessageSquareDashedIcon,
-  CircleDotIcon,
   LinkIcon,
   ListChecksIcon,
   MessageSquareIcon,
   MonitorIcon,
   MoonIcon,
   PaletteIcon,
-  RocketIcon,
   RotateCcwIcon,
   SettingsIcon,
   SquarePenIcon,
@@ -157,7 +155,6 @@ import {
   resolveProjectPathForDispatch,
 } from "../lib/projectPaths";
 import { onOpenCommandPalette } from "../commandPaletteBus";
-import { openIssuePicker } from "../issuePickerBus";
 import { isPreviewFocused } from "../lib/previewFocus";
 import { isTerminalFocused } from "../lib/terminalFocus";
 import {
@@ -1636,19 +1633,6 @@ function OpenCommandPaletteDialog(props: {
     });
   }
 
-  if (primaryEnvironmentId !== null) {
-    actionItems.push({
-      kind: "action",
-      value: "action:new-thread-from-issue",
-      searchTerms: ["new thread", "issue", "github", "from issue", "ticket"],
-      title: "New thread from a GitHub issue",
-      icon: <CircleDotIcon className={ITEM_ICON_CLASS} />,
-      run: async () => {
-        openIssuePicker();
-      },
-    });
-  }
-
   if (scratchTargetEnvironmentId !== null) {
     actionItems.push({
       kind: "action",
@@ -2074,16 +2058,6 @@ function OpenCommandPaletteDialog(props: {
       icon: <PullRequestGlyph.pullRequest className={ITEM_ICON_CLASS} />,
       run: async () => {
         await navigate({ to: "/pull-requests", search: readPullRequestListPreferences() });
-      },
-    });
-    actionItems.push({
-      kind: "action",
-      value: "action:shipping",
-      searchTerms: ["shipping", "ship", "review", "re-review", "merge", "ready", "prs", "pr"],
-      title: "Open shipping",
-      icon: <RocketIcon className={ITEM_ICON_CLASS} />,
-      run: async () => {
-        await navigate({ to: "/shipping" });
       },
     });
   }

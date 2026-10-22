@@ -1,5 +1,5 @@
 /**
- * Replies in a Slack thread for the Shipping page's re-review requests. T3 holds no Slack
+ * Replies in a Slack thread with a re-review request. T3 holds no Slack
  * credentials; a provider account whose own Slack connection can post does the sending.
  *
  * @module SlackReplyService

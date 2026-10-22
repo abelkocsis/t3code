@@ -107,7 +107,7 @@ function SlackThreadDialog({
           <DialogTitle>Link Slack thread</DialogTitle>
           <DialogDescription>
             {count === 1 ? "This thread's" : `These ${count} threads'`} agents are told about the
-            Slack thread, and Shipping posts review requests under it as replies.
+            Slack thread, and review requests can be posted under it as replies.
           </DialogDescription>
         </DialogHeader>
         <DialogPanel>
