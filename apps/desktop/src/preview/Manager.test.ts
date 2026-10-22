@@ -208,32 +208,45 @@ describe("previewWindowOpenAction", () => {
 
 const {
   browserWindowConstructor,
+  buildFromTemplate,
   clipboardItemConstructor,
   createFromPath,
   fromId,
   getFocusedWebContents,
+  menuPopup,
   mkdir,
   previewSession,
   showItemInFolder,
   webviewSend,
   writeFile,
   writeClipboard,
-} = vi.hoisted(() => ({
-  browserWindowConstructor: vi.fn(),
-  clipboardItemConstructor: vi.fn(),
-  createFromPath: vi.fn((): { readonly isEmpty: () => boolean; readonly toPNG: () => Buffer } => ({
-    isEmpty: () => false,
-    toPNG: () => Buffer.from("png"),
-  })),
-  fromId: vi.fn<(_id?: number) => Electron.WebContents | null>((_id?: number) => null),
-  getFocusedWebContents: vi.fn(() => null),
-  mkdir: vi.fn((_path: string) => undefined),
-  previewSession: { on: vi.fn() },
-  showItemInFolder: vi.fn(),
-  webviewSend: vi.fn(),
-  writeFile: vi.fn((_path: string, _data: Uint8Array) => undefined),
-  writeClipboard: vi.fn(async () => undefined),
-}));
+  writeClipboardText,
+} = vi.hoisted(() => {
+  const menuPopup = vi.fn();
+  return {
+    browserWindowConstructor: vi.fn(),
+    buildFromTemplate: vi.fn((_template: ReadonlyArray<Electron.MenuItemConstructorOptions>) => ({
+      popup: menuPopup,
+    })),
+    clipboardItemConstructor: vi.fn(),
+    menuPopup,
+    createFromPath: vi.fn(
+      (): { readonly isEmpty: () => boolean; readonly toPNG: () => Buffer } => ({
+        isEmpty: () => false,
+        toPNG: () => Buffer.from("png"),
+      }),
+    ),
+    fromId: vi.fn<(_id?: number) => Electron.WebContents | null>((_id?: number) => null),
+    getFocusedWebContents: vi.fn(() => null),
+    mkdir: vi.fn((_path: string) => undefined),
+    previewSession: { on: vi.fn() },
+    showItemInFolder: vi.fn(),
+    webviewSend: vi.fn(),
+    writeFile: vi.fn((_path: string, _data: Uint8Array) => undefined),
+    writeClipboard: vi.fn(async () => undefined),
+    writeClipboardText: vi.fn((_text: string) => undefined),
+  };
+});
 
 vi.mock("electron", () => ({
   BrowserWindow: browserWindowConstructor,
@@ -244,6 +257,10 @@ vi.mock("electron", () => ({
   },
   clipboard: {
     write: writeClipboard,
+    writeText: writeClipboardText,
+  },
+  Menu: {
+    buildFromTemplate,
   },
   nativeImage: {
     createFromPath,
@@ -485,6 +502,7 @@ const makeFaviconWebContents = (options?: {
   });
   const off = vi.fn();
   const debuggerOff = vi.fn();
+  const copy = vi.fn();
   const webContents = {
     id: options?.id ?? 42,
     isDestroyed: () => destroyed,
@@ -512,6 +530,11 @@ const makeFaviconWebContents = (options?: {
     focusedFrame: {} as object | null,
     setIgnoreMenuShortcuts: vi.fn(),
     setWindowOpenHandler: vi.fn(),
+    copy,
+    cut: vi.fn(),
+    paste: vi.fn(),
+    selectAll: vi.fn(),
+    copyImageAt: vi.fn(),
     executeJavaScriptInIsolatedWorld,
     debugger: {
       isAttached: () => false,
@@ -522,6 +545,7 @@ const makeFaviconWebContents = (options?: {
     },
   };
   return {
+    copy,
     executeJavaScriptInIsolatedWorld,
     fetch,
     debuggerOff,
@@ -595,6 +619,9 @@ describe("PreviewManager", () => {
     fromId.mockClear();
     getFocusedWebContents.mockReset();
     getFocusedWebContents.mockReturnValue(null);
+    buildFromTemplate.mockClear();
+    menuPopup.mockClear();
+    writeClipboardText.mockClear();
     mkdir.mockClear();
     previewSession.on.mockClear();
     writeFile.mockClear();
@@ -635,6 +662,60 @@ describe("PreviewManager", () => {
           { tabId: "tab_links", url: "https://github.com/issues/1", background: false },
           { tabId: "tab_links", url: "https://github.com/issues/2", background: true },
         ]);
+      }),
+    ),
+  );
+
+  effectIt.effect("gives the preview guest a context menu that reaches the clipboard", () =>
+    withManager((manager) =>
+      Effect.gen(function* () {
+        const preview = makeFaviconWebContents();
+        const hostWebContents = { sendInputEvent: vi.fn(), isDestroyed: () => false };
+        const mainWindow = {
+          isDestroyed: () => false,
+          once: vi.fn(),
+          webContents: hostWebContents,
+        };
+        Object.assign(preview.webContents, { hostWebContents });
+        fromId.mockReturnValue(preview.webContents);
+        yield* manager.setMainWindow(mainWindow as never);
+        yield* manager.createTab("tab_clipboard");
+        yield* manager.registerWebview("tab_clipboard", 42);
+
+        preview.listeners.get("context-menu")!(
+          {} as never,
+          {
+            linkURL: "https://example.com/docs",
+            mediaType: "none",
+            x: 0,
+            y: 0,
+            editFlags: { canCut: false, canCopy: true, canPaste: false, canSelectAll: true },
+          } as never,
+        );
+        yield* Effect.yieldNow;
+        const template = buildFromTemplate.mock.calls[0]![0];
+        expect(template.map((item) => item.label ?? item.type)).toEqual([
+          "Copy Link",
+          "separator",
+          "Cut",
+          "Copy",
+          "Paste",
+          "Select All",
+        ]);
+        expect(template.map((item) => item.enabled)).toEqual([
+          undefined,
+          undefined,
+          false,
+          true,
+          false,
+          true,
+        ]);
+        expect(menuPopup).toHaveBeenCalledWith({ window: mainWindow });
+
+        (template[0] as { click: () => void }).click();
+        expect(writeClipboardText).toHaveBeenCalledExactlyOnceWith("https://example.com/docs");
+        (template[3] as { click: () => void }).click();
+        expect(preview.copy).toHaveBeenCalledOnce();
       }),
     ),
   );
