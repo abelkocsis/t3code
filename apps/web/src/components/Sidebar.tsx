@@ -13,7 +13,6 @@ import { discardComposerDraft } from "../lib/discardComposerDraft";
 import { requestCustomSnooze } from "./CustomSnoozeDialog";
 import { factoryOf } from "./factory/factory.logic";
 import { useFactoryMembership } from "./factory/useFactoryMembership";
-import { useForkThreadStates } from "../state/fork";
 import { useSupportsMultiplePullRequests } from "~/hooks/useSupportsMultiplePullRequests";
 import { resolveThreadCurrentPullRequestLink } from "@t3tools/shared/threadPullRequests";
 import { useAtomValue } from "@effect/atom-react";

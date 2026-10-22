@@ -55,7 +55,6 @@ import { canOpenThreadWindows, isThreadWindow, popBackThreadWindow } from "../th
 import { useThreadFolders } from "./useThreadFolders";
 import { useFactoryMembership } from "../components/factory/useFactoryMembership";
 import { factoryOf } from "../components/factory/factory.logic";
-import { useForkThreadStates } from "../state/fork";
 
 function failureToast(title: string, error: unknown) {
   toastManager.add(
@@ -101,7 +100,6 @@ export function useThreadActionMenu(input: {
   const forkThreadStates = useForkThreadStates();
   const setThreadFolder = useSetThreadFolder();
   const handleNewThread = useNewThreadHandler();
-  const forkThreadStates = useForkThreadStates();
   const { addToFactory, removeFromFactory } = useFactoryMembership();
   const confirmThreadDelete = useClientSettings((s) => s.confirmThreadDelete);
   const confirmThreadArchive = useClientSettings((s) => s.confirmThreadArchive);
