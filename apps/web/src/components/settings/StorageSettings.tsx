@@ -1,9 +1,11 @@
 import type { StorageCleanupSettings, WorktreeCleanupRules } from "@t3tools/contracts";
 import { resolveWorktreeCleanup } from "@t3tools/shared/projectSettings";
+import * as Equal from "effect/Equal";
 import { useState } from "react";
 
 import { Select, SelectItem, SelectPopup, SelectTrigger, SelectValue } from "../ui/select";
 import { Switch } from "../ui/switch";
+import { Textarea } from "../ui/textarea";
 import {
   NumberField,
   NumberFieldDecrement,
@@ -101,9 +103,13 @@ export function StorageSettingsPanel() {
   const ruleStatus = (key: keyof StorageCleanupSettings) =>
     targets.some(
       (target) =>
-        ({ ...target.settings.storageCleanup, ...resolveWorktreeCleanup(target.settings, null) })[
-          key
-        ] !== settings[key],
+        !Equal.equals(
+          {
+            ...target.settings.storageCleanup,
+            ...resolveWorktreeCleanup(target.settings, null),
+          }[key],
+          settings[key],
+        ),
     )
       ? "Mixed across selected machines"
       : undefined;
@@ -226,7 +232,7 @@ export function StorageSettingsPanel() {
             <SettingsRow
               title="Delete merged worktrees"
               status={ruleStatus("worktreeOnMerge")}
-              description="Remove worktrees whose pull request is merged and whose commits are included in the default branch."
+              description="Remove worktrees whose pull request is merged and whose changes are in the default branch, including squash merges."
               serverScoped={!isProjectScope}
               control={
                 <Switch
@@ -249,6 +255,50 @@ export function StorageSettingsPanel() {
                 />
               }
             />
+            <SettingsRow
+              title="Ignore gitignored files"
+              status={ruleStatus("worktreeIgnoreGitignored")}
+              description="Gitignored files no longer prevent cleanup. They are deleted with the worktree, including local secrets such as .env files."
+              serverScoped={!isProjectScope}
+              control={
+                <Switch
+                  aria-label="Ignore gitignored files"
+                  checked={settings.worktreeIgnoreGitignored}
+                  onCheckedChange={(worktreeIgnoreGitignored) =>
+                    updateWorktree({ worktreeIgnoreGitignored })
+                  }
+                />
+              }
+            />
+            {!settings.worktreeIgnoreGitignored && (
+              <SettingsRow
+                title="Ignore matching gitignored files"
+                status={ruleStatus("worktreeIgnorePatterns")}
+                description="Gitignored paths that match these patterns, such as build output, no longer prevent cleanup. Write one .gitignore pattern per line."
+                serverScoped={!isProjectScope}
+              >
+                <div className="mt-3 max-w-2xl pb-3.5">
+                  <Textarea
+                    key={settings.worktreeIgnorePatterns.join("\n")}
+                    defaultValue={settings.worktreeIgnorePatterns.join("\n")}
+                    onBlur={(event) => {
+                      const worktreeIgnorePatterns = event.target.value
+                        .split("\n")
+                        .map((line) => line.trim())
+                        .filter((line) => line !== "");
+                      if (
+                        worktreeIgnorePatterns.join("\n") !==
+                        settings.worktreeIgnorePatterns.join("\n")
+                      )
+                        updateWorktree({ worktreeIgnorePatterns });
+                    }}
+                    rows={3}
+                    placeholder={"target/\ndist/"}
+                    aria-label="Ignore matching gitignored files"
+                  />
+                </div>
+              </SettingsRow>
+            )}
           </>
         )}
       </SettingsSection>

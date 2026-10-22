@@ -1559,6 +1559,9 @@ describe("storage cleanup", () => {
     "dirty",
     "ignored",
     "ignored-directory",
+    "ignored-all",
+    "ignored-pattern",
+    "ignored-pattern-miss",
     "shared",
     "project-root",
     "nested-project",
@@ -1569,6 +1572,8 @@ describe("storage cleanup", () => {
     "recent",
     "merged",
     "unmerged",
+    "squash-merged",
+    "squash-unmatched",
     "unchanged",
     "unchanged-two-worktrees",
     "diverged",
@@ -1612,7 +1617,11 @@ describe("storage cleanup", () => {
               "gitdir: /test/admin-two",
             );
           }
-          if (protection === "ignored" || protection === "deleted-ignored")
+          if (
+            protection === "ignored" ||
+            protection === "deleted-ignored" ||
+            protection === "ignored-all"
+          )
             yield* fs.writeFileString(path.join(worktreePath, ".env"), "secret");
           if (protection === "ignored-directory") {
             yield* fs.makeDirectory(path.join(worktreePath, ".cache"));
@@ -1658,7 +1667,10 @@ describe("storage cleanup", () => {
           const deleteRule = protection.startsWith("deleted");
           let tombstoned = deleteRule && protection !== "deleted-event";
           const removals: string[] = [];
-          const mergeRule = protection === "merged" || protection === "unmerged";
+          const mergeRule =
+            protection === "merged" ||
+            protection === "unmerged" ||
+            protection.startsWith("squash-");
           const unchangedRule =
             protection === "unchanged" ||
             protection === "unchanged-two-worktrees" ||
@@ -1697,6 +1709,10 @@ describe("storage cleanup", () => {
                   worktreeOnDelete: deleteRule && protection !== "deleted-project-custom",
                   worktreeOnMerge: mergeRule,
                   worktreeUnchanged: unchangedRule,
+                  worktreeIgnoreGitignored: protection === "ignored-all",
+                  worktreeIgnorePatterns: protection.startsWith("ignored-pattern")
+                    ? ["target/"]
+                    : [],
                   browserArtifactsAfterDays: 8,
                   logsAfterDays: 8,
                 },
@@ -1894,16 +1910,40 @@ describe("storage cleanup", () => {
                     Effect.succeed({
                       exitCode: ChildProcessSpawner.ExitCode(
                         input.operation === "StorageCleanup.integratedBranch" &&
-                          (protection === "diverged" || input.args.at(-1) !== "b".repeat(40))
+                          (protection === "diverged" ||
+                            protection.startsWith("squash-") ||
+                            input.args.at(-1) !== "b".repeat(40))
                           ? 1
                           : 0,
                       ),
                       stdout:
-                        protection === "ignored" || protection === "deleted-ignored"
-                          ? ".env\0"
-                          : protection === "ignored-directory"
-                            ? ".cache/\0"
-                            : "",
+                        input.operation === "StorageCleanup.ignorePatternFiles"
+                          ? input.args.includes("--exclude=target/")
+                            ? "target/\0"
+                            : ""
+                          : input.operation.startsWith("StorageCleanup.squash")
+                            ? ({
+                                "StorageCleanup.squashForkPoint": `${"f".repeat(40)}\n`,
+                                "StorageCleanup.squashFiles": "src/feature.ts\0",
+                                "StorageCleanup.squashDiff": "branch diff",
+                                "StorageCleanup.squashPatchId": `branch-patch ${"a".repeat(40)}\n`,
+                                "StorageCleanup.squashLog": "default branch log",
+                                "StorageCleanup.squashLogPatchIds":
+                                  protection === "squash-merged"
+                                    ? `other-patch ${"e".repeat(40)}\nbranch-patch ${"b".repeat(40)}\n`
+                                    : `other-patch ${"e".repeat(40)}\n`,
+                              }[input.operation] ?? "")
+                            : protection === "ignored" ||
+                                protection === "deleted-ignored" ||
+                                protection === "ignored-all"
+                              ? ".env\0"
+                              : protection === "ignored-directory"
+                                ? ".cache/\0"
+                                : protection === "ignored-pattern"
+                                  ? "target/\0"
+                                  : protection === "ignored-pattern-miss"
+                                    ? ".env\0target/\0"
+                                    : "",
                       stderr: "",
                       stdoutTruncated: false,
                       stderrTruncated: false,
@@ -2007,6 +2047,9 @@ describe("storage cleanup", () => {
             protection === "files-disabled" ||
             protection === "files-extended" ||
             protection === "merged" ||
+            protection === "squash-merged" ||
+            protection === "ignored-all" ||
+            protection === "ignored-pattern" ||
             protection === "unchanged" ||
             protection === "unchanged-two-worktrees";
           assert.strictEqual(yield* fs.exists(worktreePath), !removed);

@@ -170,6 +170,103 @@ export const make = Effect.gen(function* () {
     return false;
   });
 
+  // Ignored files can contain secrets or local datasets. Dependency installs
+  // are reproducible; every other ignored path prevents automatic removal
+  // unless the rules ignore gitignored files or a pattern matches the path.
+  const hasProtectedIgnoredFiles = Effect.fn("StorageCleanup.hasProtectedIgnoredFiles")(function* (
+    worktreePath: string,
+    rules: WorktreeCleanupRules,
+  ) {
+    if (rules.worktreeIgnoreGitignored) return false;
+    const listIgnored = (operation: string, excludes: ReadonlyArray<string>) =>
+      git.execute({
+        operation,
+        cwd: worktreePath,
+        args: ["ls-files", "--others", "--ignored", ...excludes, "--directory", "-z"],
+        maxOutputBytes: 64 * 1024,
+      });
+    const ignored = yield* listIgnored("StorageCleanup.ignoredFiles", ["--exclude-standard"]);
+    if (ignored.stdoutTruncated) return true;
+    const entries = ignored.stdout
+      .split("\0")
+      .filter((entry) => entry !== "" && !/(^|\/)node_modules\/$/.test(entry));
+    if (entries.length === 0) return false;
+    if (rules.worktreeIgnorePatterns.length === 0) return true;
+    // Git applies the patterns, so they match exactly like .gitignore lines.
+    const matched = yield* listIgnored("StorageCleanup.ignorePatternFiles", [
+      "--exclude=node_modules/",
+      ...rules.worktreeIgnorePatterns.map((pattern) => `--exclude=${pattern}`),
+    ]);
+    if (matched.stdoutTruncated) return true;
+    const allowed = matched.stdout.split("\0").filter((entry) => entry !== "");
+    return entries.some(
+      (entry) =>
+        !allowed.some(
+          (prefix) => entry === prefix || (prefix.endsWith("/") && entry.startsWith(prefix)),
+        ),
+    );
+  });
+
+  /**
+   * Whether the default branch holds one commit with exactly the branch's
+   * changes, which is what a squash merge leaves behind. Any doubt is "no".
+   */
+  const squashMerged = Effect.fn("StorageCleanup.squashMerged")(function* (
+    worktreePath: string,
+    head: string,
+    base: string,
+  ) {
+    const run = (operation: string, args: ReadonlyArray<string>, stdin?: string) =>
+      git.execute({
+        operation,
+        cwd: worktreePath,
+        args: [...args],
+        maxOutputBytes: 16 * 1024 * 1024,
+        ...(stdin !== undefined ? { stdin } : {}),
+      });
+    const forkPoint = (yield* run("StorageCleanup.squashForkPoint", [
+      "merge-base",
+      head,
+      base,
+    ])).stdout.trim();
+    if (forkPoint === "") return false;
+    const files = yield* run("StorageCleanup.squashFiles", [
+      "diff",
+      "--no-renames",
+      "--name-only",
+      "-z",
+      forkPoint,
+      head,
+    ]);
+    const paths = files.stdout.split("\0").filter((entry) => entry !== "");
+    if (files.stdoutTruncated || paths.length === 0) return false;
+    const diff = yield* run("StorageCleanup.squashDiff", ["diff", "--no-renames", forkPoint, head]);
+    if (diff.stdoutTruncated) return false;
+    const branchPatchId = (yield* run(
+      "StorageCleanup.squashPatchId",
+      ["patch-id", "--stable"],
+      diff.stdout,
+    )).stdout.split(" ")[0];
+    if (!branchPatchId) return false;
+    // The pathspec keeps the log small; a commit that also touched other
+    // files still holds every change of the branch.
+    const log = yield* run("StorageCleanup.squashLog", [
+      "log",
+      "-p",
+      "--no-merges",
+      "--no-renames",
+      `${forkPoint}..${base}`,
+      ...(paths.length <= 1000 ? ["--", ...paths] : []),
+    ]);
+    if (log.stdoutTruncated) return false;
+    const patchIds = yield* run(
+      "StorageCleanup.squashLogPatchIds",
+      ["patch-id", "--stable"],
+      log.stdout,
+    );
+    return patchIds.stdout.split("\n").some((line) => line.split(" ")[0] === branchPatchId);
+  });
+
   const cleanWorktrees = Effect.fn("StorageCleanup.cleanWorktrees")(function* (
     serverSettings: ServerSettings,
     now: number,
@@ -223,21 +320,7 @@ export const make = Effect.gen(function* () {
         if (!status.isRepo || status.branch !== thread.branch || status.hasWorkingTreeChanges)
           return;
         const head = yield* git.resolveCommit({ cwd: worktreePath, revision: "HEAD" });
-        const ignored = yield* git.execute({
-          operation: "StorageCleanup.ignoredFiles",
-          cwd: worktreePath,
-          args: ["ls-files", "--others", "--ignored", "--exclude-standard", "--directory", "-z"],
-          maxOutputBytes: 64 * 1024,
-        });
-        // Ignored files can contain secrets or local datasets. Dependency installs
-        // are reproducible; every other ignored path prevents automatic removal.
-        if (
-          ignored.stdoutTruncated ||
-          ignored.stdout
-            .split("\0")
-            .some((entry) => entry !== "" && !/(^|\/)node_modules\/$/.test(entry))
-        )
-          return;
+        if (yield* hasProtectedIgnoredFiles(worktreePath, settings)) return;
         const old =
           !deleted &&
           settings.worktreeAfterDays !== null &&
@@ -269,9 +352,14 @@ export const make = Effect.gen(function* () {
             args: ["merge-base", "--is-ancestor", head.commitSha, base.commitSha],
             allowNonZeroExit: true,
           });
-          if (ancestor.exitCode !== 0) return;
-          eligible = settings.worktreeUnchanged;
-          if (!eligible && settings.worktreeOnMerge && thread.branch !== null) {
+          const integrated = ancestor.exitCode === 0;
+          eligible = integrated && settings.worktreeUnchanged;
+          if (
+            !eligible &&
+            settings.worktreeOnMerge &&
+            thread.branch !== null &&
+            (integrated || (yield* squashMerged(worktreePath, head.commitSha, base.commitSha)))
+          ) {
             const pullRequest = yield* gitManager.branchPullRequest(
               { cwd: worktreePath, branch: thread.branch },
               { refresh: true },
@@ -328,19 +416,7 @@ export const make = Effect.gen(function* () {
           head.commitSha
         )
           return;
-        const finalIgnored = yield* git.execute({
-          operation: "StorageCleanup.ignoredFiles",
-          cwd: worktreePath,
-          args: ["ls-files", "--others", "--ignored", "--exclude-standard", "--directory", "-z"],
-          maxOutputBytes: 64 * 1024,
-        });
-        if (
-          finalIgnored.stdoutTruncated ||
-          finalIgnored.stdout
-            .split("\0")
-            .some((entry) => entry !== "" && !/(^|\/)node_modules\/$/.test(entry))
-        )
-          return;
+        if (yield* hasProtectedIgnoredFiles(worktreePath, settings)) return;
         const current = resolveWorktreeCleanup(
           yield* settingsService.getSettings,
           thread.projectId,
@@ -348,7 +424,10 @@ export const make = Effect.gen(function* () {
         if (
           Object.keys(settings).some(
             (key) =>
-              current[key as keyof typeof settings] !== settings[key as keyof typeof settings],
+              !Equal.equals(
+                current[key as keyof typeof settings],
+                settings[key as keyof typeof settings],
+              ),
           )
         )
           return;

@@ -224,8 +224,23 @@ export function resolveWorktreeCleanup(
       worktreeOnMerge: false,
       worktreeOnDelete: false,
       worktreeUnchanged: false,
+      worktreeIgnoreGitignored: false,
+      worktreeIgnorePatterns: [],
     };
-  const { worktreeAfterDays, worktreeOnMerge, worktreeOnDelete, worktreeUnchanged } =
-    settings.storageCleanup;
-  return { worktreeAfterDays, worktreeOnMerge, worktreeOnDelete, worktreeUnchanged };
+  const {
+    worktreeAfterDays,
+    worktreeOnMerge,
+    worktreeOnDelete,
+    worktreeUnchanged,
+    worktreeIgnoreGitignored,
+    worktreeIgnorePatterns,
+  } = settings.storageCleanup;
+  return {
+    worktreeAfterDays,
+    worktreeOnMerge,
+    worktreeOnDelete,
+    worktreeUnchanged,
+    worktreeIgnoreGitignored,
+    worktreeIgnorePatterns,
+  };
 }

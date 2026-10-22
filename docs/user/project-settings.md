@@ -64,9 +64,10 @@ applies when the project and environment are both on **Inherit**.
 
 ## Storage cleanup
 
-Open **Settings → Storage** to enable automatic cleanup on one machine or all connected
-environments. Policies are off by default and run on the server at startup, when changed, and
-hourly. Offline machines keep their existing policies.
+Open **Settings → Storage** to change automatic cleanup on one machine or all connected
+environments. By default, only merged worktrees and worktrees of deleted threads are removed.
+Policies run on the server at startup, when changed, and hourly. Offline machines keep their
+existing policies.
 
 Select a project to set **Automatic worktree cleanup** to **Inherit**, **Off**, or **Custom**.
 Inherit follows each machine's rules; Off keeps that project's worktrees until you remove them
@@ -77,11 +78,16 @@ Worktrees can be removed after a chosen number of inactive days, after merging, 
 have no commits beyond the default branch. Only T3-managed worktrees are eligible. Active
 sessions, shared worktrees, uncommitted changes, and ignored files other than `node_modules`
 prevent removal. Branches and thread history stay; starting another turn recreates the checkout.
-Merge cleanup requires the commits to be included in the remote default branch, so squash merges
-may need the inactivity rule instead.
+Merge cleanup requires the branch's changes to be in the remote default branch, either as the
+same commits or as one squash commit.
 
-Enable **Delete worktrees with deleted threads** to remove safe worktrees after their last
-thread is deleted, including archived threads and worktrees left by earlier deletions. The
+Build output such as `target/` or `dist/` is gitignored, so it prevents removal too. List
+`.gitignore` patterns under **Ignore matching gitignored files** to let matching paths be deleted
+with the worktree, or enable **Ignore gitignored files** to stop all gitignored files from
+preventing removal. That includes local secrets such as `.env` files.
+
+**Delete worktrees with deleted threads** removes safe worktrees after their last thread is
+deleted, including archived threads and worktrees left by earlier deletions. The
 server waits for sessions and terminals to stop and retries skipped worktrees after restart.
 Existing prompts for deleting a worktree manually remain available when this policy is off.
 
