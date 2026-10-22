@@ -1,6 +1,7 @@
 import type {
   DesktopBridge,
   DesktopOverlayAction,
+  DesktopThreadWindowTarget,
   DesktopPreviewOpenLinkEvent,
   DesktopPreviewPointerEvent,
   DesktopPreviewRecordingInputEvent,
@@ -59,6 +60,35 @@ if (clientPlatform === "darwin") {
   window.addEventListener("resize", syncWindowControlInset);
 }
 
+// A thread window gets its thread as a launch argument, so a reload keeps it.
+function readThreadWindowTarget(): DesktopThreadWindowTarget | null {
+  const argument = process.argv.find((value) =>
+    value.startsWith(IpcChannels.THREAD_WINDOW_ARGUMENT_PREFIX),
+  );
+  if (argument === undefined) return null;
+  // The argument is the thread route: `/<environmentId>/<threadId>`, each part URI-encoded.
+  const [leading, environmentId, threadId, ...rest] = argument
+    .slice(IpcChannels.THREAD_WINDOW_ARGUMENT_PREFIX.length)
+    .split("/");
+  if (leading !== "" || !environmentId || !threadId || rest.length > 0) return null;
+  try {
+    return {
+      environmentId: decodeURIComponent(environmentId),
+      threadId: decodeURIComponent(threadId),
+    };
+  } catch {
+    return null;
+  }
+}
+
+function isThreadWindowTarget(value: unknown): value is DesktopThreadWindowTarget {
+  if (typeof value !== "object" || value === null) return false;
+  const { environmentId, threadId } = value as { environmentId?: unknown; threadId?: unknown };
+  return typeof environmentId === "string" && typeof threadId === "string";
+}
+
+const threadWindowTarget = readThreadWindowTarget();
+
 function unwrapEnsureSshEnvironmentResult(result: unknown) {
   if (
     typeof result === "object" &&
@@ -75,7 +105,7 @@ function unwrapEnsureSshEnvironmentResult(result: unknown) {
   return result as Awaited<ReturnType<DesktopBridge["ensureSshEnvironment"]>>;
 }
 
-contextBridge.exposeInMainWorld("desktopBridge", {
+const desktopBridge = {
   getAppBranding: () => {
     const result = ipcRenderer.sendSync(IpcChannels.GET_APP_BRANDING_CHANNEL);
     if (typeof result !== "object" || result === null) {
@@ -320,6 +350,36 @@ contextBridge.exposeInMainWorld("desktopBridge", {
       };
     },
   },
+  threadWindows: {
+    current: () => threadWindowTarget,
+    list: () => {
+      const result: unknown = ipcRenderer.sendSync(IpcChannels.THREAD_WINDOW_LIST_CHANNEL);
+      return Array.isArray(result) ? result.filter(isThreadWindowTarget) : [];
+    },
+    onChange: (listener) => {
+      const wrappedListener = (_event: Electron.IpcRendererEvent, targets: unknown) => {
+        if (!Array.isArray(targets)) return;
+        listener(targets.filter(isThreadWindowTarget));
+      };
+      ipcRenderer.on(IpcChannels.THREAD_WINDOWS_CHANGED_CHANNEL, wrappedListener);
+      return () => {
+        ipcRenderer.removeListener(IpcChannels.THREAD_WINDOWS_CHANGED_CHANNEL, wrappedListener);
+      };
+    },
+    open: (target) => ipcRenderer.invoke(IpcChannels.THREAD_WINDOW_OPEN_CHANNEL, target),
+    popBack: () => ipcRenderer.invoke(IpcChannels.THREAD_WINDOW_POP_BACK_CHANNEL),
+    showInMain: (href) => ipcRenderer.invoke(IpcChannels.SHOW_IN_MAIN_WINDOW_CHANNEL, href),
+    onShowInMain: (listener) => {
+      const wrappedListener = (_event: Electron.IpcRendererEvent, href: unknown) => {
+        if (typeof href !== "string") return;
+        listener(href);
+      };
+      ipcRenderer.on(IpcChannels.MAIN_WINDOW_SHOW_ROUTE_CHANNEL, wrappedListener);
+      return () => {
+        ipcRenderer.removeListener(IpcChannels.MAIN_WINDOW_SHOW_ROUTE_CHANNEL, wrappedListener);
+      };
+    },
+  },
   appActivation: {
     setReady: (ready) =>
       ipcRenderer.invoke(IpcChannels.DESKTOP_APP_ACTIVATION_READY_CHANNEL, ready),
@@ -462,4 +522,13 @@ contextBridge.exposeInMainWorld("desktopBridge", {
         ipcRenderer.removeListener(IpcChannels.PREVIEW_OPEN_LINK_CHANNEL, wrappedListener);
     },
   },
-} satisfies DesktopBridge);
+} satisfies DesktopBridge;
+
+if (threadWindowTarget === null) {
+  contextBridge.exposeInMainWorld("desktopBridge", desktopBridge);
+} else {
+  // A thread window has no browser preview. Without the bridge, the renderer
+  // hides the preview the same way it does on the web.
+  const { preview: _preview, ...threadWindowBridge } = desktopBridge;
+  contextBridge.exposeInMainWorld("desktopBridge", threadWindowBridge);
+}

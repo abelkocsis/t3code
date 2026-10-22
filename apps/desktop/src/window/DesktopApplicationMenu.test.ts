@@ -90,6 +90,10 @@ const layerDesktopWindow = (selectedAction: Deferred.Deferred<string>) =>
       Deferred.succeed(selectedAction, `zoom-${direction}`).pipe(Effect.asVoid),
     runMainContentsCommand: (command) =>
       Deferred.succeed(selectedAction, `main-${command}`).pipe(Effect.asVoid),
+    openThreadWindow: () => Effect.die("unexpected thread window"),
+    popBackThreadWindow: () => Effect.void,
+    showRouteInMain: () => Effect.void,
+    threadWindowTargets: Effect.succeed([]),
     syncAppearance: Effect.void,
   } satisfies DesktopWindow.DesktopWindow["Service"]);
 

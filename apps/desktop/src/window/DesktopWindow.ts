@@ -8,7 +8,11 @@ import * as Ref from "effect/Ref";
 
 import * as Electron from "electron";
 
-import { type DesktopSnapShotEvent, DEFAULT_CLIENT_SETTINGS } from "@t3tools/contracts";
+import {
+  type DesktopSnapShotEvent,
+  type DesktopThreadWindowTarget,
+  DEFAULT_CLIENT_SETTINGS,
+} from "@t3tools/contracts";
 
 import * as DesktopAssets from "../app/DesktopAssets.ts";
 import * as DesktopEnvironment from "../app/DesktopEnvironment.ts";
@@ -20,9 +24,12 @@ import * as ElectronShell from "../electron/ElectronShell.ts";
 import * as ElectronTheme from "../electron/ElectronTheme.ts";
 import * as ElectronWindow from "../electron/ElectronWindow.ts";
 import {
+  MAIN_WINDOW_SHOW_ROUTE_CHANNEL,
   MENU_ACTION_CHANNEL,
   QUIT_SHORTCUT_CHANNEL,
   SNAP_SHOT_EVENT_CHANNEL,
+  THREAD_WINDOW_ARGUMENT_PREFIX,
+  THREAD_WINDOWS_CHANGED_CHANNEL,
   TRACKPAD_SCROLL_END_CHANNEL,
   WINDOW_FULLSCREEN_STATE_CHANNEL,
 } from "../ipc/channels.ts";
@@ -57,6 +64,9 @@ const TITLEBAR_COLOR = "#01000000"; // #00000000 does not work correctly on Linu
 const TITLEBAR_LIGHT_SYMBOL_COLOR = "#1f2937";
 const TITLEBAR_DARK_SYMBOL_COLOR = "#f8fafc";
 const MAIN_WINDOW_BOUNDS_PERSIST_DEBOUNCE_MS = 500;
+// A thread window has no sidebar, so it can be narrower than the main window.
+const THREAD_WINDOW_SIZE = { width: 900, height: 780 } as const;
+const THREAD_WINDOW_MIN_SIZE = { minWidth: 520, minHeight: 420 } as const;
 const DEVELOPMENT_LOAD_RETRY_DELAYS_MS = [100, 250, 500, 1_000, 2_000] as const;
 const RENDERER_RECOVERY_RELOAD_DELAY_MS = 500;
 const RENDERER_RECOVERY_MAX_ATTEMPTS = 3;
@@ -109,6 +119,15 @@ export class DesktopWindow extends Context.Service<
     readonly dispatchSnapShotEvent: (
       event: DesktopSnapShotEvent,
     ) => Effect.Effect<void, DesktopWindowError>;
+    /** Opens the thread in its own window, or focuses the window that already shows it. */
+    readonly openThreadWindow: (
+      target: DesktopThreadWindowTarget,
+    ) => Effect.Effect<void, DesktopWindowError>;
+    /** Closes the thread window that owns these contents, then shows its thread in the main window. */
+    readonly popBackThreadWindow: (webContentsId: number) => Effect.Effect<void>;
+    /** Shows an app route in the main window and brings that window forward. */
+    readonly showRouteInMain: (href: string) => Effect.Effect<void, DesktopWindowError>;
+    readonly threadWindowTargets: Effect.Effect<readonly DesktopThreadWindowTarget[]>;
     // The Electron `zoomIn`/`zoomOut` menu roles act on whichever webContents
     // has keyboard focus, so with an embedded preview WebContentsView (or
     // DevTools) focused they zoom the guest page instead of the app UI.
@@ -183,6 +202,11 @@ function buildConnectingSplashDataUrl(shouldUseDarkColors: boolean): string {
   const track = shouldUseDarkColors ? "rgba(248,250,252,0.18)" : "rgba(31,41,55,0.18)";
   const html = `<!doctype html><html><head><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'"><style>html,body{margin:0;height:100%}body{background:${background};color:${label};font-family:system-ui,-apple-system,'Segoe UI',sans-serif;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:18px;-webkit-user-select:none;user-select:none;-webkit-app-region:drag}.spinner{width:26px;height:26px;border:3px solid ${track};border-top-color:${accent};border-radius:50%;animation:spin .8s linear infinite}.label{font-size:13px}@keyframes spin{to{transform:rotate(360deg)}}</style></head><body><div class="spinner"></div><div class="label">Connecting to WSL…</div></body></html>`;
   return `data:text/html;charset=utf-8,${encodeURIComponent(html)}`;
+}
+
+/** The renderer's hash route for a thread, matching `/_chat/$environmentId/$threadId`. */
+export function threadRouteHref(target: DesktopThreadWindowTarget): string {
+  return `/${encodeURIComponent(target.environmentId)}/${encodeURIComponent(target.threadId)}`;
 }
 
 export function isSameOriginRendererNavigation(input: {
@@ -303,6 +327,22 @@ export const make = Effect.gen(function* () {
   const rendererHistory = yield* DesktopRendererHistory.DesktopRendererHistory;
   const backendReadyRef = yield* Ref.make(false);
   const splashWindowRef = yield* Ref.make<Option.Option<Electron.BrowserWindow>>(Option.none());
+  // Windows that show one thread each, by thread route. A thread shows in one window
+  // at a time, so the renderer sends a second open to the existing window.
+  const threadWindows = new Map<
+    string,
+    {
+      readonly target: DesktopThreadWindowTarget;
+      readonly window: Electron.BrowserWindow;
+      popBackOnClose: boolean;
+    }
+  >();
+  const isThreadWindow = (window: Electron.BrowserWindow) => {
+    for (const entry of threadWindows.values()) {
+      if (entry.window === window) return true;
+    }
+    return false;
+  };
   const context = yield* Effect.context<DesktopWindowRuntimeServices>();
   const runFork = Effect.runForkWith(context);
   const runPromise = Effect.runPromiseWith(context);
@@ -329,8 +369,22 @@ export const make = Effect.gen(function* () {
       ),
     );
 
-  const currentMainWindow = electronWindow.currentMainOrFirst.pipe(Effect.flatMap(withoutSplash));
-  const focusedMainWindow = electronWindow.focusedMainOrFirst.pipe(Effect.flatMap(withoutSplash));
+  // A thread window is never the main window: the sidebar, menu actions, and
+  // activation all belong to the main window, and a closed main window is
+  // reopened rather than replaced by a thread window.
+  const withoutThreadWindows = (window: Option.Option<Electron.BrowserWindow>) =>
+    Option.isSome(window) && isThreadWindow(window.value)
+      ? Option.none<Electron.BrowserWindow>()
+      : window;
+
+  const currentMainWindow = electronWindow.currentMainOrFirst.pipe(
+    Effect.flatMap(withoutSplash),
+    Effect.map(withoutThreadWindows),
+  );
+  const focusedMainWindow = electronWindow.focusedMainOrFirst.pipe(
+    Effect.flatMap(withoutSplash),
+    Effect.map(withoutThreadWindows),
+  );
 
   const zoomWindow = Effect.fn("desktop.window.zoomWindow")(function* (
     window: Electron.BrowserWindow,
@@ -347,18 +401,23 @@ export const make = Effect.gen(function* () {
     yield* previewManager.reapplyZoom();
   });
 
-  const createWindow = Effect.fn("desktop.window.createWindow")(function* (): Effect.fn.Return<
-    Option.Option<Electron.BrowserWindow>,
-    DesktopWindowError
-  > {
+  const createWindow = Effect.fn("desktop.window.createWindow")(function* (
+    threadTarget: DesktopThreadWindowTarget | null,
+  ): Effect.fn.Return<Option.Option<Electron.BrowserWindow>, DesktopWindowError> {
+    const isMainWindow = threadTarget === null;
     if (yield* Ref.get(desktopState.quitting)) return Option.none();
     yield* previewManager.getBrowserSession();
     const applicationUrl = getDesktopUrl(environment.isDevelopment);
+    // The renderer uses hash routing, so a thread window loads its thread route.
+    const windowUrl = isMainWindow
+      ? applicationUrl
+      : `${applicationUrl}#${threadRouteHref(threadTarget)}`;
     const iconPaths = yield* assets.iconPaths;
     const iconOption = getIconOption(iconPaths, environment.platform);
     const shouldUseDarkColors = yield* electronTheme.shouldUseDarkColors;
     const persistedSettings = yield* desktopSettings.get;
-    const persistedBounds = persistedSettings.mainWindowBounds;
+    // Only the main window remembers its bounds.
+    const persistedBounds = isMainWindow ? persistedSettings.mainWindowBounds : null;
     const displayBoundsResult = yield* Effect.sync(() => {
       try {
         return {
@@ -375,7 +434,9 @@ export const make = Effect.gen(function* () {
         : yield* logWindowWarning("failed to read connected displays; using defaults", {
             cause: displayBoundsResult.cause,
           }).pipe(Effect.as<readonly Electron.Rectangle[]>([]));
-    const initialBounds = resolveInitialMainWindowBounds(persistedBounds, displayBounds);
+    const initialBounds = isMainWindow
+      ? resolveInitialMainWindowBounds(persistedBounds, displayBounds)
+      : THREAD_WINDOW_SIZE;
     const restoredPersistedBounds = persistedBounds !== null && initialBounds === persistedBounds;
     if (persistedBounds !== null && initialBounds === DesktopAppSettings.DEFAULT_MAIN_WINDOW_SIZE) {
       yield* logWindowWarning("saved main window bounds could not be restored; using defaults");
@@ -383,8 +444,7 @@ export const make = Effect.gen(function* () {
     if (yield* Ref.get(desktopState.quitting)) return Option.none();
     const window = yield* electronWindow.create({
       ...initialBounds,
-      minWidth: 840,
-      minHeight: 620,
+      ...(isMainWindow ? { minWidth: 840, minHeight: 620 } : THREAD_WINDOW_MIN_SIZE),
       show: false,
       autoHideMenuBar: true,
       ...(environment.platform === "darwin" ? { disableAutoHideCursor: true } : {}),
@@ -402,7 +462,14 @@ export const make = Effect.gen(function* () {
         contextIsolation: true,
         nodeIntegration: false,
         sandbox: true,
-        webviewTag: true,
+        webviewTag: isMainWindow,
+        ...(isMainWindow
+          ? {}
+          : {
+              additionalArguments: [
+                `${THREAD_WINDOW_ARGUMENT_PREFIX}${threadRouteHref(threadTarget)}`,
+              ],
+            }),
         // A preview guest's fullscreen request is mirrored onto this embedder,
         // which would otherwise put the whole window into OS fullscreen. With
         // both sides opted out the page fills its webview and the window stays.
@@ -414,7 +481,9 @@ export const make = Effect.gen(function* () {
       return Option.none();
     }
 
-    yield* rendererHistory.register(window.webContents, { surface: "main" });
+    yield* rendererHistory.register(window.webContents, {
+      surface: isMainWindow ? "main" : "thread",
+    });
     if (environment.platform === "darwin") {
       window.setAutoHideCursor(false);
     }
@@ -503,15 +572,18 @@ export const make = Effect.gen(function* () {
         fiber === undefined ? Effect.void : Fiber.join(fiber).pipe(Effect.asVoid),
       ),
     );
-    flushMainWindowBounds = flushBoundsPersist;
-
-    yield* previewManager.setMainWindow(window);
+    if (isMainWindow) {
+      flushMainWindowBounds = flushBoundsPersist;
+      yield* previewManager.setMainWindow(window);
+    }
     if (yield* Ref.get(desktopState.quitting)) {
       yield* electronWindow.destroyAll;
       return Option.none();
     }
     window.webContents.on("will-attach-webview", (event, webPreferences, params) => {
+      // The browser preview lives only in the main window.
       if (
+        !isMainWindow ||
         typeof params.partition !== "string" ||
         !previewManager.isBrowserPartition(params.partition)
       ) {
@@ -685,13 +757,15 @@ export const make = Effect.gen(function* () {
       event.preventDefault();
       window.setTitle(environment.displayName);
     });
-    window.on("resize", scheduleBoundsPersist);
-    window.on("move", scheduleBoundsPersist);
-    window.on("maximize", scheduleBoundsPersist);
-    window.on("unmaximize", scheduleBoundsPersist);
-    window.on("close", () => {
-      runFork(flushBoundsPersist);
-    });
+    if (isMainWindow) {
+      window.on("resize", scheduleBoundsPersist);
+      window.on("move", scheduleBoundsPersist);
+      window.on("maximize", scheduleBoundsPersist);
+      window.on("unmaximize", scheduleBoundsPersist);
+      window.on("close", () => {
+        runFork(flushBoundsPersist);
+      });
+    }
 
     if (environment.platform === "darwin") {
       window.on("enter-full-screen", () => {
@@ -718,7 +792,7 @@ export const make = Effect.gen(function* () {
       if (window.isDestroyed()) {
         return;
       }
-      void window.loadURL(applicationUrl).catch(() => undefined);
+      void window.loadURL(windowUrl).catch(() => undefined);
     };
     const scheduleDevelopmentLoadRetry = () => {
       if (developmentLoadRetryFiber !== undefined || window.isDestroyed()) {
@@ -831,28 +905,30 @@ export const make = Effect.gen(function* () {
       if (!window.isDestroyed()) {
         window.webContents.setBackgroundThrottling(true);
       }
-      if (persistedSettings.mainWindowMaximized) {
+      if (isMainWindow && persistedSettings.mainWindowMaximized) {
         window.maximize();
       }
       void runPromise(Effect.andThen(electronWindow.reveal(window), dismissConnectingSplash));
     });
 
     loadApplication();
-    if (environment.isDevelopment) {
+    if (environment.isDevelopment && isMainWindow) {
       window.webContents.openDevTools({ mode: "detach" });
     }
 
     window.on("closed", () => {
       clearDevelopmentLoadRetry();
       clearBoundsPersist();
-      void runPromise(electronWindow.clearMain(Option.some(window)));
+      if (isMainWindow) {
+        void runPromise(electronWindow.clearMain(Option.some(window)));
+      }
     });
 
     return Option.some(window);
   });
 
   const createMain = Effect.gen(function* () {
-    const window = yield* createWindow();
+    const window = yield* createWindow(null);
     if (Option.isSome(window)) {
       yield* electronWindow.setMain(window.value);
       yield* logWindowInfo("main window created");
@@ -880,6 +956,66 @@ export const make = Effect.gen(function* () {
     yield* electronWindow.reveal(window);
     return window;
   }).pipe(Effect.withSpan("desktop.window.revealOrCreateMain"));
+
+  const listThreadWindowTargets = () => Array.from(threadWindows.values(), (entry) => entry.target);
+
+  const showRouteInMain = Effect.fn("desktop.window.showRouteInMain")(function* (href: string) {
+    const window = yield* revealOrCreateMain;
+    const send = () => {
+      if (!window.isDestroyed()) window.webContents.send(MAIN_WINDOW_SHOW_ROUTE_CHANNEL, href);
+    };
+    if (window.webContents.isLoadingMainFrame()) {
+      window.webContents.once("did-finish-load", send);
+      return;
+    }
+    send();
+  });
+
+  const openThreadWindow = Effect.fn("desktop.window.openThreadWindow")(function* (
+    target: DesktopThreadWindowTarget,
+  ) {
+    const key = threadRouteHref(target);
+    const existing = threadWindows.get(key);
+    if (existing !== undefined && !existing.window.isDestroyed()) {
+      yield* electronWindow.reveal(existing.window);
+      return;
+    }
+    const created = yield* createWindow(target);
+    if (Option.isNone(created)) return;
+    const window = created.value;
+    const entry = { target, window, popBackOnClose: false };
+    threadWindows.set(key, entry);
+    window.on("closed", () => {
+      if (threadWindows.get(key) === entry) threadWindows.delete(key);
+      // The list goes out before the route, so the main window no longer sends
+      // the thread back to the window that just closed.
+      void runPromise(
+        electronWindow.sendAll(THREAD_WINDOWS_CHANGED_CHANNEL, listThreadWindowTargets()).pipe(
+          Effect.andThen(
+            entry.popBackOnClose ? showRouteInMain(threadRouteHref(target)) : Effect.void,
+          ),
+          Effect.catch((error) =>
+            logWindowWarning("failed to show a popped back thread", { message: error.message }),
+          ),
+        ),
+      );
+    });
+    yield* electronWindow.sendAll(THREAD_WINDOWS_CHANGED_CHANNEL, listThreadWindowTargets());
+    yield* logWindowInfo("thread window created");
+  });
+
+  const popBackThreadWindow = Effect.fn("desktop.window.popBackThreadWindow")(function* (
+    webContentsId: number,
+  ) {
+    for (const entry of threadWindows.values()) {
+      if (entry.window.isDestroyed() || entry.window.webContents.id !== webContentsId) continue;
+      // The renderer saves its draft while it unloads, so the main window shows
+      // the thread only after the window has closed.
+      entry.popBackOnClose = true;
+      yield* Effect.sync(() => entry.window.close());
+      return;
+    }
+  });
 
   const waitingForBackend = Effect.gen(function* () {
     if (yield* Ref.get(backendReadyRef)) return false;
@@ -1043,6 +1179,10 @@ export const make = Effect.gen(function* () {
       else if (command === "forceReload") webContents.reloadIgnoringCache();
       else webContents.toggleDevTools();
     }),
+    openThreadWindow,
+    popBackThreadWindow,
+    showRouteInMain,
+    threadWindowTargets: Effect.sync(listThreadWindowTargets),
     syncAppearance: Effect.gen(function* () {
       const shouldUseDarkColors = yield* electronTheme.shouldUseDarkColors;
       yield* electronWindow.syncAllAppearance((window) =>

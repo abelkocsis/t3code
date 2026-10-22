@@ -98,6 +98,10 @@ function layerDesktopWindow(
     dispatchSnapShotEvent: () => Effect.void,
     zoomMain: () => Effect.void,
     runMainContentsCommand: () => Effect.void,
+    openThreadWindow: () => Effect.die("unexpected thread window"),
+    popBackThreadWindow: () => Effect.void,
+    showRouteInMain: () => Effect.void,
+    threadWindowTargets: Effect.succeed([]),
     syncAppearance: Effect.void,
   });
 }

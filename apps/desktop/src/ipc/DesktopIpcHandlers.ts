@@ -74,6 +74,7 @@ import {
 import * as PreviewIpc from "./methods/preview.ts";
 import * as AppActivationIpc from "./methods/appActivation.ts";
 import * as WebLinksIpc from "./methods/webLinks.ts";
+import * as ThreadWindowIpc from "./methods/threadWindows.ts";
 import {
   completeLegacyLocalStorage,
   takeLegacyLocalStorage,
@@ -166,6 +167,10 @@ export const installDesktopIpcHandlers = Effect.fn("desktop.ipc.installHandlers"
   yield* ipc.handle(getCliCommandState);
   yield* ipc.handle(installCliCommand);
   yield* ipc.handle(uninstallCliCommand);
+  yield* ipc.handleSync(ThreadWindowIpc.listThreadWindows);
+  yield* ipc.handle(ThreadWindowIpc.openThreadWindow);
+  yield* ipc.handle(ThreadWindowIpc.popBackThreadWindow);
+  yield* ipc.handle(ThreadWindowIpc.showInMainWindow);
   for (const previewMethod of PreviewIpc.methods) {
     // Explicit types preserve the error/service union of these heterogeneous preview methods.
     yield* ipc.handle<

@@ -91,6 +91,13 @@ export const DesktopUpdateStatusSchema = Schema.Literals([
   "error",
 ]);
 export const DesktopRuntimeArchSchema = Schema.Literals(["arm64", "x64", "other"]);
+/** A thread shown in its own desktop window, apart from the main window. */
+export const DesktopThreadWindowTargetSchema = Schema.Struct({
+  environmentId: Schema.String,
+  threadId: Schema.String,
+});
+export type DesktopThreadWindowTarget = typeof DesktopThreadWindowTargetSchema.Type;
+
 export const DesktopThemeSchema = Schema.Literals(["light", "dark", "system"]);
 export const DesktopUpdateChannelSchema = Schema.Literals(["latest", "nightly"]);
 export const DesktopAppStageLabelSchema = Schema.Literals(["Alpha", "Beta", "Dev", "Nightly"]);
@@ -1215,6 +1222,26 @@ export interface DesktopBridge {
     setReady: (ready: boolean) => Promise<void>;
     complete: (response: DesktopAppActivationResponse) => Promise<void>;
     onRequest: (listener: (request: DesktopAppActivationRequest) => void) => () => void;
+  };
+  /**
+   * Thread windows: one thread in its own window, without the sidebar. A
+   * thread shows in one window at a time. Optional so a newer web client
+   * keeps working inside an older desktop shell.
+   */
+  threadWindows?: {
+    /** The thread this window shows, or null in the main window. */
+    current: () => DesktopThreadWindowTarget | null;
+    /** Every thread that has its own window now. */
+    list: () => readonly DesktopThreadWindowTarget[];
+    onChange: (listener: (targets: readonly DesktopThreadWindowTarget[]) => void) => () => void;
+    /** Opens the thread in its own window, or focuses the window that already shows it. */
+    open: (target: DesktopThreadWindowTarget) => Promise<void>;
+    /** Closes this thread window, then shows its thread in the main window. */
+    popBack: () => Promise<void>;
+    /** Shows an app route in the main window and brings that window forward. */
+    showInMain: (href: string) => Promise<void>;
+    /** Fires in the main window when another window asks it to show a route. */
+    onShowInMain: (listener: (href: string) => void) => () => void;
   };
   preview?: DesktopPreviewBridge;
 }

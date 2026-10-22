@@ -131,3 +131,12 @@ export const RECEIVE_PROVIDER_AUTH_CALLBACK_CHANNEL = "desktop:receive-provider-
 export const CANCEL_PROVIDER_AUTH_CALLBACK_CHANNEL = "desktop:cancel-provider-auth-callback";
 export const TAKE_LEGACY_LOCAL_STORAGE_CHANNEL = "desktop:take-legacy-local-storage";
 export const COMPLETE_LEGACY_LOCAL_STORAGE_CHANNEL = "desktop:complete-legacy-local-storage";
+
+export const THREAD_WINDOW_LIST_CHANNEL = "desktop:thread-window-list";
+export const THREAD_WINDOWS_CHANGED_CHANNEL = "desktop:thread-windows-changed";
+export const THREAD_WINDOW_OPEN_CHANNEL = "desktop:thread-window-open";
+export const THREAD_WINDOW_POP_BACK_CHANNEL = "desktop:thread-window-pop-back";
+export const SHOW_IN_MAIN_WINDOW_CHANNEL = "desktop:show-in-main-window";
+export const MAIN_WINDOW_SHOW_ROUTE_CHANNEL = "desktop:main-window-show-route";
+// Launch argument that tells a window's preload which thread the window shows.
+export const THREAD_WINDOW_ARGUMENT_PREFIX = "--t3code-thread-window=";
