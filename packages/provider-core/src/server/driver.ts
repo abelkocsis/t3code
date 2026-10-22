@@ -58,6 +58,15 @@ export interface ProviderInstance {
   >;
   readonly orchestrationAdapter: ProviderAdapter.ProviderAdapterV2["Service"];
   readonly textGeneration: ProviderTextGeneration;
+  /**
+   * Post a reply in a Slack thread through the account's own Slack connection. Only a provider
+   * whose account carries one offers it; the reply is posted as that account's Slack user.
+   */
+  readonly replyInSlackThread?: (input: {
+    readonly channelId: string;
+    readonly threadTs: string;
+    readonly text: string;
+  }) => Effect.Effect<{ readonly link: string }, ProviderDriverError>;
   readonly auth?: ProviderAuthController;
   readonly acpSessionManagement?: {
     readonly listSessions: (input: {

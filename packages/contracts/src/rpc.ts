@@ -7,11 +7,13 @@ import { OrchestrationDispatchCommandError } from "./orchestrationDispatch.ts";
 import {
   ForkThreadSetFactoryInput,
   ForkThreadSetFolderInput,
+  ForkThreadSetSlackThreadInput,
   ForkThreadState,
   ForkThreadStateError,
   ForkThreadStateStreamEvent,
   ForkThreadStateSubscribeInput,
 } from "./fork.ts";
+import { SlackThreadReplyError, SlackThreadReplyInput, SlackThreadReplyResult } from "./slack.ts";
 import {
   McpAppCallToolInput,
   McpAppCallToolResult,
@@ -506,6 +508,8 @@ export const WS_METHODS = {
   forkThreadStateSubscribe: "fork.threadState.subscribe",
   forkThreadSetFolder: "fork.threadState.setFolder",
   forkThreadSetFactory: "fork.threadState.setFactory",
+  forkThreadSetSlackThread: "fork.threadState.setSlackThread",
+  forkReplyInSlackThread: "fork.slack.replyInThread",
   serverGetStorageCleanupReport: "server.getStorageCleanupReport",
   serverGetStandupState: "server.getStandupState",
   serverGenerateStandupSummary: "server.generateStandupSummary",
@@ -785,6 +789,20 @@ const WsForkThreadSetFactoryRpc = Rpc.make(WS_METHODS.forkThreadSetFactory, {
   payload: ForkThreadSetFactoryInput,
   success: ForkThreadState,
   error: Schema.Union([ForkThreadStateError, EnvironmentAuthorizationError]),
+});
+const WsForkThreadSetSlackThreadRpc = Rpc.make(WS_METHODS.forkThreadSetSlackThread, {
+  payload: ForkThreadSetSlackThreadInput,
+  success: ForkThreadState,
+  error: Schema.Union([ForkThreadStateError, EnvironmentAuthorizationError]),
+});
+/**
+ * Posts a reply in a Slack thread as the user, through the Slack connection of a provider account
+ * on this server. Each call sends a message, so the client calls it only on an explicit Send.
+ */
+const WsForkReplyInSlackThreadRpc = Rpc.make(WS_METHODS.forkReplyInSlackThread, {
+  payload: SlackThreadReplyInput,
+  success: SlackThreadReplyResult,
+  error: Schema.Union([SlackThreadReplyError, EnvironmentAuthorizationError]),
 });
 
 const WsServerRunStorageCleanupRpc = Rpc.make(WS_METHODS.serverRunStorageCleanup, {
@@ -2211,6 +2229,8 @@ export const ForkWsRpcGroup = RpcGroup.make(
   WsSourceControlIssueDetailsRpc,
   WsForkThreadStateSubscribeRpc,
   WsForkThreadSetFolderRpc,
+  WsForkThreadSetSlackThreadRpc,
+  WsForkReplyInSlackThreadRpc,
   WsServerGetStandupStateRpc,
   WsServerGenerateStandupSummaryRpc,
   WsServerUpdateStandupItemsRpc,

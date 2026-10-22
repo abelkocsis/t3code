@@ -12,6 +12,7 @@ import * as Schema from "effect/Schema";
 
 import { ThreadFolderId, ThreadId } from "./baseSchemas.ts";
 import { ThreadFactory } from "./factory.ts";
+import { SlackThreadRef } from "./slack.ts";
 
 export const ForkThreadState = Schema.Struct({
   threadId: ThreadId,
@@ -19,6 +20,8 @@ export const ForkThreadState = Schema.Struct({
   folderId: Schema.NullOr(ThreadFolderId),
   /** Set while the thread runs as a code-factory task. Null for a plain thread. */
   factory: Schema.NullOr(ThreadFactory),
+  /** The Slack thread where this thread's review requests live, told to the agent on every turn. */
+  slackThread: Schema.NullOr(SlackThreadRef),
   updatedAt: Schema.String,
 });
 export type ForkThreadState = typeof ForkThreadState.Type;
@@ -28,6 +31,7 @@ export const emptyForkThreadState = (threadId: ThreadId): ForkThreadState => ({
   threadId,
   folderId: null,
   factory: null,
+  slackThread: null,
   updatedAt: "1970-01-01T00:00:00.000Z",
 });
 
@@ -63,6 +67,12 @@ export const ForkThreadSetFactoryInput = Schema.Struct({
   factory: Schema.NullOr(ThreadFactory),
 });
 export type ForkThreadSetFactoryInput = typeof ForkThreadSetFactoryInput.Type;
+export const ForkThreadSetSlackThreadInput = Schema.Struct({
+  threadId: ThreadId,
+  /** Null removes the link. */
+  slackThread: Schema.NullOr(SlackThreadRef),
+});
+export type ForkThreadSetSlackThreadInput = typeof ForkThreadSetSlackThreadInput.Type;
 
 export class ForkThreadStateError extends Schema.TaggedError<ForkThreadStateError>()(
   "ForkThreadStateError",

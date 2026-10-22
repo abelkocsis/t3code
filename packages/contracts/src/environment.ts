@@ -122,6 +122,8 @@ export const ExecutionEnvironmentCapabilities = Schema.Struct({
   threadActiveReorder: Schema.optionalKey(Schema.Boolean),
   /** The server stores sidebar folders in its settings and a folder per thread. */
   threadFolders: Schema.optionalKey(Schema.Boolean),
+  /** The server stores a Slack thread link per thread and can post review requests into it. */
+  threadSlackThreads: Schema.optionalKey(Schema.Boolean),
   threadAutoSettleOptOut: Schema.optionalKey(Schema.Boolean),
   threadTitleRegeneration: Schema.optionalKey(Schema.Boolean),
   threadVisitedTracking: Schema.optionalKey(Schema.Boolean),
