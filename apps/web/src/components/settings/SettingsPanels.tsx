@@ -629,6 +629,9 @@ export function useSettingsRestore(onRestored?: () => void) {
     ...(settings.contextWindowMeterEnabled !== DEFAULT_UNIFIED_SETTINGS.contextWindowMeterEnabled
       ? ["Context window indicator"]
       : []),
+    ...(settings.usagePaceIncludesWeekends !== DEFAULT_UNIFIED_SETTINGS.usagePaceIncludesWeekends
+      ? ["Count weekends in usage pace"]
+      : []),
     ...(settings.responseStreamingMode !== DEFAULT_UNIFIED_SETTINGS.responseStreamingMode
       ? ["Response streaming"]
       : []),
@@ -744,6 +747,7 @@ export function useSettingsRestore(onRestored?: () => void) {
       sendShortcut: DEFAULT_UNIFIED_SETTINGS.sendShortcut,
       followUpBehavior: DEFAULT_UNIFIED_SETTINGS.followUpBehavior,
       contextWindowMeterEnabled: DEFAULT_UNIFIED_SETTINGS.contextWindowMeterEnabled,
+      usagePaceIncludesWeekends: DEFAULT_UNIFIED_SETTINGS.usagePaceIncludesWeekends,
       environmentIdentificationMode: DEFAULT_UNIFIED_SETTINGS.environmentIdentificationMode,
       glassOpacity: DEFAULT_UNIFIED_SETTINGS.glassOpacity,
       panelAnimationDurationMs: DEFAULT_UNIFIED_SETTINGS.panelAnimationDurationMs,
@@ -2280,6 +2284,19 @@ export function GeneralSettingsPanel() {
                 updateSettings({ snoozeLimitedThreads: Boolean(checked) })
               }
               aria-label="Snooze limited threads"
+            />
+          }
+        />
+        <SettingsRow
+          {...searchableSetting("usage-pace-weekends")}
+          description="The even-spending mark on a weekly limit follows the whole week. Off, it only advances Monday to Friday."
+          control={
+            <Switch
+              checked={settings.usagePaceIncludesWeekends}
+              onCheckedChange={(checked) =>
+                updateSettings({ usagePaceIncludesWeekends: Boolean(checked) })
+              }
+              aria-label="Count weekends in usage pace"
             />
           }
         />

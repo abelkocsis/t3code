@@ -13,6 +13,7 @@ import {
   formatDuration,
   formatResetsIn,
   type LimitPace,
+  type LimitPaceOptions,
   paceOf,
   paceRemainingPercent,
   remainingPercent,
@@ -46,6 +47,16 @@ const PACE: Record<LimitPace, { readonly label: string; readonly icon: typeof Ga
   on: { label: "On pace with the window", icon: GaugeIcon },
   under: { label: "Under pace: headroom left for the rest of the window", icon: TrendingDownIcon },
 };
+
+/**
+ * How every limits view reads the clock, from the user's weekend preference.
+ * A weekday-only week moves the even-spending mark and the pace verdict
+ * together, so the bar and the glyph never disagree.
+ */
+export function useLimitPaceOptions(): LimitPaceOptions {
+  const includeWeekends = usePrimarySettings((settings) => settings.usagePaceIncludesWeekends);
+  return { includeWeekends };
+}
 
 export function barColor(driver: ServerProvider["driver"]): string {
   const presentation = Object.values(PROVIDER_PRESENTATION).find(
@@ -121,8 +132,9 @@ function WindowBar({
   readonly now: number;
 }) {
   const timestampFormat = usePrimarySettings((settings) => settings.timestampFormat);
+  const paceOptions = useLimitPaceOptions();
   const remaining = remainingPercent(window);
-  const timeLeft = paceRemainingPercent(window, now);
+  const timeLeft = paceRemainingPercent(window, now, paceOptions);
   const [barRef, paceMark] = usePaceMark(timeLeft);
   const resetsIn = formatResetsIn(window, now);
   const resetsAt = window.resetsAt
@@ -195,6 +207,7 @@ export function LimitWindows({
   readonly compact?: boolean;
 }) {
   const color = barColor(driver);
+  const paceOptions = useLimitPaceOptions();
   return (
     <div
       className={
@@ -204,7 +217,7 @@ export function LimitWindows({
       }
     >
       {windows.map((window) => {
-        const pace = paceOf(window, now);
+        const pace = paceOf(window, now, paceOptions);
         const resetsIn = formatResetsIn(window, now);
         return (
           <Fragment key={window.id}>

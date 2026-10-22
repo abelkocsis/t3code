@@ -44,6 +44,7 @@ import {
   barColor,
   usePaceMark,
   resetCreditsSummary,
+  useLimitPaceOptions,
   useResetCredit,
 } from "./UsageLimits";
 
@@ -148,8 +149,9 @@ function SegmentPopover({
   readonly onRedeem: () => void;
 }) {
   const timestampFormat = usePrimarySettings((settings) => settings.timestampFormat);
+  const paceOptions = useLimitPaceOptions();
   const remaining = remainingPercent(window);
-  const timeLeft = paceRemainingPercent(window, now);
+  const timeLeft = paceRemainingPercent(window, now, paceOptions);
   const resetsIn = formatResetsIn(window, now);
   const where =
     account.environments.length > 0
@@ -341,8 +343,9 @@ function SegmentTriggers({
 }) {
   const popover = use(SegmentPopoverContext) ?? undefined;
   const payload: SegmentPayload = { account, window, reset, redeem };
+  const paceOptions = useLimitPaceOptions();
   const remaining = remainingPercent(window);
-  const timeLeft = paceRemainingPercent(window, now);
+  const timeLeft = paceRemainingPercent(window, now, paceOptions);
   const [segmentRef, paceMark] = usePaceMark(timeLeft);
   const resetsIn = formatResetsIn(window, now);
   const credits = account.limits.resetCredits?.availableCount ?? 0;
@@ -606,7 +609,8 @@ export function UsageLimitsPooled({
 }) {
   const [segmentPopover] = useState(() => PopoverCreateHandle<SegmentPayload>());
   const segmentPopoverActions = useRef<PopoverPrimitive.Root.Actions | null>(null);
-  const pools = collectLimitPools(collectLimitAccounts(presentations), now);
+  const paceOptions = useLimitPaceOptions();
+  const pools = collectLimitPools(collectLimitAccounts(presentations), now, paceOptions);
   const notices = collectLimitNotices(presentations);
   const externalLinks = collectExternalUsageLinks(presentations);
   const cursorPromptAt =

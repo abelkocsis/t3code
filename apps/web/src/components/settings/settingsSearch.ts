@@ -329,6 +329,12 @@ export const SETTINGS_SEARCH_ITEMS = [
     searchTerms: ["usage quota rate limit reset recover continue"],
   },
   {
+    id: "usage-pace-weekends",
+    title: "Count weekends in usage pace",
+    to: "/settings/general",
+    searchTerms: ["limits weekly window marker pace weekday weekend saturday sunday quota"],
+  },
+  {
     id: "working-shelf",
     title: "Working section (beta)",
     to: "/settings/general",

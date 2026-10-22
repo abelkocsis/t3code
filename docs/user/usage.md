@@ -102,6 +102,11 @@ and a partly spent session may only regain its unused portion when the week rese
 stale reset times have no refill estimate; refresh Limits for a new reading. Claude's
 model-specific weekly allowances keep their reported values.
 
+A line across each bar marks where even spending would be, and the pace icon compares your
+spend against it. By default the line crosses a weekly window over all seven days. If you do not
+work weekends, turn off **Count weekends in usage pace** in **Settings → General**. The line then
+advances only from Monday to Friday, so it holds still over the weekend.
+
 Opening Limits checks the selected connected environments automatically. Each client waits at
 least five minutes between automatic checks of an environment, including after a failed check.
 If a window still looks stale, refresh Limits to re-check every provider and hub.
