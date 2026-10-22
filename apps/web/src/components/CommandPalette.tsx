@@ -69,6 +69,7 @@ import {
   FolderIcon,
   FolderPlusIcon,
   MessageSquareDashedIcon,
+  CircleDotIcon,
   LinkIcon,
   ListChecksIcon,
   MessageSquareIcon,
@@ -153,6 +154,7 @@ import {
   resolveProjectPathForDispatch,
 } from "../lib/projectPaths";
 import { onOpenCommandPalette } from "../commandPaletteBus";
+import { openIssuePicker } from "../issuePickerBus";
 import { isPreviewFocused } from "../lib/previewFocus";
 import { isTerminalFocused } from "../lib/terminalFocus";
 import {
@@ -1627,6 +1629,19 @@ function OpenCommandPaletteDialog(props: {
       icon: <SquarePenIcon className={ITEM_ICON_CLASS} />,
       addonIcon: <SquarePenIcon className={ADDON_ICON_CLASS} />,
       groups: [{ value: "projects", label: "Projects", items: projectThreadItems }],
+    });
+  }
+
+  if (primaryEnvironmentId !== null) {
+    actionItems.push({
+      kind: "action",
+      value: "action:new-thread-from-issue",
+      searchTerms: ["new thread", "issue", "github", "from issue", "ticket"],
+      title: "New thread from a GitHub issue",
+      icon: <CircleDotIcon className={ITEM_ICON_CLASS} />,
+      run: async () => {
+        openIssuePicker();
+      },
     });
   }
 

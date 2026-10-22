@@ -37,6 +37,7 @@ import { LegacyThreadMigrationToast } from "../components/LegacyThreadMigrationT
 import { ThreadNotificationCoordinator } from "../components/ThreadNotificationCoordinator";
 import { ReopenClosedViewShortcut } from "../components/ReopenClosedViewShortcut";
 import { ProjectCloneToastCoordinator } from "../components/ProjectCloneToastCoordinator";
+import { IssuePickerHost } from "../components/issues/IssuePickerHost";
 import { PullRequestGuideRunCoordinator } from "../components/pullRequest/guide/PullRequestGuideRunCoordinator";
 import { HostFreezeToastCoordinator } from "../components/HostFreezeToastCoordinator";
 import { SlowRpcRequestToastCoordinator } from "../components/SlowRpcRequestToastCoordinator";
@@ -262,6 +263,7 @@ function RootRouteView() {
           {mainWindow ? <PermissionUpdateNotice /> : null}
           {primaryEnvironmentAuthenticated && mainWindow ? <LegacyThreadMigrationToast /> : null}
           {mainWindow ? <ProjectCloneToastCoordinator /> : null}
+          {mainWindow ? <IssuePickerHost /> : null}
           <AddProjectToMachineDialogHost />
           {mainWindow ? <PullRequestGuideRunCoordinator /> : null}
           <HostedStaticEnvironmentBootstrap />

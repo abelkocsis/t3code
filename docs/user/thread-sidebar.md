@@ -23,6 +23,24 @@ list. It starts on your current machine; before sending, pick another machine
 from the machine menu to move it there. To move a draft into a project, pick the
 project in the heading.
 
+### Start from a GitHub issue
+
+To start work on one or more GitHub issues, click **From issue** in the sidebar
+or pick **New thread from a GitHub issue** in the command palette. The search
+covers every repository your GitHub account can read and starts with the open
+issues assigned to you; turn off **Assigned to me** to widen it, type
+`owner/repo` to search one repository, or paste an issue link or `owner/repo#123`
+to pick an issue directly. One thread works on one repository, so picking an
+issue from another repository starts the selection again.
+
+The next step shows the thread's first message: your instructions, then the
+issues with their full text. Edit either part. If a project already holds the
+issue's repository, the thread starts there; otherwise T3 Code clones the
+repository into your projects folder first, or you can choose **Clone a fresh
+copy** anyway. The model and effort pickers in the footer set what the thread
+starts with. This needs the GitHub CLI signed in, or a `GH_TOKEN`, on the
+server.
+
 Each thread without a project works in its own folder under `~/.t3/scratch` (the
 `scratch` folder of your T3 data directory), named after its date, the first words
 of its first message, and a short id, like
