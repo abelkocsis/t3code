@@ -3824,6 +3824,17 @@ export default function ChatView(props: ChatViewProps) {
     useRightPanelStore.getState().open(activeThreadRef, "device");
   };
   const addDeviceSurfaceStable = useStableCallback(addDeviceSurface);
+  // Both panels read the environment, not the thread, so a draft can open them too.
+  const addTodoSurface = () => {
+    if (!activeThreadRef) return;
+    useRightPanelStore.getState().toggle(activeThreadRef, "todo");
+  };
+  const addTodoSurfaceStable = useStableCallback(addTodoSurface);
+  const addStandupSurface = () => {
+    if (!activeThreadRef) return;
+    useRightPanelStore.getState().toggle(activeThreadRef, "standup");
+  };
+  const addStandupSurfaceStable = useStableCallback(addStandupSurface);
   useAgentOpenedPreviews({
     threadRef: activeThreadRef,
     deviceState,
@@ -8845,6 +8856,8 @@ export default function ChatView(props: ChatViewProps) {
           onAddPullRequest={addPullRequestSurfaceStable}
           onAddPullRequests={addPullRequestsSurfaceStable}
           onAddDevice={addDeviceSurfaceStable}
+          onAddTodo={addTodoSurfaceStable}
+          onAddStandup={addStandupSurfaceStable}
           browserAvailable={canOperatePreview && browserAvailable}
           terminalAvailable={activeProject !== null && canOperateTerminal}
           diffAvailable={isServerThread && isGitRepo}
@@ -8900,6 +8913,8 @@ export default function ChatView(props: ChatViewProps) {
             onAddPullRequest={addPullRequestSurfaceStable}
             onAddPullRequests={addPullRequestsSurfaceStable}
             onAddDevice={addDeviceSurfaceStable}
+            onAddTodo={addTodoSurfaceStable}
+            onAddStandup={addStandupSurfaceStable}
             browserAvailable={canOperatePreview && browserAvailable}
             terminalAvailable={activeProject !== null && canOperateTerminal}
             diffAvailable={isServerThread && isGitRepo}

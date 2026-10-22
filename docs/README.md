@@ -17,6 +17,8 @@
 - [Use T3 Code as your default browser](./user/default-browser.md)
 - [Devices](./user/devices.md)
 - [Usage and limits](./user/usage.md)
+- [To-do list](./user/todo-list.md)
+- [Daily summary](./user/daily-summary.md)
 - [Product usage data](./user/telemetry.md)
 - [Remote access](./user/remote-access.md)
 - [T3 Connect troubleshooting](./user/t3-connect-troubleshooting.md)

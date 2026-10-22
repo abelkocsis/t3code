@@ -59,6 +59,7 @@ import { useLocation, useNavigate } from "@tanstack/react-router";
 import {
   ArrowLeftIcon,
   ExternalLinkIcon,
+  CalendarDaysIcon,
   ChartNoAxesColumnIcon,
   CheckIcon,
   ChevronRightIcon,
@@ -69,6 +70,7 @@ import {
   FolderPlusIcon,
   MessageSquareDashedIcon,
   LinkIcon,
+  ListChecksIcon,
   MessageSquareIcon,
   MonitorIcon,
   MoonIcon,
@@ -2044,6 +2046,32 @@ function OpenCommandPaletteDialog(props: {
       icon: <RocketIcon className={ITEM_ICON_CLASS} />,
       run: async () => {
         await navigate({ to: "/shipping" });
+      },
+    });
+  }
+
+  if (activeThread) {
+    const panelRef = scopeThreadRef(activeThread.environmentId, activeThread.id);
+    actionItems.push({
+      kind: "action",
+      value: "action:open-todos",
+      searchTerms: ["todo", "to-do", "todos", "task list", "next", "backlog"],
+      title: "To-do list",
+      description: "Your ordered list of what to do next",
+      icon: <ListChecksIcon className={ITEM_ICON_CLASS} />,
+      run: async () => {
+        useRightPanelStore.getState().open(panelRef, "todo");
+      },
+    });
+    actionItems.push({
+      kind: "action",
+      value: "action:open-standup",
+      searchTerms: ["standup", "daily summary", "what did i do", "yesterday", "recap", "report"],
+      title: "Daily summary",
+      description: "What you worked on, ready to paste into standup",
+      icon: <CalendarDaysIcon className={ITEM_ICON_CLASS} />,
+      run: async () => {
+        useRightPanelStore.getState().open(panelRef, "standup");
       },
     });
   }

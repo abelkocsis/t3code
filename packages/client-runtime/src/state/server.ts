@@ -982,6 +982,42 @@ export function createServerEnvironmentAtoms<R, E>(
       tag: WS_METHODS.serverGetStorageCleanupReport,
       idleTtlMs: 0,
     }),
+    // The state read is cheap and never calls the model, so the panel may ask
+    // for it on every open. Generating is a separate, explicit command.
+    standupState: createEnvironmentRpcQueryAtomFamily(runtime, {
+      label: "environment-data:server:standup-state",
+      tag: WS_METHODS.serverGetStandupState,
+      staleTimeMs: 30_000,
+    }),
+    // Generating spends provider tokens, so a second click on the same day
+    // joins the run in flight rather than starting another one.
+    generateStandupSummary: createEnvironmentRpcCommand(runtime, {
+      label: "environment-data:server:generate-standup-summary",
+      tag: WS_METHODS.serverGenerateStandupSummary,
+      concurrency: {
+        mode: "singleFlight",
+        key: ({ environmentId, input }) => JSON.stringify([environmentId, input.day]),
+      },
+    }),
+    updateStandupItems: createEnvironmentRpcCommand(runtime, {
+      label: "environment-data:server:update-standup-items",
+      tag: WS_METHODS.serverUpdateStandupItems,
+    }),
+    saveStandupSummary: createEnvironmentRpcCommand(runtime, {
+      label: "environment-data:server:save-standup-summary",
+      tag: WS_METHODS.serverSaveStandupSummary,
+    }),
+    // A short list read from one file. Another device may have changed it, so
+    // the panel re-reads rather than trusting what it last wrote.
+    todoList: createEnvironmentRpcQueryAtomFamily(runtime, {
+      label: "environment-data:server:todo-list",
+      tag: WS_METHODS.serverGetTodoList,
+      staleTimeMs: 15_000,
+    }),
+    setTodoList: createEnvironmentRpcCommand(runtime, {
+      label: "environment-data:server:set-todo-list",
+      tag: WS_METHODS.serverSetTodoList,
+    }),
     updateStateAtom,
     settingsValueAtom,
     providersValueAtom,

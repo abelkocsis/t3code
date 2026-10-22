@@ -27,12 +27,14 @@ import { horizontalListSortingStrategy, SortableContext, useSortable } from "@dn
 import { CSS } from "@dnd-kit/utilities";
 import {
   Smartphone,
+  CalendarDays,
   ChevronDown,
   ChevronLeft,
   ChevronRight,
   FileDiff,
   Files,
   Globe2,
+  ListChecks,
   Plus,
   TerminalSquare,
 } from "lucide-react";
@@ -137,6 +139,9 @@ interface RightPanelTabsProps {
   onAddPullRequest: () => void;
   onAddPullRequests: () => void;
   onAddDevice: () => void;
+  /** Absent where the panel has no environment to read the list from. */
+  onAddTodo?: (() => void) | undefined;
+  onAddStandup?: (() => void) | undefined;
   browserAvailable: boolean;
   terminalAvailable: boolean;
   diffAvailable: boolean;
@@ -172,6 +177,8 @@ const SURFACE_DISABLED_REASONS = {
   pullRequest: "This thread's branch has no pull request yet.",
   pullRequests: "No linked pull requests are available for this thread.",
   device: "Devices are only available from a thread.",
+  todo: "The to-do list is only available from a thread.",
+  standup: "The daily summary is only available from a thread.",
 } as const;
 
 // Closed keepMounted popups must stop blocking shortcuts once their exit transition ends.
@@ -196,6 +203,8 @@ const SURFACE_UNAVAILABLE_HINTS = {
   pullRequest: "No pull request on this branch yet.",
   pullRequests: "No linked pull requests available.",
   device: "Available from a thread.",
+  todo: "Available from a thread.",
+  standup: "Available from a thread.",
 } as const;
 
 type TabContextMenuAction =
@@ -317,6 +326,9 @@ function RightPanelEmptyState(props: {
   onAddPullRequest: () => void;
   onAddPullRequests: () => void;
   onAddDevice: () => void;
+  /** Absent where the panel has no environment to read the list from. */
+  onAddTodo?: (() => void) | undefined;
+  onAddStandup?: (() => void) | undefined;
   browserAvailable: boolean;
   terminalAvailable: boolean;
   diffAvailable: boolean;
@@ -384,6 +396,24 @@ function RightPanelEmptyState(props: {
       available: props.deviceAvailable,
       disabledReason: SURFACE_UNAVAILABLE_HINTS.device,
       onClick: props.onAddDevice,
+    },
+    {
+      label: "To-do list",
+      description: "Your ordered list of what to do next.",
+      icon: ListChecks,
+      shortcut: "O",
+      available: props.onAddTodo !== undefined,
+      disabledReason: SURFACE_UNAVAILABLE_HINTS.todo,
+      onClick: () => props.onAddTodo?.(),
+    },
+    {
+      label: "Daily summary",
+      description: "What you worked on, ready to paste into standup.",
+      icon: CalendarDays,
+      shortcut: "S",
+      available: props.onAddStandup !== undefined,
+      disabledReason: SURFACE_UNAVAILABLE_HINTS.standup,
+      onClick: () => props.onAddStandup?.(),
     },
   ] as const;
 
@@ -569,6 +599,10 @@ function surfaceTitle(
       return "Pull requests";
     case "device":
       return surface.title ?? surface.target?.name ?? "Device";
+    case "todo":
+      return "To-do";
+    case "standup":
+      return "Daily summary";
     case "preview": {
       const snapshot = surface.resourceId ? sessions[surface.resourceId] : null;
       if (!snapshot || snapshot.navStatus._tag === "Idle") return "Browser";
@@ -657,6 +691,10 @@ function SurfaceIcon({
       );
     case "pull-requests":
       return <PullRequestGlyph.link className="size-3 shrink-0" />;
+    case "todo":
+      return <ListChecks className="size-3 shrink-0" />;
+    case "standup":
+      return <CalendarDays className="size-3 shrink-0" />;
     case "device":
       return surface.target?.platform === "ios" ? (
         <AppleIcon className="size-3 shrink-0" />
@@ -1085,6 +1123,22 @@ export function RightPanelTabs(props: RightPanelTabsProps) {
       available: props.deviceAvailable,
       disabledReason: SURFACE_DISABLED_REASONS.device,
       onClick: props.onAddDevice,
+    },
+    {
+      label: "To-do list",
+      icon: ListChecks,
+      shortcut: "O",
+      available: props.onAddTodo !== undefined,
+      disabledReason: SURFACE_DISABLED_REASONS.todo,
+      onClick: () => props.onAddTodo?.(),
+    },
+    {
+      label: "Daily summary",
+      icon: CalendarDays,
+      shortcut: "S",
+      available: props.onAddStandup !== undefined,
+      disabledReason: SURFACE_DISABLED_REASONS.standup,
+      onClick: () => props.onAddStandup?.(),
     },
   ] as const;
 
