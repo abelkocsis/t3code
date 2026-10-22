@@ -79,20 +79,26 @@ vp run --filter t3 --filter @t3tools/web --filter @t3tools/desktop \
   || die "Typecheck failed. Nothing was built or published."
 
 say "Running the tests that cover this fork's changes…"
-# ThreadSettlementReactor's storage cleanup group fails on this machine against
-# a pristine upstream checkout too, and this fork touches neither the reactor
-# nor its test. Gating a release on it would only block releases.
 vp test run \
-  --exclude "**/ThreadSettlementReactor.test.ts" \
-  apps/server/src/orchestration/ \
-  apps/server/src/sourceControl/gitHubIssues.test.ts \
+  apps/server/src/fork/ \
+  apps/server/src/slack/ \
+  apps/server/src/standup/ \
+  apps/server/src/todos/ \
   apps/server/src/sourceControl/SourceControlIssueService.test.ts \
   apps/server/src/provider/providerWorkspaceState.test.ts \
   apps/server/src/provider/ProviderWorkspaceStateService.test.ts \
-  packages/client-runtime/src/state/ \
-  apps/web/src/notifications/ \
-  apps/web/src/components/issues/ \
+  apps/server/src/persistence/Migrations.test.ts \
+  packages/contracts/src/factory.test.ts \
+  packages/contracts/src/slack.test.ts \
+  packages/contracts/src/settings.test.ts \
+  packages/shared/src/usageLimits.test.ts \
+  packages/client-runtime/src/state/threadAttention.test.ts \
+  packages/client-runtime/src/state/overlayVisibility.test.ts \
   apps/web/src/components/Sidebar.logic.test.ts \
+  apps/web/src/components/Sidebar.drag.test.ts \
+  apps/web/src/components/factory/ \
+  apps/web/src/components/chat/quickReplyVisibility.test.ts \
+  apps/web/src/upstreamRelease.test.ts \
   apps/desktop/src/window/ \
   apps/desktop/src/settings/DesktopClientSettings.test.ts \
   || die "Tests failed. Nothing was built or published."
