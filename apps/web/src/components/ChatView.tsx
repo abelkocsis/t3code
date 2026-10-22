@@ -307,6 +307,7 @@ import { usePanelAnimationSettings, usePanelPresence } from "../panelAnimations"
 import { useNewThreadHandler } from "../hooks/useHandleNewThread";
 import { useRemoveClonedProject } from "../hooks/useRemoveClonedProject";
 import { useOpenPanelPullRequestUrl } from "../hooks/useOpenPanelPullRequestUrl";
+import { useTitlebarControlsInset } from "../hooks/useTitlebarControlsInset";
 import { resolveAppModelSelectionForInstance } from "../modelSelection";
 import {
   getComposerPromptInjectionState,
@@ -7970,6 +7971,8 @@ export default function ChatView(props: ChatViewProps) {
     (folders: Parameters<ChatComposerHandle["addDroppedFolders"]>[0]) =>
       composerRef.current?.addDroppedFolders(folders),
   );
+  // The right panel tab strip reserves exactly as much room as this cluster occupies.
+  const titlebarControlsRef = useTitlebarControlsInset();
 
   if (!activeThread) {
     return <NoActiveThreadState />;
@@ -8061,6 +8064,7 @@ export default function ChatView(props: ChatViewProps) {
   );
   const panelLayoutControls = (
     <div
+      ref={titlebarControlsRef}
       className={cn(
         "pointer-events-none fixed top-[var(--workspace-controls-top)] right-[var(--workspace-controls-right)] z-50 mr-px flex h-[var(--workspace-topbar-height)] items-center gap-1 [-webkit-app-region:no-drag]",
       )}
