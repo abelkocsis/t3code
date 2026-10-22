@@ -4,6 +4,7 @@ import { memo } from "react";
 import { Link, useLocation, useNavigate } from "@tanstack/react-router";
 
 import { useEnvironmentIdentificationMode } from "../../hooks/useSettings";
+import { useUpstreamRelease } from "../../hooks/useUpstreamRelease";
 import { cn } from "../../lib/utils";
 import { usePullRequestsSupported } from "../../state/environments";
 import { T3Wordmark } from "../T3Wordmark";
@@ -135,22 +136,38 @@ function SidebarUtilityItem({
   icon,
   label,
   onClick,
+  badge = false,
+  badgeLabel,
 }: {
   icon: ReactNode;
   label: string;
   onClick: () => void;
+  /** A dot on the icon, for something waiting behind this entry. */
+  badge?: boolean;
+  badgeLabel?: string;
 }) {
   return (
     <SidebarMenuItem className="shrink-0">
       <Tooltip>
         <TooltipTrigger
           render={
-            <SidebarMenuButton aria-label={label} onClick={onClick} size="icon">
+            <SidebarMenuButton
+              aria-label={badge && badgeLabel ? `${label}. ${badgeLabel}` : label}
+              onClick={onClick}
+              size="icon"
+              className="relative"
+            >
+              {badge ? (
+                <span
+                  aria-hidden
+                  className="absolute end-1.5 top-1.5 size-1.5 rounded-full bg-warning"
+                />
+              ) : null}
               {icon}
             </SidebarMenuButton>
           }
         />
-        <TooltipPopup side="top">{label}</TooltipPopup>
+        <TooltipPopup side="top">{badge && badgeLabel ? badgeLabel : label}</TooltipPopup>
       </Tooltip>
     </SidebarMenuItem>
   );
@@ -164,6 +181,7 @@ export const SidebarUtilityMenu = memo(function SidebarUtilityMenu() {
     select: (location) => isSidebarUtilityPage(location.pathname),
   });
   const pullRequestsSupported = usePullRequestsSupported();
+  const upstreamRelease = useUpstreamRelease();
   const closeMobileSidebar = () => {
     if (isMobile) {
       setOpenMobile(false);
@@ -208,6 +226,10 @@ export const SidebarUtilityMenu = memo(function SidebarUtilityMenu() {
             icon={<SettingsIcon />}
             label="Settings"
             onClick={handleSettingsClick}
+            badge={upstreamRelease?.isBehind === true}
+            {...(upstreamRelease?.isBehind === true
+              ? { badgeLabel: `Settings. Upstream ${upstreamRelease.latest.tag} is out` }
+              : {})}
           />
           {pullRequestsSupported ? (
             <SidebarUtilityItem

@@ -170,6 +170,12 @@ export const SETTINGS_SEARCH_ITEMS = [
     searchTerms: ["disk storage browser screenshots captures rotated logs cleanup retention"],
   },
   {
+    id: "upstream-release",
+    title: "Upstream release",
+    to: "/settings/general",
+    searchTerms: ["fork base tag rebase upstream t3code stable update"],
+  },
+  {
     id: "project-defaults",
     title: "Project defaults and overrides",
     to: "/settings/general",

@@ -3,6 +3,7 @@ import { settingsScopeEnvironmentLabels } from "./settingsScopeAxis";
 import { useScopedSettingsWriteAllowed } from "./useScopedSettings";
 import { Spinner } from "~/components/ui/spinner";
 import { NotificationSettings } from "./NotificationSettings";
+import { UpstreamReleaseSection } from "./UpstreamReleaseSection";
 import { PRIVACY_POLICY_URL } from "../../legalLinks";
 import { ArchiveIcon, ArchiveX, CheckIcon, ChevronRightIcon, SettingsIcon } from "lucide-react";
 import { Link, useNavigate } from "@tanstack/react-router";
@@ -3311,6 +3312,7 @@ export function GeneralSettingsPanel() {
             </Button>
           }
         />
+        <UpstreamReleaseSection />
       </SettingsSection>
       <SettingsSection title="Diagnostics">
         <SettingsRow
