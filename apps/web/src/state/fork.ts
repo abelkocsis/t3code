@@ -2,6 +2,8 @@ import type {
   EnvironmentId,
   ForkThreadState,
   ThreadFactory,
+  ScopedThreadRef,
+  SlackThreadRef,
   ThreadFolderId,
   ThreadId,
 } from "@t3tools/contracts";
@@ -55,4 +57,16 @@ export function useSetThreadFactory() {
   });
   return (environmentId: EnvironmentId, threadId: ThreadId, factory: ThreadFactory | null) =>
     setThreadFactory({ environmentId, input: { threadId, factory } });
+/** The fork's row for one thread, or null when the fork has not touched it. */
+export function useForkThreadState(threadRef: ScopedThreadRef | null): ForkThreadState | null {
+  const states = useForkThreadStates();
+  return threadRef === null ? null : (states.get(scopedThreadKey(threadRef)) ?? null);
+}
+
+export function useSetThreadSlackThread() {
+  const setThreadSlackThread = useAtomCommand(forkEnvironment.setThreadSlackThread, {
+    reportFailure: false,
+  });
+  return (environmentId: EnvironmentId, threadId: ThreadId, slackThread: SlackThreadRef | null) =>
+    setThreadSlackThread({ environmentId, input: { threadId, slackThread } });
 }

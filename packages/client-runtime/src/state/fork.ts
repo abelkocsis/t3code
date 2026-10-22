@@ -50,5 +50,20 @@ export function createForkEnvironmentAtoms<R, E>(
       label: "environment-data:fork:set-thread-factory",
       tag: WS_METHODS.forkThreadSetFactory,
     }),
+    setThreadSlackThread: createEnvironmentRpcCommand(runtime, {
+      label: "environment-data:fork:set-thread-slack-thread",
+      tag: WS_METHODS.forkThreadSetSlackThread,
+    }),
+    // Every call posts a message, so a second click while one is in flight
+    // joins it rather than posting twice.
+    replyInSlackThread: createEnvironmentRpcCommand(runtime, {
+      label: "environment-data:fork:reply-in-slack-thread",
+      tag: WS_METHODS.forkReplyInSlackThread,
+      concurrency: {
+        mode: "singleFlight",
+        key: ({ environmentId, input }) =>
+          JSON.stringify([environmentId, input.thread.channelId, input.thread.threadTs]),
+      },
+    }),
   };
 }

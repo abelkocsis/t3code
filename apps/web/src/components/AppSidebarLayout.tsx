@@ -38,6 +38,7 @@ import ThreadSidebar from "./Sidebar";
 import { SettingsSidebarNav } from "./settings/SettingsSidebarNav";
 import { SidebarBrandWidthProbe, SidebarChromeHeader } from "./sidebar/SidebarChrome";
 import { MainAppLocationTracker } from "./sidebar/mainAppLocation";
+import { SlackThreadDialogHost } from "./slack/SlackThreadDialog";
 import { ThreadWindowRouting } from "./ThreadWindowRouting";
 import { Button } from "./ui/button";
 import { useSidebarStageBackdropVariant } from "./SidebarStageBackdrop";
@@ -397,6 +398,7 @@ export function AppSidebarLayout({ children }: { children: ReactNode }) {
             <SidebarControl />
             <NavigationHistoryShortcuts />
             <MainAppLocationTracker />
+            <SlackThreadDialogHost />
           </>
         )}
       </SidebarProvider>

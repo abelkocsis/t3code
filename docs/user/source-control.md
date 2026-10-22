@@ -320,9 +320,27 @@ in the command palette. Drafts, merged, and closed pull requests stay out. A row
   has already reviewed are grouped by that reviewer and marked **Re-review**; pull requests nobody
   has reviewed share one group. **Copy request** copies a review request listing the group's
   pull request URLs.
+  A thread linked to a Slack thread puts its pull requests under that Slack thread instead, and
+  **Send to Slack** posts the same request there as a reply.
 - **Waiting on checks** holds pull requests whose checks are still running.
 - **Action needed** holds pull requests with conflicts, failing checks, requested changes,
   unresolved review comments, or a branch behind its base, and names each reason.
+
+### Slack threads
+
+Review requests often live in one Slack thread: a message lists the pull requests and reviewers
+answer under it. Link a thread to that Slack thread with **Link Slack thread** in the thread's
+title menu, in a sidebar row's menu (a selection links several at once), or from the **Linked
+pull requests** panel. Paste the message link Slack gives you with **Copy link**; a link to a
+reply points at the reply's parent thread. A hash sign beside the thread title opens the Slack
+thread; the same menu changes or removes the link.
+
+Agents in a linked thread are told about the Slack thread on every turn, so "check Slack" means
+that thread. They read it with their own Slack tools and do not post there unless you ask.
+
+**Send to Slack** on Shipping posts through the Slack connection of a Claude provider on the
+server, as that account's Slack user. T3 Code holds no Slack credentials of its own, so the
+provider must be signed in and its Slack connector must be able to post.
 
 The page reads from the server's linked pull request snapshots. Opening it re-reads each pull
 request from the host, at most once every ten seconds; **Refresh** reads them all again. The

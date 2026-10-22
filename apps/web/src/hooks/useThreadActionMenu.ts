@@ -1,6 +1,7 @@
 import { scopeProjectRef, scopedThreadKey } from "@t3tools/client-runtime/environment";
 import { requestCustomSnooze } from "../components/CustomSnoozeDialog";
 import { requestFolderName } from "../components/FolderNameDialog";
+import { openSlackThreadDialog } from "../components/slack/SlackThreadDialog";
 import {
   type AtomCommandResult,
   isAtomCommandInterrupted,
@@ -31,6 +32,7 @@ import {
   readEnvironmentSupportsFolders,
   readEnvironmentSupportsPinning,
   readEnvironmentSupportsSettlement,
+  readEnvironmentSupportsSlackThreads,
   readEnvironmentSupportsSnooze,
   readEnvironmentSupportsTitleRegeneration,
   readThreadShell,
@@ -138,6 +140,7 @@ export function useThreadActionMenu(input: {
         snooze: readEnvironmentSupportsSnooze(threadRef.environmentId),
         pinning: readEnvironmentSupportsPinning(threadRef.environmentId),
         folders: readEnvironmentSupportsFolders(threadRef.environmentId),
+        slackThreads: readEnvironmentSupportsSlackThreads(threadRef.environmentId),
         titleRegeneration: readEnvironmentSupportsTitleRegeneration(threadRef.environmentId),
       };
       const isRegeneratingTitle = thread.titleRegeneration != null;
@@ -151,6 +154,8 @@ export function useThreadActionMenu(input: {
         isPinned: thread.pinnedAt != null,
         folderId: forkThreadStates.get(scopedThreadKey(threadRef))?.folderId ?? null,
         folders: threadFolders.folders,
+        slackThreadLinked:
+          (forkThreadStates.get(scopedThreadKey(threadRef))?.slackThread ?? null) !== null,
         isSettled: supports.settlement && thread.settledOverride === "settled",
         autoSettleEnabled: thread.autoSettleDisabledAt == null,
         isSnoozed: supports.snooze && effectiveSnoozed(thread, { now: now.toISOString() }),
@@ -267,6 +272,9 @@ export function useThreadActionMenu(input: {
         }
         case "folder:clear":
           await moveToFolder(null);
+          return;
+        case "slack-thread":
+          openSlackThreadDialog([threadRef]);
           return;
         case "pin":
           await reportFailure("Failed to pin thread", () => pinThread(threadRef));

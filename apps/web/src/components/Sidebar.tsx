@@ -66,6 +66,7 @@ import {
   type EnvironmentMachineKind,
   type ScopedThreadRef,
   type ThreadId,
+  type SlackThreadRef,
 } from "@t3tools/contracts";
 
 import type { TimestampFormat } from "@t3tools/contracts/settings";
@@ -147,6 +148,7 @@ import {
 import { useAcknowledgeThreadWoke, useThreadActions } from "../hooks/useThreadActions";
 import { useThreadFolders, type ThreadFoldersApi } from "../hooks/useThreadFolders";
 import { useForkThreadStates, useSetThreadFolder } from "../state/fork";
+import { openSlackThreadDialog } from "./slack/SlackThreadDialog";
 import { requestFolderName } from "./FolderNameDialog";
 import { useHandleNewThread } from "../hooks/useHandleNewThread";
 import { useSidebarProjectGroups } from "../hooks/useSidebarProjectGroups";
@@ -487,8 +489,10 @@ function useSidebarThreads(input: {
   const threadFolders = useThreadFolders();
   const forkThreadStates = useForkThreadStates();
   const folderIdByThreadKey = new Map<string, string | null>();
+  const slackThreadByThreadKey = new Map<string, SlackThreadRef>();
   for (const [threadKey, state] of forkThreadStates) {
     if (state.folderId !== null) folderIdByThreadKey.set(threadKey, state.folderId);
+    if (state.slackThread !== null) slackThreadByThreadKey.set(threadKey, state.slackThread);
   }
   const knownFolderIds = new Set(threadFolders.folders.map((folder) => folder.id as string));
   const [collapsedFolderIds, setCollapsedFolderIds] = useLocalStorage(
@@ -650,6 +654,7 @@ function useSidebarThreads(input: {
     threadFolders,
     folderGroups,
     folderIdByThreadKey,
+    slackThreadByThreadKey,
     folderKeysById: new Map(
       [...threadsByFolderId].map(
         ([folderId, members]) => [folderId, members.map(threadShellKey)] as const,
@@ -3264,6 +3269,7 @@ export default function Sidebar() {
     threadFolders,
     folderGroups,
     folderIdByThreadKey,
+    slackThreadByThreadKey,
     folderKeysById,
     toggleFolder,
     forgetFolder,
@@ -3323,6 +3329,7 @@ export default function Sidebar() {
   // the whole shell list and the membership map through refs.
   const threadsRef = useRef(threads);
   const folderIdByThreadKeyRef = useRef(folderIdByThreadKey);
+  const slackThreadByThreadKeyRef = useRef(slackThreadByThreadKey);
   const threadFoldersRef = useRef<ThreadFoldersApi>(threadFolders);
   const setThreadFolder = useSetThreadFolder();
   const settledThreadKeysRef = useRef(settledThreadKeys);
@@ -3665,6 +3672,7 @@ export default function Sidebar() {
     threadByKeyRef.current = threadByKey;
     threadsRef.current = threads;
     folderIdByThreadKeyRef.current = folderIdByThreadKey;
+    slackThreadByThreadKeyRef.current = slackThreadByThreadKey;
     threadFoldersRef.current = threadFolders;
     handleNewThreadRef.current = newThreadContext.handleNewThread;
     settledThreadKeysRef.current = settledThreadKeys;
@@ -4350,6 +4358,19 @@ export default function Sidebar() {
                   },
                 ]
               : []),
+            ...(selectedThreads.every(
+              (thread) =>
+                serverConfigs.get(thread.environmentId)?.environment.capabilities
+                  .threadSlackThreads === true,
+            )
+              ? [
+                  {
+                    id: "slack-thread",
+                    label: `Link Slack thread… (${count})`,
+                    disabled: !canOperateThreads(selectedThreads),
+                  },
+                ]
+              : []),
             { id: "mark-unread", label: `Mark unread (${count})` },
             {
               id: "delete",
@@ -4450,6 +4471,13 @@ export default function Sidebar() {
           actionTargets.map((thread) =>
             scopedThreadKey(scopeThreadRef(thread.environmentId, thread.id)),
           ),
+        );
+        clearSelection();
+        return;
+      }
+      if (clicked.value === "slack-thread") {
+        openSlackThreadDialog(
+          selectedThreads.map((thread) => scopeThreadRef(thread.environmentId, thread.id)),
         );
         clearSelection();
         return;
@@ -4698,6 +4726,9 @@ export default function Sidebar() {
             .threadTitleRegeneration === true;
         const supportsFolders =
           serverConfigs.get(thread.environmentId)?.environment.capabilities.threadFolders === true;
+        const supportsSlackThreads =
+          serverConfigs.get(thread.environmentId)?.environment.capabilities.threadSlackThreads ===
+          true;
         const isRegeneratingTitle = thread.titleRegeneration != null;
         const factory = factoryOf(thread, forkThreadStates);
         const isSettled = settledThreadKeysRef.current.has(threadKey);
@@ -4730,6 +4761,7 @@ export default function Sidebar() {
               isPinned,
               folderId: folderIdByThreadKeyRef.current.get(threadKey) ?? null,
               folders: threadFoldersRef.current.folders,
+              slackThreadLinked: slackThreadByThreadKeyRef.current.has(threadKey),
               isSettled,
               autoSettleEnabled: thread.autoSettleDisabledAt == null,
               isSnoozed,
@@ -4743,6 +4775,7 @@ export default function Sidebar() {
                 snooze: supportsSnooze,
                 pinning: supportsPinning,
                 folders: supportsFolders,
+                slackThreads: supportsSlackThreads,
                 titleRegeneration: supportsTitleRegeneration,
               },
               snoozePresets,
@@ -4830,6 +4863,9 @@ export default function Sidebar() {
           }
           case "folder:clear":
             await moveThreadToFolder(threadRef, null);
+            return;
+          case "slack-thread":
+            openSlackThreadDialog([threadRef]);
             return;
           case "auto-settle:enabled":
           case "auto-settle:disabled": {

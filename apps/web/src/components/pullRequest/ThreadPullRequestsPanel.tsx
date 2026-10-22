@@ -16,6 +16,7 @@ import {
   LinkIcon,
   MoreHorizontalIcon,
   PlusIcon,
+  HashIcon,
 } from "lucide-react";
 import { LegendList } from "@legendapp/list/react";
 import { memo, useState } from "react";
@@ -39,6 +40,8 @@ import { Menu, MenuItem, MenuPopup, MenuTrigger } from "../ui/menu";
 import { MiddleTruncate } from "../ui/middle-truncate";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
 import { openLinkPullRequestDialog } from "./LinkPullRequestDialog";
+import { openSlackThreadDialog } from "../slack/SlackThreadDialog";
+import { useForkThreadState } from "~/state/fork";
 import {
   PULL_REQUEST_ROW_CLASS,
   PULL_REQUEST_ROW_NUMBER_CLASS,
@@ -402,6 +405,8 @@ function EnabledThreadPullRequestsPanel({ threadRef }: { threadRef: ScopedThread
   const watch = useAtomCommand(threadEnvironment.watchPullRequest, { reportFailure: true });
   const capabilities = useServerConfigs().get(threadRef.environmentId)?.environment.capabilities;
   const supportsWatch = capabilities?.threadPullRequestWatch === true;
+  const supportsSlackThreads = capabilities?.threadSlackThreads === true;
+  const slackThread = useForkThreadState(threadRef)?.slackThread ?? null;
   const handleUnlink = (link: ThreadPullRequestLink) => {
     void unlink({
       environmentId: threadRef.environmentId,
@@ -485,10 +490,23 @@ function EnabledThreadPullRequestsPanel({ threadRef }: { threadRef: ScopedThread
             </>
           ) : null}
         </span>
-        <Button size="xs" variant="ghost" onClick={openLinkDialog}>
-          <PlusIcon className="size-3.5" />
-          Link
-        </Button>
+        <span className="flex items-center gap-1">
+          {supportsSlackThreads ? (
+            <Button
+              size="xs"
+              variant="ghost"
+              onClick={() => openSlackThreadDialog([threadRef])}
+              title={slackThread?.url}
+            >
+              <HashIcon className="size-3.5" />
+              {slackThread ? "Slack thread" : "Link Slack"}
+            </Button>
+          ) : null}
+          <Button size="xs" variant="ghost" onClick={openLinkDialog}>
+            <PlusIcon className="size-3.5" />
+            Link
+          </Button>
+        </span>
       </footer>
     </div>
   );

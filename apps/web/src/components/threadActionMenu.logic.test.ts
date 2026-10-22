@@ -14,6 +14,7 @@ const baseState: ThreadActionMenuState = {
   isPinned: false,
   folderId: null,
   folders: [],
+  slackThreadLinked: false,
   isSettled: false,
   autoSettleEnabled: true,
   isSnoozed: false,
@@ -27,6 +28,7 @@ const baseState: ThreadActionMenuState = {
     snooze: true,
     pinning: true,
     folders: true,
+    slackThreads: true,
     titleRegeneration: true,
   },
   snoozePresets: [
@@ -71,6 +73,7 @@ describe("buildThreadActionMenuItems", () => {
         ? [
             "unpin",
             "folder",
+            "slack-thread",
             "unsettle",
             "unsnooze",
             "rename",
@@ -83,6 +86,7 @@ describe("buildThreadActionMenuItems", () => {
         : [
             "pin",
             "folder",
+            "slack-thread",
             "settle",
             "snooze",
             "rename",
@@ -122,6 +126,7 @@ describe("buildThreadActionMenuItems", () => {
           snooze: false,
           pinning: false,
           folders: false,
+          slackThreads: false,
           titleRegeneration: false,
         },
       }),
@@ -271,6 +276,7 @@ describe("buildThreadActionMenuItems", () => {
           snooze: false,
           pinning: false,
           folders: false,
+          slackThreads: false,
           titleRegeneration: false,
         },
       }),

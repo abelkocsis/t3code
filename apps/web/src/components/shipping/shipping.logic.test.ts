@@ -135,19 +135,43 @@ describe("groupShippingReviews", () => {
         link(5, { ...green, checksState: "failing", lastReviewer: reviewer("ana") }),
       ]),
     ]);
-    const groups = groupShippingReviews(items);
-    expect(
-      groups.map((group) => [
-        group.reviewer?.login ?? null,
-        group.items.map((item) => item.link.number),
-      ]),
-    ).toEqual([
+    expect(summarize(groupShippingReviews(items))).toEqual([
       ["ana", [3]],
       ["bo", [1, 4]],
       [null, [2]],
     ]);
   });
+
+  it("sends every pull request of a Slack-linked thread to that Slack thread", () => {
+    const slackThread = {
+      url: "https://acme.slack.com/archives/C01/p1700000000123456",
+      channelId: "C01",
+      threadTs: "1700000000.123456",
+    };
+    const items = collectShippingItems([
+      thread("linked", [link(1, { ...green, lastReviewer: reviewer("ana") }), link(2, green)]),
+      thread("other", [link(3, { ...green, lastReviewer: reviewer("ana") })]),
+    ]);
+    const groups = groupShippingReviews(items, (candidate) =>
+      candidate.id === "linked" ? slackThread : null,
+    );
+    expect(summarize(groups)).toEqual([
+      ["slack:C01", [1, 2]],
+      ["ana", [3]],
+    ]);
+  });
 });
+
+function summarize(groups: ReturnType<typeof groupShippingReviews>) {
+  return groups.map((group) => [
+    group.kind === "slack"
+      ? `slack:${group.slackThread.channelId}`
+      : group.kind === "reviewer"
+        ? group.reviewer.login
+        : null,
+    group.items.map((item) => item.link.number),
+  ]);
+}
 
 describe("buildReviewRequestMessage", () => {
   it("lists one URL per line under the request", () => {
