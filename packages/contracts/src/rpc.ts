@@ -2091,8 +2091,6 @@ export const UpstreamWsRpcGroup = RpcGroup.make(
   WsPullRequestsSetLabelsRpc,
   WsSourceControlLookupRepositoryRpc,
   WsSourceControlCloneRepositoryRpc,
-  WsSourceControlSearchIssuesRpc,
-  WsSourceControlIssueDetailsRpc,
   WsSourceControlPublishRepositoryRpc,
   WsProjectCloneStartRpc,
   WsProjectCloneCancelRpc,
@@ -2201,6 +2199,8 @@ export const UpstreamWsRpcGroup = RpcGroup.make(
  * stays where upstream left it.
  */
 export const ForkWsRpcGroup = RpcGroup.make(
+  WsSourceControlSearchIssuesRpc,
+  WsSourceControlIssueDetailsRpc,
   WsForkThreadStateSubscribeRpc,
   WsForkThreadSetFolderRpc,
   WsServerGetStandupStateRpc,

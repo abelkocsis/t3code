@@ -1194,7 +1194,10 @@ const layerForkWsRpc = ServerForkWsRpcGroup.toLayer(
     const standup = yield* StandupService.StandupService;
     const todos = yield* TodoStore.TodoStore;
     const forkThreadState = yield* ForkThreadStateStore.ForkThreadStateStore;
+    const sourceControlIssues = yield* SourceControlIssueService.SourceControlIssueService;
     return ServerForkWsRpcGroup.of({
+      [WS_METHODS.sourceControlSearchIssues]: (input) => sourceControlIssues.searchIssues(input),
+      [WS_METHODS.sourceControlIssueDetails]: (input) => sourceControlIssues.getIssueDetails(input),
       [WS_METHODS.forkThreadStateSubscribe]: () => forkThreadState.subscribe,
       [WS_METHODS.forkThreadSetFolder]: (input) =>
         forkThreadState.setFolder(input.threadId, input.folderId),
@@ -1355,7 +1358,6 @@ const layerUpstreamWsRpc = (
       const otlpEndpointCheck = yield* OtlpEndpointCheck.OtlpEndpointCheck;
       const sourceControlRepositories =
         yield* SourceControlRepositoryService.SourceControlRepositoryService;
-      const sourceControlIssues = yield* SourceControlIssueService.SourceControlIssueService;
       const withPullRequestViewer = pullRequests.withRoutingCredential;
       const bootstrapCredentials = yield* PairingGrantStore.PairingGrantStore;
       const sessions = yield* SessionStore.SessionStore;
@@ -2595,9 +2597,6 @@ const layerUpstreamWsRpc = (
           sourceControlRepositories.lookupRepository(input),
         [WS_METHODS.sourceControlCloneRepository]: (input) =>
           sourceControlRepositories.cloneRepository(input),
-        [WS_METHODS.sourceControlSearchIssues]: (input) => sourceControlIssues.searchIssues(input),
-        [WS_METHODS.sourceControlIssueDetails]: (input) =>
-          sourceControlIssues.getIssueDetails(input),
         [WS_METHODS.projectCloneStart]: (input) =>
           projectCloneTracker.start(input, {
             createProject: (project) =>
