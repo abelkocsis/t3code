@@ -65,6 +65,7 @@ import {
   ThreadFolderId,
   type EnvironmentMachineKind,
   type ScopedThreadRef,
+  type ThreadFactory,
   type ThreadId,
   type SlackThreadRef,
 } from "@t3tools/contracts";
@@ -80,6 +81,7 @@ import {
   CircleDashedIcon,
   CircleDotDashedIcon,
   ClockIcon,
+  FactoryIcon,
   FolderIcon,
   GitBranchIcon,
   ListFilterIcon,
@@ -1792,6 +1794,8 @@ type SidebarThreadRowProps = {
   snoozeSupported: boolean;
   pinningSupported: boolean;
   isPinned: boolean;
+  /** The fork's factory row for the thread, or null for a plain thread. */
+  factory: ThreadFactory | null;
   sortable?: SortableThreadRowBag | undefined;
   dropVerb: SidebarDropVerb | null;
   dragOverPinned: boolean;
@@ -2312,6 +2316,22 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThreadRowP
       <TooltipPopup side="top">Unsent draft</TooltipPopup>
     </Tooltip>
   ) : null;
+  const factoryIndicator = props.factory ? (
+    <Tooltip>
+      <TooltipTrigger
+        render={
+          <span
+            role="img"
+            aria-label="Factory task"
+            className="inline-flex shrink-0 items-center"
+          />
+        }
+      >
+        <FactoryIcon aria-hidden className="size-3 text-muted-foreground/65" />
+      </TooltipTrigger>
+      <TooltipPopup side="top">Factory task</TooltipPopup>
+    </Tooltip>
+  ) : null;
   const showPin =
     props.isPinned && (!sortable?.isDragging || (props.dragOverPinned && props.dropVerb === null));
   const pinIndicator = showPin ? (
@@ -2389,6 +2409,7 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThreadRowP
             </span>
             {draftIndicator}
             {title}
+            {factoryIndicator}
             {pinIndicator}
             {terminalStatusIcon}
             {isRegeneratingTitle ? (
@@ -2545,6 +2566,7 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThreadRowP
               ) : null}
               {/* Left of the status slot, the pin would slide when hover swaps the
                 label for the wider row controls. */}
+              {factoryIndicator}
               {pinIndicator}
               {props.projectDisplayName ? (
                 <span
@@ -5460,6 +5482,7 @@ export default function Sidebar() {
                                 .threadPinning === true
                             }
                             isPinned={thread.pinnedAt != null}
+                            factory={factoryOf(thread, forkThreadStates)}
                             dropVerb={
                               dragState?.activeKey === threadKey
                                 ? resolveSidebarDropVerb(dragState.activeSection, dragTargetSection)
