@@ -92,7 +92,6 @@ import {
   SettingsIcon,
   ShieldQuestionIcon,
   SquarePenIcon,
-  CircleDotIcon,
   TerminalIcon,
   Undo2Icon,
   XIcon,
@@ -163,7 +162,6 @@ import { useCopyToClipboard } from "../hooks/useCopyToClipboard";
 import { useLocalStorage } from "../hooks/useLocalStorage";
 import { useNowMinute } from "../hooks/useNowMinute";
 import { useNowSecond } from "../hooks/useNowSecond";
-import { openIssuePicker } from "../issuePickerBus";
 import {
   useEnvironmentIdentities,
   useConnectedEnvironmentIds,
@@ -736,9 +734,10 @@ function partitionSidebarThreads(input: SidebarThreadPartitionInput) {
   const byFolder = new Map<string, EnvironmentThreadShell[]>();
   const draggable = new Set<string>();
   const activeReorderable = new Set<string>();
-  // A folder holds its threads through every state but pinned and snoozed:
-  // a pin says "keep on top", a snooze hides the row until it wakes, and
-  // both win. A settled member stays in its folder and reads as settled.
+  // A folder holds its live threads only: a pin says "keep on top", a snooze
+  // hides the row until it wakes, and settling parks the thread on the
+  // Settled shelf. The membership stays, so an unsettled thread returns to
+  // its folder.
   const place = (
     thread: EnvironmentThreadShell,
     section: SidebarSection,
@@ -746,13 +745,13 @@ function partitionSidebarThreads(input: SidebarThreadPartitionInput) {
   ) => {
     if (section === "snoozed") return snoozed.push(thread);
     if (section === "pinned") return pinned.push(thread);
+    if (section === "settled") return settled.push(thread);
     if (folderId !== null && knownFolderIds.has(folderId)) {
       const members = byFolder.get(folderId);
       if (members === undefined) byFolder.set(folderId, [thread]);
       else members.push(thread);
       return;
     }
-    if (section === "settled") return settled.push(thread);
     return inbox(thread).push(thread);
   };
   for (const thread of visible) {
@@ -797,17 +796,11 @@ function partitionSidebarThreads(input: SidebarThreadPartitionInput) {
       place(thread, section, folderId);
     }
   }
-  // A folder keeps the arranged order of its live rows, with settled
-  // members after them in settlement order; the inbox's keys carry both.
+  // A folder keeps the arranged order of its rows; the inbox's keys carry it.
   const folderOrder = folderIdOfSection(optimisticDrop?.section ?? "active");
   const threadsByFolderId = new Map(
     [...byFolder].map(([folderId, members]) => {
-      const live = sortThreadsForSidebar(
-        members.filter((thread) => thread.settledOverride !== "settled"),
-      );
-      const parked = sortSettledThreads(
-        members.filter((thread) => thread.settledOverride === "settled"),
-      );
+      const live = sortThreadsForSidebar(members);
       const arranged =
         folderOrder === folderId && optimisticDrop?.order != null
           ? orderItemsByPreferredIds({
@@ -816,7 +809,7 @@ function partitionSidebarThreads(input: SidebarThreadPartitionInput) {
               getId: (thread) => scopedThreadKey(scopeThreadRef(thread.environmentId, thread.id)),
             })
           : live;
-      return [folderId, [...arranged, ...parked]] as const;
+      return [folderId, arranged] as const;
     }),
   );
   // Server capability only gates DRAGGING — it must not influence the
@@ -1796,6 +1789,8 @@ type SidebarThreadRowProps = {
   isPinned: boolean;
   /** The fork's factory row for the thread, or null for a plain thread. */
   factory: ThreadFactory | null;
+  /** Rows inside a folder section are inset so the grouping reads at a glance. */
+  inFolder?: boolean;
   sortable?: SortableThreadRowBag | undefined;
   dropVerb: SidebarDropVerb | null;
   dragOverPinned: boolean;
@@ -2382,6 +2377,7 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThreadRowP
         {...(fileDropHandlers ?? {})}
         className={cn(
           "list-none [content-visibility:auto] [contain-intrinsic-size:auto_36px]",
+          props.inFolder && "ps-3",
           sortable?.isDragging && "relative z-20",
         )}
       >
@@ -2542,6 +2538,7 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThreadRowP
       {...(fileDropHandlers ?? {})}
       className={cn(
         "list-none py-0.5 [content-visibility:auto] [contain-intrinsic-size:auto_78px]",
+        props.inFolder && "ps-3",
         sortable?.isDragging && "relative z-20",
       )}
     >
@@ -5268,74 +5265,49 @@ export default function Sidebar() {
               activeSearchResultIndex={activeSearchResultIndex}
               onClearSearch={clearThreadSearch}
             />
-            {/* Starting work is the sidebar's most-used action, so it gets
-                labelled, full-width buttons rather than unlabelled icons
-                sharing the header with search and scope. The two share the
-                width one button used to take. */}
-            <div className="mt-1 flex w-full items-center gap-2">
-              <Tooltip>
-                <TooltipTrigger
-                  render={
-                    <Button
-                      type="button"
-                      // Outlined rather than filled: the button stays the obvious
-                      // target without a block of accent colour shouting from the
-                      // top of every screen.
-                      variant="outline"
-                      className="min-w-0 flex-1"
-                      onClick={handleNewThreadClick}
-                      disabled={projects.length === 0}
-                    />
-                  }
-                >
-                  <SquarePenIcon />
-                  <span className="truncate">New thread</span>
-                </TooltipTrigger>
-                <TooltipPopup side="right">
-                  {projectGroups.length > 1 ? (
-                    <span className="flex flex-col gap-0.5">
-                      <span>
-                        {newThreadShortcutLabel
-                          ? `New thread (${newThreadShortcutLabel})`
-                          : "New thread"}
-                      </span>
-                      <span className="text-muted-foreground">
-                        New thread in current project: Shift+click
-                        {newThreadInProjectShortcutLabel
-                          ? ` (${newThreadInProjectShortcutLabel})`
-                          : ""}
-                      </span>
+            {/* Starting a thread is the sidebar's most-used action, so it gets
+                its own full-width, labelled row rather than an unlabelled icon
+                sharing the header with search and scope. */}
+            <Tooltip>
+              <TooltipTrigger
+                render={
+                  <Button
+                    type="button"
+                    // Outlined rather than filled: the button stays the obvious
+                    // target without a block of accent colour shouting from the
+                    // top of every screen.
+                    variant="outline"
+                    className="mt-1 w-full"
+                    onClick={handleNewThreadClick}
+                    disabled={projects.length === 0}
+                  />
+                }
+              >
+                <SquarePenIcon />
+                <span className="truncate">New thread</span>
+              </TooltipTrigger>
+              <TooltipPopup side="right">
+                {projectGroups.length > 1 ? (
+                  <span className="flex flex-col gap-0.5">
+                    <span>
+                      {newThreadShortcutLabel
+                        ? `New thread (${newThreadShortcutLabel})`
+                        : "New thread"}
                     </span>
-                  ) : newThreadShortcutLabel ? (
-                    `New thread (${newThreadShortcutLabel})`
-                  ) : (
-                    "New thread"
-                  )}
-                </TooltipPopup>
-              </Tooltip>
-              {/* An issue carries its own project: its repository names the
-                  project, and the picker clones it when there is nothing to
-                  reuse. So it is never disabled with the other one. */}
-              <Tooltip>
-                <TooltipTrigger
-                  render={
-                    <Button
-                      type="button"
-                      variant="outline"
-                      className="min-w-0 flex-1"
-                      onClick={openIssuePicker}
-                      disabled={primaryEnvironmentId === null}
-                    />
-                  }
-                >
-                  <CircleDotIcon />
-                  <span className="truncate">From issue</span>
-                </TooltipTrigger>
-                <TooltipPopup side="right">
-                  Start a thread from one or more GitHub issues
-                </TooltipPopup>
-              </Tooltip>
-            </div>
+                    <span className="text-muted-foreground">
+                      New thread in current project: Shift+click
+                      {newThreadInProjectShortcutLabel
+                        ? ` (${newThreadInProjectShortcutLabel})`
+                        : ""}
+                    </span>
+                  </span>
+                ) : newThreadShortcutLabel ? (
+                  `New thread (${newThreadShortcutLabel})`
+                ) : (
+                  "New thread"
+                )}
+              </TooltipPopup>
+            </Tooltip>
           </SidebarGroup>
         }
       >
@@ -5447,15 +5419,12 @@ export default function Sidebar() {
                         const threadKey = scopedThreadKey(
                           scopeThreadRef(thread.environmentId, thread.id),
                         );
-                        // A settled member stays in its folder but reads as settled.
-                        const settledInFolder =
-                          folderIdOfSection(section) !== null &&
-                          thread.settledOverride === "settled";
+                        const inFolder = folderIdOfSection(section) !== null;
                         const isCard =
                           section === "active" ||
                           section === "pinned" ||
                           section === "working" ||
-                          (folderIdOfSection(section) !== null && !settledInFolder);
+                          inFolder;
                         const rowVariant = isCard ? "card" : "slim";
                         return (
                           <SortableThreadRow
@@ -5469,10 +5438,11 @@ export default function Sidebar() {
                             }
                             thread={thread}
                             variant={rowVariant}
+                            inFolder={inFolder}
                             variantAction={
                               section === "snoozed"
                                 ? "unsnooze"
-                                : section === "settled" || settledInFolder
+                                : section === "settled"
                                   ? "unsettle"
                                   : "settle"
                             }
