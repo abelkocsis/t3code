@@ -89,6 +89,7 @@ import * as ProjectionStore from "../orchestration-v2/ProjectionStore.ts";
 import * as ProjectStore from "../orchestration-v2/ProjectStore.ts";
 import * as ProjectSetupScriptRunner from "../project/ProjectSetupScriptRunner.ts";
 import * as ProviderRegistry from "../provider/ProviderRegistry.ts";
+import * as ProviderWorkspaceStateService from "../provider/ProviderWorkspaceStateService.ts";
 import { extractBranchNameFromRemoteRef } from "./remoteRefs.ts";
 import { detachStackFrame } from "./detachStackFrame.ts";
 import * as ServerSettings from "../serverSettings.ts";
@@ -732,6 +733,7 @@ export const make = Effect.gen(function* () {
 
   const sourceControlProvider = (cwd: string) => sourceControlProviders.resolve({ cwd });
   const serverSettingsService = yield* ServerSettings.ServerSettingsService;
+  const providerWorkspaceState = yield* ProviderWorkspaceStateService.ProviderWorkspaceStateService;
   const threads = yield* ProjectionStore.ProjectionStoreV2;
   const projects = yield* ProjectStore.ProjectStoreV2;
   const projectSettingsFor = Effect.fnUntraced(function* (input: {
@@ -792,7 +794,18 @@ export const make = Effect.gen(function* () {
             Effect.orElseSucceed(() => null),
           );
     const worktreesDirectory = yield* readWorktreesDirectory;
-    return yield* gitCore.createWorktree(input, { worktreesDirectory, ...options, submodules });
+    const created = yield* gitCore.createWorktree(input, {
+      worktreesDirectory,
+      ...options,
+      submodules,
+    });
+    // Before the agent runs: a provider that files project state under the
+    // path would otherwise start this workspace with no memory of the project.
+    yield* providerWorkspaceState.linkForWorktree({
+      projectPath: input.cwd,
+      worktreePath: created.worktree.path,
+    });
+    return created;
   });
 
   const readRepositoryInstructions = Effect.fn("GitManager.readRepositoryInstructions")(
@@ -3018,6 +3031,12 @@ export const make = Effect.gen(function* () {
         },
       );
       yield* ensureExistingWorktreeUpstream(worktree.worktree.path);
+      // A pull-request worktree is a new path too, so it carries provider
+      // state the same way a thread worktree does.
+      yield* providerWorkspaceState.linkForWorktree({
+        projectPath: input.cwd,
+        worktreePath: worktree.worktree.path,
+      });
       yield* maybeRunSetupScript(worktree.worktree.path);
 
       return {

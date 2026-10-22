@@ -79,6 +79,7 @@ import * as ProjectionStore from "../orchestration-v2/ProjectionStore.ts";
 import * as ProjectStore from "../orchestration-v2/ProjectStore.ts";
 import * as SqlitePersistence from "../persistence/Sqlite.ts";
 import * as ProjectSetupScriptRunner from "../project/ProjectSetupScriptRunner.ts";
+import * as ProviderWorkspaceStateService from "../provider/ProviderWorkspaceStateService.ts";
 import * as ProviderRegistry from "../provider/ProviderRegistry.ts";
 import * as ServerSettings from "../serverSettings.ts";
 import * as GitManager from "./GitManager.ts";
@@ -877,6 +878,11 @@ function makeManager(input?: {
         runForThread: () => Effect.succeed({ status: "no-script" as const }),
       },
     ),
+    // Carrying provider state touches the real provider config directory, so the
+    // tests get a no-op rather than the live service.
+    Layer.succeed(ProviderWorkspaceStateService.ProviderWorkspaceStateService, {
+      linkForWorktree: () => Effect.void,
+    }),
     layerServerSettings,
   ).pipe(
     Layer.provideMerge(layerSourceControlRegistry),
