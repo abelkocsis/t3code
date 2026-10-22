@@ -1,5 +1,6 @@
 import type { EnvironmentProject } from "@t3tools/client-runtime/state/models";
 import { scopeThreadRef } from "@t3tools/client-runtime/environment";
+import { sourceControlClients } from "@t3tools/client-runtime/source-control-clients";
 import { squashAtomCommandFailure } from "@t3tools/client-runtime/state/runtime";
 import { derivePendingThreadRequests } from "@t3tools/client-runtime/state/thread-requests";
 import {
@@ -72,6 +73,10 @@ import { observeResize } from "../../lib/observeResize";
 
 import { isElectron } from "../../env";
 import { writeTextToClipboard } from "../../hooks/useCopyToClipboard";
+import {
+  openOnHostLabel,
+  showPullRequestLinkContextMenu,
+} from "../pullRequest/pullRequestLinkContextMenu";
 import { useFactoryFolders } from "../../hooks/useFactoryFolders";
 import { useFactoryTokenSaving } from "../../hooks/useFactoryTokenSaving";
 import { getLocalStorageItem, setLocalStorageItem } from "../../hooks/useLocalStorage";
@@ -953,6 +958,18 @@ function TaskRow({
                   variant="ghost"
                   aria-label={`Open pull request #${task.pullRequest.number}`}
                   onClick={openPullRequest}
+                  // A right-click copies the link, as on the pull request number elsewhere.
+                  onContextMenu={(event) => {
+                    event.preventDefault();
+                    event.stopPropagation();
+                    void showPullRequestLinkContextMenu({
+                      url: task.pullRequest?.url ?? "",
+                      openLabel: openOnHostLabel(
+                        sourceControlClients.get(project?.repositoryIdentity?.provider),
+                      ),
+                      position: { x: event.clientX, y: event.clientY },
+                    });
+                  }}
                 />
               }
             >
