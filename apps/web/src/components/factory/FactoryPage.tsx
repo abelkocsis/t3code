@@ -44,6 +44,7 @@ import {
   ArchiveIcon,
   ArrowDownIcon,
   ArrowUpIcon,
+  CalendarDaysIcon,
   CheckIcon,
   ChevronDownIcon,
   ChevronRightIcon,
@@ -54,13 +55,17 @@ import {
   FolderIcon,
   FolderPlusIcon,
   GripVerticalIcon,
+  ListChecksIcon,
   MessageSquareIcon,
   MilestoneIcon,
   PencilIcon,
   PlayIcon,
   Trash2Icon,
+  XIcon,
 } from "lucide-react";
 import {
+  lazy,
+  Suspense,
   useEffect,
   useLayoutEffect,
   useRef,
@@ -162,6 +167,20 @@ import { TaskModelPicker } from "./TaskModelPicker";
 import { useFactoryMembership } from "./useFactoryMembership";
 import { useStartFactoryTask } from "./useStartFactoryTask";
 
+// The same two panels the right panel hosts beside a thread, loaded on first open.
+const TodoPanel = lazy(() =>
+  import("../TodoPanel").then((module) => ({ default: module.TodoPanel })),
+);
+const StandupPanel = lazy(() =>
+  import("../StandupPanel").then((module) => ({ default: module.StandupPanel })),
+);
+
+type FactorySidePane = "todo" | "standup";
+const SIDE_PANE_TITLES: Record<FactorySidePane, string> = {
+  todo: "To-do",
+  standup: "Daily summary",
+};
+
 const STATE_BADGE: Record<
   FactoryTaskState,
   "warning" | "info" | "error" | "success" | "secondary"
@@ -249,6 +268,12 @@ function readCollapsed(): ReadonlySet<string> {
 export function FactoryPage() {
   useEscapeToGoBack();
   const navigate = useNavigate();
+  const primaryEnvironmentId = usePrimaryEnvironmentId();
+  // The Factory page has no chat right panel, so the to-do list and the daily summary open in
+  // a pane of their own beside the task list.
+  const [sidePane, setSidePane] = useState<FactorySidePane | null>(null);
+  const toggleSidePane = (pane: FactorySidePane) =>
+    setSidePane((current) => (current === pane ? null : pane));
   const threads = useThreadShells();
   const states = useForkThreadStates();
   const folders = useFactoryFolders();
@@ -441,89 +466,138 @@ export function FactoryPage() {
                 New folder
               </Button>
             ) : null}
+            <Button
+              size="xs"
+              variant={sidePane === "todo" ? "secondary" : "ghost"}
+              aria-pressed={sidePane === "todo"}
+              onClick={() => toggleSidePane("todo")}
+            >
+              <ListChecksIcon aria-hidden className="size-3.5" />
+              To-do
+            </Button>
+            <Button
+              size="xs"
+              variant={sidePane === "standup" ? "secondary" : "ghost"}
+              aria-pressed={sidePane === "standup"}
+              onClick={() => toggleSidePane("standup")}
+            >
+              <CalendarDaysIcon aria-hidden className="size-3.5" />
+              Summary
+            </Button>
           </div>
         </WorkspacePageHeader>
 
-        <ScrollArea className="min-h-0 flex-1">
-          <WorkspacePageContainer>
-            <div className="flex flex-col gap-6">
-              <StartTaskForm />
-              {tasks.length === 0 ? (
-                <p className="text-sm text-muted-foreground">No factory tasks yet.</p>
-              ) : null}
-              <DndContext
-                sensors={sensors}
-                collisionDetection={closestCenter}
-                modifiers={[restrictToVerticalAxis]}
-                onDragStart={onDragStart}
-                onDragOver={onDragOver}
-                onDragEnd={onDragEnd}
-                onDragCancel={() => {
-                  setDraggingKey(null);
-                  setDragLayout(null);
-                }}
-              >
-                {/* One sortable list per container: rows shift only inside their own folder,
+        <div className="flex min-h-0 min-w-0 flex-1">
+          <ScrollArea className="min-h-0 flex-1">
+            <WorkspacePageContainer>
+              <div className="flex flex-col gap-6">
+                <StartTaskForm />
+                {tasks.length === 0 ? (
+                  <p className="text-sm text-muted-foreground">No factory tasks yet.</p>
+                ) : null}
+                <DndContext
+                  sensors={sensors}
+                  collisionDetection={closestCenter}
+                  modifiers={[restrictToVerticalAxis]}
+                  onDragStart={onDragStart}
+                  onDragOver={onDragOver}
+                  onDragEnd={onDragEnd}
+                  onDragCancel={() => {
+                    setDraggingKey(null);
+                    setDragLayout(null);
+                  }}
+                >
+                  {/* One sortable list per container: rows shift only inside their own folder,
                     and a row dragged onto another folder's header or rows files it there. */}
-                <div className="flex flex-col gap-4">
-                  {folders.folders.map((folder, index) => {
-                    const members = tasksByFolder.get(folder.id) ?? [];
-                    return (
-                      <FolderSection
-                        key={folder.id}
-                        id={folder.id}
-                        name={folder.name}
-                        tasks={members}
-                        expanded={!collapsed.has(folder.id)}
-                        canMoveUp={index > 0}
-                        canMoveDown={index < folders.folders.length - 1}
-                        onToggle={() => toggleFolder(folder.id)}
-                        onMove={(direction) =>
-                          void folders.moveFolder(folder.id, index + (direction === "up" ? -1 : 1))
-                        }
-                        onRename={() =>
-                          setFolderDialog({ mode: "rename", id: folder.id, name: folder.name })
-                        }
-                        onDelete={() => void folders.deleteFolder(folder.id)}
-                      >
-                        <SortableContext
-                          items={members.map(factoryTaskKey)}
-                          strategy={verticalListSortingStrategy}
+                  <div className="flex flex-col gap-4">
+                    {folders.folders.map((folder, index) => {
+                      const members = tasksByFolder.get(folder.id) ?? [];
+                      return (
+                        <FolderSection
+                          key={folder.id}
+                          id={folder.id}
+                          name={folder.name}
+                          tasks={members}
+                          expanded={!collapsed.has(folder.id)}
+                          canMoveUp={index > 0}
+                          canMoveDown={index < folders.folders.length - 1}
+                          onToggle={() => toggleFolder(folder.id)}
+                          onMove={(direction) =>
+                            void folders.moveFolder(
+                              folder.id,
+                              index + (direction === "up" ? -1 : 1),
+                            )
+                          }
+                          onRename={() =>
+                            setFolderDialog({ mode: "rename", id: folder.id, name: folder.name })
+                          }
+                          onDelete={() => void folders.deleteFolder(folder.id)}
                         >
-                          {members.map(renderRow)}
-                        </SortableContext>
-                      </FolderSection>
-                    );
-                  })}
-                  {unfiled.length > 0 ? (
-                    <SortableContext
-                      items={unfiled.map(factoryTaskKey)}
-                      strategy={verticalListSortingStrategy}
-                    >
-                      <div className="flex flex-col gap-2">{unfiled.map(renderRow)}</div>
-                    </SortableContext>
-                  ) : null}
-                </div>
-                <DragOverlay dropAnimation={null}>
-                  {draggingTask ? (
-                    <div className="pointer-events-none w-fit max-w-md cursor-grabbing select-none truncate rounded-md border border-border bg-background px-3 py-2 text-sm shadow-md">
-                      {draggingTask.thread.title}
-                    </div>
-                  ) : null}
-                </DragOverlay>
-              </DndContext>
-              {completed.length > 0 ? (
-                <section className="flex flex-col gap-2">
-                  <h2 className="text-sm font-medium text-foreground">
-                    Completed{" "}
-                    <span className="text-muted-foreground tabular-nums">{completed.length}</span>
-                  </h2>
-                  <div className="flex flex-col gap-2">{completed.map(renderRow)}</div>
-                </section>
-              ) : null}
-            </div>
-          </WorkspacePageContainer>
-        </ScrollArea>
+                          <SortableContext
+                            items={members.map(factoryTaskKey)}
+                            strategy={verticalListSortingStrategy}
+                          >
+                            {members.map(renderRow)}
+                          </SortableContext>
+                        </FolderSection>
+                      );
+                    })}
+                    {unfiled.length > 0 ? (
+                      <SortableContext
+                        items={unfiled.map(factoryTaskKey)}
+                        strategy={verticalListSortingStrategy}
+                      >
+                        <div className="flex flex-col gap-2">{unfiled.map(renderRow)}</div>
+                      </SortableContext>
+                    ) : null}
+                  </div>
+                  <DragOverlay dropAnimation={null}>
+                    {draggingTask ? (
+                      <div className="pointer-events-none w-fit max-w-md cursor-grabbing select-none truncate rounded-md border border-border bg-background px-3 py-2 text-sm shadow-md">
+                        {draggingTask.thread.title}
+                      </div>
+                    ) : null}
+                  </DragOverlay>
+                </DndContext>
+                {completed.length > 0 ? (
+                  <section className="flex flex-col gap-2">
+                    <h2 className="text-sm font-medium text-foreground">
+                      Completed{" "}
+                      <span className="text-muted-foreground tabular-nums">{completed.length}</span>
+                    </h2>
+                    <div className="flex flex-col gap-2">{completed.map(renderRow)}</div>
+                  </section>
+                ) : null}
+              </div>
+            </WorkspacePageContainer>
+          </ScrollArea>
+          {sidePane !== null ? (
+            <aside className="flex w-80 shrink-0 flex-col border-l border-border">
+              <div className="flex h-9 shrink-0 items-center gap-2 border-b border-border px-3">
+                <span className="min-w-0 flex-1 truncate text-xs font-medium">
+                  {SIDE_PANE_TITLES[sidePane]}
+                </span>
+                <Button
+                  size="icon-xs"
+                  variant="ghost"
+                  aria-label={`Close ${SIDE_PANE_TITLES[sidePane]}`}
+                  onClick={() => setSidePane(null)}
+                >
+                  <XIcon aria-hidden className="size-3.5" />
+                </Button>
+              </div>
+              <div className="min-h-0 flex-1">
+                <Suspense fallback={null}>
+                  {sidePane === "todo" ? (
+                    <TodoPanel environmentId={primaryEnvironmentId} />
+                  ) : (
+                    <StandupPanel environmentId={primaryEnvironmentId} />
+                  )}
+                </Suspense>
+              </div>
+            </aside>
+          ) : null}
+        </div>
       </div>
       <FolderNameDialog
         request={folderDialog}
