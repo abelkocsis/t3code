@@ -208,6 +208,7 @@ import {
 } from "./chat/timelineScrollAnchoring";
 import { useUiStateStore } from "../uiStateStore";
 import { useWorkspaceMutationRefresh } from "../hooks/useWorkspaceMutationRefresh";
+import { useWindowFocused } from "../hooks/useWindowFocused";
 import {
   buildPlanImplementationThreadTitle,
   buildPlanImplementationPrompt,
@@ -8934,6 +8935,11 @@ function PreviewSessionSync(props: { readonly threadRef: ScopedThreadRef }) {
 function ThreadVisitWatermark(props: { readonly threadRef: ScopedThreadRef }) {
   const serverThread = useThreadShell(props.threadRef);
   const threadKey = scopedThreadKey(props.threadRef);
+  // A thread on screen while the user works in another application is not
+  // read. The visit waits for focus, and focus returning records it at once,
+  // so a turn that finishes while the user is away stays unseen for the
+  // sidebar and the overlay.
+  const windowFocused = useWindowFocused();
   const markThreadVisited = useUiStateStore((store) => store.markThreadVisited);
   const activeThreadLocalLastVisitedAt = useUiStateStore(
     (store) => store.threadLastVisitedAtById[threadKey],
@@ -8943,6 +8949,7 @@ function ThreadVisitWatermark(props: { readonly threadRef: ScopedThreadRef }) {
   const lastVisitDispatchAtRef = useRef(0);
 
   useEffect(() => {
+    if (!windowFocused) return;
     if (!serverThread?.id) return;
     const threadUpdatedAt = Date.parse(serverThread.updatedAt);
     if (Number.isNaN(threadUpdatedAt)) return;
@@ -8997,6 +9004,7 @@ function ThreadVisitWatermark(props: { readonly threadRef: ScopedThreadRef }) {
     serverThread?.latestRun?.completedAt,
     serverThread?.updatedAt,
     visitThreadMutation,
+    windowFocused,
   ]);
   return null;
 }

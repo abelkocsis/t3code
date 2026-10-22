@@ -627,6 +627,7 @@ type ThreadStatusInput = Pick<
   lastVisitedAt?: string | null | undefined;
   pendingBackgroundTasks?: SidebarThreadSummary["pendingBackgroundTasks"] | undefined;
   blockedOnThreadWait?: boolean | undefined;
+  settledOverride?: SidebarThreadSummary["settledOverride"] | undefined;
 };
 
 export interface ThreadJumpHintVisibilityController {
@@ -733,6 +734,10 @@ export function resolveThreadLastVisitedAt(
 }
 
 export function hasUnseenCompletion(thread: ThreadStatusInput): boolean {
+  // Settling is the user saying they are done, so a settled thread never
+  // shows as unread work. New activity unsettles it on the server, which
+  // brings the mark back.
+  if (thread.settledOverride === "settled") return false;
   if (!thread.latestRun?.completedAt) return false;
   const completedAt = Date.parse(thread.latestRun.completedAt);
   if (Number.isNaN(completedAt)) return false;
