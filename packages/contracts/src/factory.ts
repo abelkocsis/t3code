@@ -195,6 +195,12 @@ export function factoryAfterWake<F extends ThreadFactory | null | undefined>(fac
 /** The line an agent prints when it enters a phase. Only this line is parsed. */
 export const FACTORY_PHASE_MARKER = "FACTORY PHASE:";
 
+/**
+ * Commit signing fails only on the developer's machine, and only they can fix it. A partial
+ * push would leave the pull request half updated, so the agent pushes nothing and stops.
+ */
+export const FACTORY_SIGNING_RULE = `If a commit fails to sign, push nothing from this round, not even the commits that signed. The cause is always local, and only I can fix it. Do not turn signing off or work around it. Leave the changes in place, print "${FACTORY_PHASE_MARKER} human-gate", and ask me to fix commit signing.`;
+
 const MARKER_LINE = /^\s*(?:[*_`#>\-\s]*)FACTORY PHASE:\s*([a-z-]+)\b[\s:*_`–-]*(.*?)[\s*_`]*$/i;
 
 /**
@@ -269,6 +275,7 @@ Rules:
 - At the end of each phase, write a short report: what was done, what was considered and rejected, which agents and models ran, and at what effort. Choose the format yourself. Post the report as a comment under the pull request once one exists. Earlier reports go under the pull request as soon as it opens.
 - Each time you enter a phase, print one line on its own that starts with "${FACTORY_PHASE_MARKER}" followed by the phase word and one sentence. The phase words are: ${FACTORY_PHASES.join(", ")}. Example: "${FACTORY_PHASE_MARKER} review Three reviewers read the diff."
 - Ask me a question only when the flow needs a human decision. Print "${FACTORY_PHASE_MARKER} human-gate" before you ask.
+- ${FACTORY_SIGNING_RULE}
 - Print "${FACTORY_PHASE_MARKER} done" with the pull request link as the last line when the flow ends.`;
 
 /**

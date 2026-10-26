@@ -12,8 +12,13 @@ import type {
   ThreadPullRequestLink,
   ThreadPullRequestSnapshot,
 } from "@t3tools/contracts";
-import { FACTORY_PHASE_MARKER, factoryHeldWorkMessage } from "@t3tools/contracts";
+import {
+  FACTORY_PHASE_MARKER,
+  FACTORY_SIGNING_RULE,
+  factoryHeldWorkMessage,
+} from "@t3tools/contracts";
 import { visibleThreadPullRequests } from "@t3tools/shared/threadPullRequests";
+import * as DateTime from "effect/DateTime";
 
 /**
  * What the review sweep does to one task: update its factory state, send the agent a
@@ -27,7 +32,11 @@ export interface FactoryReviewDecision {
 /** The thread fields the sweep reads from upstream's shell. */
 export type FactoryReviewThread = Pick<
   OrchestrationV2ThreadShell,
-  "archivedAt" | "status" | "pendingRuntimeRequest" | "pendingBackgroundTasks"
+  | "archivedAt"
+  | "status"
+  | "pendingRuntimeRequest"
+  | "pendingBackgroundTasks"
+  | "latestUserAuthoredMessageAt"
 >;
 
 /**
@@ -172,6 +181,21 @@ export function factoryPullRequestView(
   };
 }
 
+/**
+ * A task back from review work keeps CI and its base watched: the agent may stop in "fix"
+ * without a marker, or at a gate the human already answered in the thread.
+ */
+export function watchedAfterReview(thread: FactoryReviewThread, factory: ThreadFactory): boolean {
+  if (factory.review == null) return false;
+  if (factory.phase === "fix") return true;
+  const answeredAt = thread.latestUserAuthoredMessageAt ?? null;
+  return (
+    factory.phase === "human-gate" &&
+    answeredAt !== null &&
+    DateTime.toEpochMillis(answeredAt) > Date.parse(factory.updatedAt)
+  );
+}
+
 /** A message to the agent must not land mid-turn or jump an unanswered question. */
 export function canMessageThread(thread: FactoryReviewThread): boolean {
   if (thread.archivedAt !== null) return false;
@@ -243,13 +267,15 @@ function composeWork(parts: ReadonlyArray<FactoryPendingWorkPart>): {
 } {
   return {
     summary: parts.map((part) => part.summary).join(" "),
-    message:
+    message: [
       parts.length === 1
         ? parts[0]!.message
         : [
             "Several things need work on this pull request. Do all of them, then print one phase marker for the whole set.",
             ...parts.map((part, index) => `${index + 1}. ${part.message}`),
           ].join("\n\n"),
+      FACTORY_SIGNING_RULE,
+    ].join("\n\n"),
   };
 }
 
@@ -314,6 +340,8 @@ function withoutClearedWork(factory: ThreadFactory, target: FactoryReviewTarget)
  *   review), a failed check, or a stale base become a message to the agent and the phase goes
  *   to "fix". Each cause fires once, and again only after it cleared.
  * - Ready to merge falls back to the under-review rules when the pull request changes.
+ * - After the review stages, "fix" and an answered human gate keep the ready-for-review rules
+ *   once the agent stops, so a push that breaks CI or falls behind the base is not missed.
  * - Token saving holds each message as `pendingWork` instead of sending it, and leaves the
  *   phase alone, so the task waits on the human. Turning token saving off sends held work, and
  *   the agent also checks the whole pull request, because it may have moved on meanwhile.
@@ -418,7 +446,9 @@ function decideWithFactory(
       seenMergeState: null,
     });
   }
+  const between = watchedAfterReview(thread, factory);
   if (
+    !between &&
     factory.phase !== "ready-for-review" &&
     factory.phase !== "under-review" &&
     factory.phase !== "ready-to-merge"
@@ -510,8 +540,10 @@ function decideWithFactory(
     );
   };
 
-  if (factory.phase === "ready-for-review") {
+  if (factory.phase === "ready-for-review" || between) {
     if (!newFailure && !newStaleBase) return settled ? settle() : null;
+    // A running agent may be on this very failure; it goes out once the agent stops.
+    if (between && !canMessageThread(thread)) return null;
     return work({
       comments: false,
       seenReviewId: memo.seenReviewId,

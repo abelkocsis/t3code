@@ -33,6 +33,7 @@ import {
   factoryPullRequestLink,
   factoryPullRequestView,
   type FactoryPullRequestView,
+  watchedAfterReview,
 } from "./FactoryReviewPolicy.ts";
 import * as ForkThreadStateStore from "./ForkThreadStateStore.ts";
 
@@ -235,6 +236,7 @@ export const make = Effect.gen(function* () {
     // Phases the agent still owns need no sweep unless the pull request already ended.
     if (
       !REVIEW_STAGES.has(factory.phase) &&
+      !watchedAfterReview(thread, factory) &&
       factory.pendingWork == null &&
       link.snapshot.state === "open"
     ) {
