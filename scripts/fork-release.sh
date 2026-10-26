@@ -121,6 +121,13 @@ for extra in "${DMG}.blockmap" "${ZIP}.blockmap"; do
   [ -f "$extra" ] && ASSETS+=("$extra")
 done
 
+# The Homebrew cask in DLC-link/TOMA downloads
+# releases/latest/download/T3-Code-arm64.dmg. That redirect only resolves a
+# fixed asset name, so every release also carries the dmg under this name.
+STABLE_DMG="release/T3-Code-arm64.dmg"
+cp -f "$DMG" "$STABLE_DMG"
+ASSETS+=("$STABLE_DMG")
+
 if [ "$DRY_RUN" = "1" ]; then
   say "Dry run. Built ${DMG} and left the tag and the release alone."
   exit 0
