@@ -56,8 +56,12 @@ scoop install extras/t3code
 
 #### macOS (Homebrew)
 
+This fork ships from its own tap. The official `t3-code` cask is upstream T3 Code, not this fork.
+
 ```bash
-brew install --cask t3-code
+brew tap abelkocsis/t3code
+brew trust abelkocsis/t3code
+brew install --cask t3-code-bitsafe
 ```
 
 #### Debian, Ubuntu (`.deb`)
