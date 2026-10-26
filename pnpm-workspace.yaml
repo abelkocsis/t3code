@@ -220,6 +220,9 @@ minimumReleaseAgeExclude:
   - "@expo/schema-utils@58.0.2"
 
 overrides:
+  # Keep on the patched version. The lockfile-free release install would take a newer
+  # release and fail on the unused patch. Move this with patchedDependencies.
+  node-pty: 1.2.0-beta.15
   # Keep on the patched version. A fresh resolution would take a newer release and
   # fail on the unused patch. Move this with patches/expo-modules-core@*.patch.
   expo-modules-core: 58.0.22
