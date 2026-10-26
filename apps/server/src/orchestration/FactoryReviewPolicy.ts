@@ -7,7 +7,11 @@ import type {
   ThreadPullRequestLink,
   ThreadPullRequestSnapshot,
 } from "@t3tools/contracts";
-import { FACTORY_PHASE_MARKER, factoryHeldWorkMessage } from "@t3tools/contracts";
+import {
+  FACTORY_PHASE_MARKER,
+  FACTORY_SIGNING_RULE,
+  factoryHeldWorkMessage,
+} from "@t3tools/contracts";
 import { visibleThreadPullRequests } from "@t3tools/shared/threadPullRequests";
 
 import { threadHasQueuedTurnStart } from "./ThreadSettlementPolicy.ts";
@@ -122,13 +126,15 @@ function composeWork(parts: ReadonlyArray<FactoryPendingWorkPart>): {
 } {
   return {
     summary: parts.map((part) => part.summary).join(" "),
-    message:
+    message: [
       parts.length === 1
         ? parts[0]!.message
         : [
             "Several things need work on this pull request. Do all of them, then print one phase marker for the whole set.",
             ...parts.map((part, index) => `${index + 1}. ${part.message}`),
           ].join("\n\n"),
+      FACTORY_SIGNING_RULE,
+    ].join("\n\n"),
   };
 }
 
@@ -197,6 +203,8 @@ function withoutClearedWork(
  *   check, or a stale base become a message to the agent and the phase goes to "fix". Each
  *   cause fires once, and again only after it cleared.
  * - Ready to merge falls back to the under-review rules when the pull request changes.
+ * - After the review stages, "fix" and an answered human gate keep the ready-for-review rules
+ *   once the agent stops, so a push that breaks CI or falls behind the base is not missed.
  * - Token saving holds each message as `pendingWork` instead of sending it, and leaves the
  *   phase alone, so the task waits on the human. Turning token saving off sends held work, and
  *   the agent also checks the whole pull request, because it may have moved on meanwhile.
@@ -302,7 +310,16 @@ function decideWithFactory(
       seenMergeState: null,
     });
   }
+  // A task back from review work keeps CI and its base watched: the agent may stop in "fix"
+  // without a marker, or at a gate the human already answered in the thread.
+  const between =
+    factory.review != null &&
+    (factory.phase === "fix" ||
+      (factory.phase === "human-gate" &&
+        thread.latestUserMessageAt !== null &&
+        Date.parse(thread.latestUserMessageAt) > Date.parse(factory.updatedAt)));
   if (
+    !between &&
     factory.phase !== "ready-for-review" &&
     factory.phase !== "under-review" &&
     factory.phase !== "ready-to-merge"
@@ -394,8 +411,10 @@ function decideWithFactory(
     );
   };
 
-  if (factory.phase === "ready-for-review") {
+  if (factory.phase === "ready-for-review" || between) {
     if (!newFailure && !newStaleBase) return settled ? settle() : null;
+    // A running agent may be on this very failure; it goes out once the agent stops.
+    if (between && !canMessageThread(thread, now)) return null;
     return work({
       comments: false,
       seenReviewId: memo.seenReviewId,

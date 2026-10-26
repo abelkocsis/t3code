@@ -473,6 +473,76 @@ describe("decideFactoryReview", () => {
     expect(decideFactoryReview(asking, NOW)).toBeNull();
   });
 
+  it("watches CI after the agent stops in fix without a marker", () => {
+    const decision = decideFactoryReview(
+      thread({
+        factory: factory({
+          phase: "fix",
+          review: { ...factory().review!, seenChecksState: "passing" },
+        }),
+        pullRequests: [link({ checksState: "failing" })],
+      }),
+      NOW,
+    );
+    expect(decision?.message).toContain("CI is failing");
+    expect(decision?.factory?.review?.seenChecksState).toBe("failing");
+  });
+
+  it("reports a fix push that fails CI again after the agent stops", () => {
+    const running = {
+      threadId: ThreadId.make("thread-1"),
+      status: "running" as const,
+      providerName: "claude",
+      runtimeMode: "full-access" as const,
+      activeTurnId: null,
+      updatedAt: EARLIER,
+      lastError: null,
+    };
+    const sent = factory({
+      phase: "fix",
+      review: { ...factory().review!, seenChecksState: "failing" },
+    });
+    // The agent pushes a fix: checks restart while it still runs.
+    const restarted = decideFactoryReview(
+      thread({ factory: sent, pullRequests: [link({ checksState: "pending" })], session: running }),
+      NOW,
+    );
+    expect(restarted?.message).toBeNull();
+    expect(restarted?.factory?.review?.seenChecksState).toBe("pending");
+
+    const failedAgain = thread({
+      factory: restarted!.factory!,
+      pullRequests: [link({ checksState: "failing" })],
+    });
+    expect(decideFactoryReview({ ...failedAgain, session: running }, NOW)).toBeNull();
+    expect(decideFactoryReview(failedAgain, NOW)?.message).toContain("CI is failing");
+  });
+
+  it("watches CI at a human gate only after the human answered", () => {
+    const gate = factory({
+      phase: "human-gate",
+      gatedFrom: "fix",
+      updatedAt: EARLIER,
+      review: { ...factory().review!, seenChecksState: "passing" },
+    });
+    const pullRequests = [link({ checksState: "failing" })];
+    expect(decideFactoryReview(thread({ factory: gate, pullRequests }), NOW)).toBeNull();
+    const answered = decideFactoryReview(
+      thread({ factory: gate, pullRequests, latestUserMessageAt: "2026-10-14T11:30:00.000Z" }),
+      NOW,
+    );
+    expect(answered?.factory?.phase).toBe("fix");
+    expect(answered?.message).toContain("CI is failing");
+  });
+
+  it("tells the agent to push nothing when commit signing fails", () => {
+    const decision = decideFactoryReview(
+      thread({ pullRequests: [link({ checksState: "failing" })] }),
+      NOW,
+    );
+    expect(decision?.message).toContain("If a commit fails to sign, push nothing");
+  });
+
   it("drops ready to merge back to under review when the pull request changes", () => {
     const decision = decideFactoryReview(
       thread({
@@ -570,7 +640,10 @@ describe("decideFactoryReview with token saving", () => {
     expect(rerun?.factory?.updatedAt).toBe(failed.updatedAt);
 
     // Work held before parts existed is matched by its message.
-    const { parts: _, ...legacy } = failed.pendingWork!;
+    const legacy = {
+      summary: failed.pendingWork!.summary,
+      message: failed.pendingWork!.parts![0]!.message,
+    };
     const legacyRerun = decideFactoryReview(
       thread({
         factory: { ...failed, pendingWork: legacy },
