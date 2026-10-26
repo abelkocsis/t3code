@@ -152,6 +152,9 @@ minimumReleaseAgeExclude:
   - expo-image-loader@58.0.3
 
 overrides:
+  # Keep on the patched version. The lockfile-free release install would take a newer
+  # release and fail on the unused patch. Move this with patchedDependencies.
+  node-pty: 1.2.0-beta.15
   # Keep jsdom's optional peer consistent so Vite+ has one test-runner instance.
   "@exodus/bytes>@noble/hashes": "1.8.0"
   # Earlier React Navigation declarations create a circular type alias in TypeScript 7.
