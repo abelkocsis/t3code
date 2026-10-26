@@ -45,11 +45,11 @@ Apple Silicon only. Ask if you need an Intel build.
 
 ## Branches
 
-- **`bitsafe-v0.1`** is this fork's line (the branch name tracks the upstream minor version). Releases are cut from
+- **`bitsafe`** is this fork's line (upstream v0.0.45 history lives on `bitsafe-v0.0.45`). Releases are cut from
   it.
 - **`main`** mirrors upstream and is not used. Do not commit to it.
 
-`bitsafe-v0.1` is replayed onto each new upstream stable release, so its history is
+`bitsafe` is replayed onto each new upstream stable release, so its history is
 rewritten. Install releases rather than tracking the branch, unless you are
 working on the fork itself.
 

@@ -12,7 +12,7 @@
 #
 set -euo pipefail
 
-BRANCH="bitsafe-v0.1"
+BRANCH="bitsafe"
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$REPO_ROOT"

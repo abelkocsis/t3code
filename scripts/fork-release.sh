@@ -10,7 +10,7 @@
 #
 set -euo pipefail
 
-BRANCH="bitsafe-v0.1"
+BRANCH="bitsafe"
 # Where installed copies look for updates. Building without this produces an
 # app with no update feed at all, which is the difference between colleagues
 # updating themselves and colleagues re-downloading by hand forever.
