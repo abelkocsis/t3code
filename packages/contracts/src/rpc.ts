@@ -42,6 +42,12 @@ import {
   StandupUpdateItemsInput,
 } from "./standup.ts";
 import { TodoError, TodoList, TodoListInput } from "./todos.ts";
+import {
+  AgentInstructionsError,
+  AgentInstructionsGlobalFile,
+  AgentInstructionsGlobalInput,
+  AgentInstructionsGlobalWriteInput,
+} from "./agentInstructions.ts";
 import * as Rpc from "effect/rpc/Rpc";
 import * as RpcGroup from "effect/rpc/RpcGroup";
 import * as RpcMiddleware from "effect/rpc/RpcMiddleware";
@@ -517,6 +523,8 @@ export const WS_METHODS = {
   serverSaveStandupSummary: "server.saveStandupSummary",
   serverGetTodoList: "server.getTodoList",
   serverSetTodoList: "server.setTodoList",
+  forkReadGlobalAgentInstructions: "fork.agentInstructions.readGlobal",
+  forkWriteGlobalAgentInstructions: "fork.agentInstructions.writeGlobal",
   serverGetDatabaseStorage: "server.getDatabaseStorage",
   serverGetSettings: "server.getSettings",
   serverUpdateSettings: "server.updateSettings",
@@ -870,6 +878,23 @@ const WsServerSetTodoListRpc = Rpc.make(WS_METHODS.serverSetTodoList, {
   success: TodoList,
   error: Schema.Union([EnvironmentAuthorizationError, TodoError]),
 });
+
+/** Reads the provider's global instructions file from the path the server resolves. */
+const WsForkReadGlobalAgentInstructionsRpc = Rpc.make(WS_METHODS.forkReadGlobalAgentInstructions, {
+  payload: AgentInstructionsGlobalInput,
+  success: AgentInstructionsGlobalFile,
+  error: Schema.Union([EnvironmentAuthorizationError, AgentInstructionsError]),
+});
+
+/** Replaces the provider's global instructions file, creating it on the first save. */
+const WsForkWriteGlobalAgentInstructionsRpc = Rpc.make(
+  WS_METHODS.forkWriteGlobalAgentInstructions,
+  {
+    payload: AgentInstructionsGlobalWriteInput,
+    success: AgentInstructionsGlobalFile,
+    error: Schema.Union([EnvironmentAuthorizationError, AgentInstructionsError]),
+  },
+);
 
 const WsServerGetDatabaseStorageRpc = Rpc.make(WS_METHODS.serverGetDatabaseStorage, {
   payload: Schema.Struct({}),
@@ -2237,6 +2262,8 @@ export const ForkWsRpcGroup = RpcGroup.make(
   WsServerSaveStandupSummaryRpc,
   WsServerGetTodoListRpc,
   WsServerSetTodoListRpc,
+  WsForkReadGlobalAgentInstructionsRpc,
+  WsForkWriteGlobalAgentInstructionsRpc,
 ).middleware(RpcScopeAuthorization);
 
 export const WsRpcGroup = UpstreamWsRpcGroup.merge(ForkWsRpcGroup);

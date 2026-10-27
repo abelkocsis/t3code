@@ -67,6 +67,8 @@ const RPC_AGGREGATES = {
   [WS_METHODS.serverSaveStandupSummary]: "server",
   [WS_METHODS.serverGetTodoList]: "server",
   [WS_METHODS.serverSetTodoList]: "server",
+  [WS_METHODS.forkReadGlobalAgentInstructions]: "server",
+  [WS_METHODS.forkWriteGlobalAgentInstructions]: "server",
   [WS_METHODS.forkThreadSetFactory]: "server",
   [WS_METHODS.serverGetDatabaseStorage]: "server",
   [WS_METHODS.serverGetSettings]: "server",

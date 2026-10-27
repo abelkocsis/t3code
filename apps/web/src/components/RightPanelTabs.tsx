@@ -35,6 +35,7 @@ import {
   Files,
   Globe2,
   ListChecks,
+  ScrollText,
   Plus,
   TerminalSquare,
 } from "lucide-react";
@@ -142,6 +143,7 @@ interface RightPanelTabsProps {
   /** Absent where the panel has no environment to read the list from. */
   onAddTodo?: (() => void) | undefined;
   onAddStandup?: (() => void) | undefined;
+  onAddInstructions?: (() => void) | undefined;
   browserAvailable: boolean;
   terminalAvailable: boolean;
   diffAvailable: boolean;
@@ -179,6 +181,7 @@ const SURFACE_DISABLED_REASONS = {
   device: "Devices are only available from a thread.",
   todo: "The to-do list is only available from a thread.",
   standup: "The daily summary is only available from a thread.",
+  instructions: "Agent instructions are only available from a thread.",
 } as const;
 
 // Closed keepMounted popups must stop blocking shortcuts once their exit transition ends.
@@ -205,6 +208,7 @@ const SURFACE_UNAVAILABLE_HINTS = {
   device: "Available from a thread.",
   todo: "Available from a thread.",
   standup: "Available from a thread.",
+  instructions: "Available from a thread.",
 } as const;
 
 type TabContextMenuAction =
@@ -329,6 +333,7 @@ function RightPanelEmptyState(props: {
   /** Absent where the panel has no environment to read the list from. */
   onAddTodo?: (() => void) | undefined;
   onAddStandup?: (() => void) | undefined;
+  onAddInstructions?: (() => void) | undefined;
   browserAvailable: boolean;
   terminalAvailable: boolean;
   diffAvailable: boolean;
@@ -414,6 +419,15 @@ function RightPanelEmptyState(props: {
       available: props.onAddStandup !== undefined,
       disabledReason: SURFACE_UNAVAILABLE_HINTS.standup,
       onClick: () => props.onAddStandup?.(),
+    },
+    {
+      label: "Agent instructions",
+      description: "The CLAUDE.md or AGENTS.md this thread's agent reads.",
+      icon: ScrollText,
+      shortcut: "I",
+      available: props.onAddInstructions !== undefined,
+      disabledReason: SURFACE_UNAVAILABLE_HINTS.instructions,
+      onClick: () => props.onAddInstructions?.(),
     },
   ] as const;
 
@@ -603,6 +617,8 @@ function surfaceTitle(
       return "To-do";
     case "standup":
       return "Daily summary";
+    case "instructions":
+      return "Instructions";
     case "preview": {
       const snapshot = surface.resourceId ? sessions[surface.resourceId] : null;
       if (!snapshot || snapshot.navStatus._tag === "Idle") return "Browser";
@@ -695,6 +711,8 @@ function SurfaceIcon({
       return <ListChecks className="size-3 shrink-0" />;
     case "standup":
       return <CalendarDays className="size-3 shrink-0" />;
+    case "instructions":
+      return <ScrollText className="size-3 shrink-0" />;
     case "device":
       return surface.target?.platform === "ios" ? (
         <AppleIcon className="size-3 shrink-0" />
@@ -1140,6 +1158,14 @@ export function RightPanelTabs(props: RightPanelTabsProps) {
       disabledReason: SURFACE_DISABLED_REASONS.standup,
       onClick: () => props.onAddStandup?.(),
     },
+    {
+      label: "Agent instructions",
+      icon: ScrollText,
+      shortcut: "I",
+      available: props.onAddInstructions !== undefined,
+      disabledReason: SURFACE_DISABLED_REASONS.instructions,
+      onClick: () => props.onAddInstructions?.(),
+    },
   ] as const;
 
   const handleAddSurfaceMenuKeyDown = (event: ReactKeyboardEvent<HTMLDivElement>) => {
@@ -1515,6 +1541,9 @@ export function RightPanelTabs(props: RightPanelTabsProps) {
             onAddPullRequest={props.onAddPullRequest}
             onAddPullRequests={props.onAddPullRequests}
             onAddDevice={props.onAddDevice}
+            onAddTodo={props.onAddTodo}
+            onAddStandup={props.onAddStandup}
+            onAddInstructions={props.onAddInstructions}
             browserAvailable={props.browserAvailable}
             terminalAvailable={props.terminalAvailable}
             diffAvailable={props.diffAvailable}

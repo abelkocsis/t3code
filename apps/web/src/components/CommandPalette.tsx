@@ -60,6 +60,7 @@ import {
   ArrowLeftIcon,
   ExternalLinkIcon,
   CalendarDaysIcon,
+  ScrollTextIcon,
   ChartNoAxesColumnIcon,
   CheckIcon,
   ChevronRightIcon,
@@ -2084,6 +2085,17 @@ function OpenCommandPaletteDialog(props: {
       icon: <CalendarDaysIcon className={ITEM_ICON_CLASS} />,
       run: async () => {
         useRightPanelStore.getState().open(panelRef, "standup");
+      },
+    });
+    actionItems.push({
+      kind: "action",
+      value: "action:open-instructions",
+      searchTerms: ["instructions", "agents.md", "claude.md", "rules", "memory", "prompt"],
+      title: "Agent instructions",
+      description: "The CLAUDE.md or AGENTS.md this thread's agent reads",
+      icon: <ScrollTextIcon className={ITEM_ICON_CLASS} />,
+      run: async () => {
+        useRightPanelStore.getState().open(panelRef, "instructions");
       },
     });
   }

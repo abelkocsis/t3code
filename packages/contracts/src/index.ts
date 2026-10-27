@@ -65,6 +65,7 @@ export * from "./fork.ts";
 export * from "./slack.ts";
 export * from "./standup.ts";
 export * from "./todos.ts";
+export * from "./agentInstructions.ts";
 export * from "./worktreeMcp.ts";
 export * from "./resourceTelemetry.ts";
 export * from "./rpc.ts";

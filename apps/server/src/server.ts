@@ -9,6 +9,7 @@ import * as SlackReplyService from "./slack/SlackReplyService.ts";
 import * as StandupService from "./standup/StandupService.ts";
 import * as StandupStore from "./standup/StandupStore.ts";
 import * as TodoStore from "./todos/TodoStore.ts";
+import * as AgentInstructionsService from "./fork/AgentInstructionsService.ts";
 import * as PullRequestSyncReactor from "./orchestration-v2/PullRequestSyncReactor.ts";
 import * as PullRequestWatchReactor from "./orchestration-v2/PullRequestWatchReactor.ts";
 import * as DelegatedTaskQuestionReactor from "./orchestration-v2/DelegatedTaskQuestionReactor.ts";
@@ -591,6 +592,7 @@ const layerRuntimeCoreDependenciesBase = Layer.mergeAll(
   layerIdleCompactionWorker,
   StorageCleanup.layer.pipe(Layer.provide(ProjectionStoreV2.layer)),
   ForkThreadStateStore.layer,
+  AgentInstructionsService.layer,
   SlackReplyService.layer,
   StandupService.layer.pipe(
     Layer.provide(StandupStore.layer),

@@ -3837,6 +3837,11 @@ export default function ChatView(props: ChatViewProps) {
     useRightPanelStore.getState().toggle(activeThreadRef, "standup");
   };
   const addStandupSurfaceStable = useStableCallback(addStandupSurface);
+  const addInstructionsSurface = () => {
+    if (!activeThreadRef) return;
+    useRightPanelStore.getState().toggle(activeThreadRef, "instructions");
+  };
+  const addInstructionsSurfaceStable = useStableCallback(addInstructionsSurface);
   useAgentOpenedPreviews({
     threadRef: activeThreadRef,
     deviceState,
@@ -8035,6 +8040,12 @@ export default function ChatView(props: ChatViewProps) {
             ? addPullRequestsSurfaceStable
             : undefined,
       }}
+      instructions={{
+        instanceId: activeProviderInstanceId,
+        driver: selectedProvider ?? null,
+        workspaceRoot: activeWorkspaceRoot ?? null,
+        worktreeBranch: activeThreadWorktreePath === null ? null : (activeThread.branch ?? null),
+      }}
       files={{
         projectName: activeProject?.title ?? null,
         workspaceRoot: activeWorkspaceRoot,
@@ -8871,6 +8882,7 @@ export default function ChatView(props: ChatViewProps) {
           onAddDevice={addDeviceSurfaceStable}
           onAddTodo={addTodoSurfaceStable}
           onAddStandup={addStandupSurfaceStable}
+          onAddInstructions={addInstructionsSurfaceStable}
           browserAvailable={canOperatePreview && browserAvailable}
           terminalAvailable={activeProject !== null && canOperateTerminal}
           diffAvailable={isServerThread && isGitRepo}
@@ -8928,6 +8940,7 @@ export default function ChatView(props: ChatViewProps) {
             onAddDevice={addDeviceSurfaceStable}
             onAddTodo={addTodoSurfaceStable}
             onAddStandup={addStandupSurfaceStable}
+            onAddInstructions={addInstructionsSurfaceStable}
             browserAvailable={canOperatePreview && browserAvailable}
             terminalAvailable={activeProject !== null && canOperateTerminal}
             diffAvailable={isServerThread && isGitRepo}

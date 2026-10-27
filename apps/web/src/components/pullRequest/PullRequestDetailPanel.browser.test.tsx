@@ -605,6 +605,12 @@ it("restores the selected PR tab when switching threads and remounting the right
           branchPullRequest: null,
           onBack: undefined,
         }}
+        instructions={{
+          instanceId: null,
+          driver: null,
+          workspaceRoot: null,
+          worktreeBranch: null,
+        }}
         files={{
           projectName: null,
           workspaceRoot: undefined,

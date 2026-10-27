@@ -90,6 +90,7 @@ import * as ForkThreadStateStore from "./fork/ForkThreadStateStore.ts";
 import * as SlackReplyService from "./slack/SlackReplyService.ts";
 import * as StandupService from "./standup/StandupService.ts";
 import * as TodoStore from "./todos/TodoStore.ts";
+import * as AgentInstructionsService from "./fork/AgentInstructionsService.ts";
 import * as DatabaseStorage from "./persistence/DatabaseStorage.ts";
 import * as TerminalManager from "./terminal/Manager.ts";
 import * as ThreadLaunchService from "./orchestration-v2/ThreadLaunchService.ts";
@@ -511,6 +512,7 @@ const layerUnusedConfigRpcServices = Layer.mergeAll(
   Layer.mock(SlackReplyService.SlackReplyService)({}),
   Layer.mock(StandupService.StandupService)({}),
   Layer.mock(TodoStore.TodoStore)({}),
+  Layer.mock(AgentInstructionsService.AgentInstructionsService)({}),
   Layer.mock(DatabaseStorage.DatabaseStorage)({}),
   Layer.mock(TerminalManager.TerminalManager)({}),
   Layer.mock(ThreadLaunchService.ThreadLaunchService)({}),

@@ -22,6 +22,7 @@ import { PullRequestDetailPanel } from "../pullRequest/PullRequestDetailPanel";
 import { PullRequestDetailGhost } from "../pullRequest/PullRequestGhosts";
 import { PullRequestsUnavailableState } from "../pullRequest/PullRequestsUnavailableState";
 import { ThreadPullRequestsPanel } from "../pullRequest/ThreadPullRequestsPanel";
+import type { InstructionsPanelProps } from "../InstructionsPanel";
 
 const PreviewPanel = lazy(() =>
   import("../preview/PreviewPanel").then((module) => ({ default: module.PreviewPanel })),
@@ -36,6 +37,9 @@ const TodoPanel = lazy(() =>
 );
 const StandupPanel = lazy(() =>
   import("../StandupPanel").then((module) => ({ default: module.StandupPanel })),
+);
+const InstructionsPanel = lazy(() =>
+  import("../InstructionsPanel").then((module) => ({ default: module.InstructionsPanel })),
 );
 
 export type RightPanelTerminalProps = Omit<
@@ -83,6 +87,7 @@ export function RightPanelSurfaceContent(props: {
   readonly terminal: RightPanelTerminalProps;
   readonly pullRequest: RightPanelPullRequestProps;
   readonly files: RightPanelFileProps;
+  readonly instructions: Omit<InstructionsPanelProps, "environmentId">;
 }) {
   const { surface, threadRef, visible } = props;
   if (surface === null) return null;
@@ -185,6 +190,19 @@ export function RightPanelSurfaceContent(props: {
           <StandupPanel environmentId={props.environmentId} />
         </Suspense>
       );
+    case "instructions": {
+      const { instanceId, workspaceRoot } = props.instructions;
+      return (
+        <Suspense fallback={null}>
+          {/* A new provider or checkout is a different pair of files, so the drafts reset. */}
+          <InstructionsPanel
+            key={`${props.environmentId}:${instanceId}:${workspaceRoot}`}
+            environmentId={props.environmentId}
+            {...props.instructions}
+          />
+        </Suspense>
+      );
+    }
     case "device":
       return (
         <Suspense fallback={null}>

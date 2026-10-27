@@ -139,6 +139,15 @@ describe("RPC authorization scopes", () => {
     );
   });
 
+  it("lets file readers see the global agent instructions but only provider managers change them", () => {
+    expect(requiredScopeForRpcMethod(WS_METHODS.forkReadGlobalAgentInstructions)).toBe(
+      AuthFilesystemReadScope,
+    );
+    expect(requiredScopeForRpcMethod(WS_METHODS.forkWriteGlobalAgentInstructions)).toBe(
+      AuthProvidersManageScope,
+    );
+  });
+
   it("separates viewing pull request file progress from writing it", () => {
     expect(requiredScopeForRpcMethod(WS_METHODS.pullRequestsFilesViewed)).toBe(
       AuthOrchestrationReadScope,

@@ -93,6 +93,8 @@ export const RPC_REQUIRED_SCOPES = {
   [WS_METHODS.serverSaveStandupSummary]: AuthOrchestrationOperateScope,
   [WS_METHODS.serverGetTodoList]: AuthOrchestrationReadScope,
   [WS_METHODS.serverSetTodoList]: AuthOrchestrationOperateScope,
+  [WS_METHODS.forkReadGlobalAgentInstructions]: AuthFilesystemReadScope,
+  [WS_METHODS.forkWriteGlobalAgentInstructions]: AuthProvidersManageScope,
   [WS_METHODS.forkThreadSetFactory]: AuthOrchestrationOperateScope,
   [WS_METHODS.serverGetDatabaseStorage]: AuthOrchestrationReadScope,
   [WS_METHODS.serverGetSettings]: AuthOrchestrationReadScope,

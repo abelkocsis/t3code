@@ -1018,6 +1018,16 @@ export function createServerEnvironmentAtoms<R, E>(
       label: "environment-data:server:set-todo-list",
       tag: WS_METHODS.serverSetTodoList,
     }),
+    // Short-lived: another device or the agent itself may edit the file.
+    globalAgentInstructions: createEnvironmentRpcQueryAtomFamily(runtime, {
+      label: "environment-data:server:global-agent-instructions",
+      tag: WS_METHODS.forkReadGlobalAgentInstructions,
+      staleTimeMs: 5_000,
+    }),
+    writeGlobalAgentInstructions: createEnvironmentRpcCommand(runtime, {
+      label: "environment-data:server:write-global-agent-instructions",
+      tag: WS_METHODS.forkWriteGlobalAgentInstructions,
+    }),
     updateStateAtom,
     settingsValueAtom,
     providersValueAtom,

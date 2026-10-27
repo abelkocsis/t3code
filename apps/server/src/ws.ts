@@ -180,6 +180,7 @@ import * as ForkThreadStateStore from "./fork/ForkThreadStateStore.ts";
 import * as SlackReplyService from "./slack/SlackReplyService.ts";
 import * as StandupService from "./standup/StandupService.ts";
 import * as TodoStore from "./todos/TodoStore.ts";
+import * as AgentInstructionsService from "./fork/AgentInstructionsService.ts";
 import * as TerminalManager from "./terminal/Manager.ts";
 import { terminalOutputStream, withTerminalOutputWindow } from "./terminal/OutputProtocol.ts";
 import * as PreviewAutomationBroker from "./mcp/PreviewAutomationBroker.ts";
@@ -1194,6 +1195,7 @@ const layerForkWsRpc = ServerForkWsRpcGroup.toLayer(
   Effect.gen(function* () {
     const standup = yield* StandupService.StandupService;
     const todos = yield* TodoStore.TodoStore;
+    const agentInstructions = yield* AgentInstructionsService.AgentInstructionsService;
     const forkThreadState = yield* ForkThreadStateStore.ForkThreadStateStore;
     const slackReplies = yield* SlackReplyService.SlackReplyService;
     const sourceControlIssues = yield* SourceControlIssueService.SourceControlIssueService;
@@ -1214,6 +1216,10 @@ const layerForkWsRpc = ServerForkWsRpcGroup.toLayer(
       [WS_METHODS.serverSaveStandupSummary]: (input) => standup.save(input),
       [WS_METHODS.serverGetTodoList]: () => todos.read,
       [WS_METHODS.serverSetTodoList]: (input) => todos.write(input.items),
+      [WS_METHODS.forkReadGlobalAgentInstructions]: (input) =>
+        agentInstructions.readGlobal(input.instanceId),
+      [WS_METHODS.forkWriteGlobalAgentInstructions]: (input) =>
+        agentInstructions.writeGlobal(input.instanceId, input.contents),
     });
   }),
 );

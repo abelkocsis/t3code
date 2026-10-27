@@ -24,6 +24,7 @@ const RIGHT_PANEL_KINDS = [
   "pull-requests",
   "todo",
   "standup",
+  "instructions",
 ] as const;
 export type RightPanelKind = (typeof RIGHT_PANEL_KINDS)[number];
 
@@ -86,7 +87,9 @@ export type RightPanelSurface =
   | { id: "pull-requests"; kind: "pull-requests" }
   /** Environment-wide panels: the same list and summary on every thread of a server. */
   | { id: "todo"; kind: "todo" }
-  | { id: "standup"; kind: "standup" };
+  | { id: "standup"; kind: "standup" }
+  /** The thread provider's instructions file, in the checkout or in the provider's home. */
+  | { id: "instructions"; kind: "instructions" };
 
 const RIGHT_PANEL_STORAGE_KEY = "t3code:right-panel-state:v2";
 const RIGHT_PANEL_STORAGE_VERSION = 14;
@@ -237,6 +240,8 @@ const singletonSurface = (
       return { id: "todo", kind };
     case "standup":
       return { id: "standup", kind };
+    case "instructions":
+      return { id: "instructions", kind };
   }
 };
 
