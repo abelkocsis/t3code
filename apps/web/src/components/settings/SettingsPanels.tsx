@@ -2341,7 +2341,7 @@ export function GeneralSettingsPanel() {
         />
         <SettingsRow
           {...searchableSetting("usage-bars-fill-used")}
-          description="Usage limit bars fill with the quota you used. Off, they fill with what is left."
+          description="Usage limit bars fill with the quota you used. Off, they fill with what is left, as upstream does."
           control={
             <Switch
               checked={settings.usageBarsFillUsed}
