@@ -636,6 +636,9 @@ export function useSettingsRestore(onRestored?: () => void) {
     ...(settings.usagePaceIncludesWeekends !== DEFAULT_UNIFIED_SETTINGS.usagePaceIncludesWeekends
       ? ["Count weekends in usage pace"]
       : []),
+    ...(settings.usageBarsFillUsed !== DEFAULT_UNIFIED_SETTINGS.usageBarsFillUsed
+      ? ["Usage bars show what is used"]
+      : []),
     ...(settings.responseStreamingMode !== DEFAULT_UNIFIED_SETTINGS.responseStreamingMode
       ? ["Response streaming"]
       : []),
@@ -752,6 +755,7 @@ export function useSettingsRestore(onRestored?: () => void) {
       followUpBehavior: DEFAULT_UNIFIED_SETTINGS.followUpBehavior,
       contextWindowMeterEnabled: DEFAULT_UNIFIED_SETTINGS.contextWindowMeterEnabled,
       usagePaceIncludesWeekends: DEFAULT_UNIFIED_SETTINGS.usagePaceIncludesWeekends,
+      usageBarsFillUsed: DEFAULT_UNIFIED_SETTINGS.usageBarsFillUsed,
       environmentIdentificationMode: DEFAULT_UNIFIED_SETTINGS.environmentIdentificationMode,
       glassOpacity: DEFAULT_UNIFIED_SETTINGS.glassOpacity,
       panelAnimationDurationMs: DEFAULT_UNIFIED_SETTINGS.panelAnimationDurationMs,
@@ -2332,6 +2336,17 @@ export function GeneralSettingsPanel() {
                 updateSettings({ usagePaceIncludesWeekends: Boolean(checked) })
               }
               aria-label="Count weekends in usage pace"
+            />
+          }
+        />
+        <SettingsRow
+          {...searchableSetting("usage-bars-fill-used")}
+          description="Usage limit bars fill with the quota you used. Off, they fill with what is left."
+          control={
+            <Switch
+              checked={settings.usageBarsFillUsed}
+              onCheckedChange={(checked) => updateSettings({ usageBarsFillUsed: Boolean(checked) })}
+              aria-label="Usage bars show what is used"
             />
           }
         />

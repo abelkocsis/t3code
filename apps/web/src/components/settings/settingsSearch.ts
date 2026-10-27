@@ -343,6 +343,12 @@ export const SETTINGS_SEARCH_ITEMS = [
     searchTerms: ["limits weekly window marker pace weekday weekend saturday sunday quota"],
   },
   {
+    id: "usage-bars-fill-used",
+    title: "Usage bars show what is used",
+    to: "/settings/general",
+    searchTerms: ["limits bar fill used spent remaining left direction quota"],
+  },
+  {
     id: "working-shelf",
     title: "Working section (beta)",
     to: "/settings/general",

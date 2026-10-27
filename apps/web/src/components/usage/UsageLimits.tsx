@@ -58,6 +58,15 @@ export function useLimitPaceOptions(): LimitPaceOptions {
   return { includeWeekends };
 }
 
+/** The percent a limit row shows, in the direction the user's bars fill. */
+function useLimitReading() {
+  const fillUsed = usePrimarySettings((settings) => settings.usageBarsFillUsed);
+  return (window: ServerProviderUsageWindow) => {
+    const remaining = remainingPercent(window);
+    return fillUsed ? `${100 - remaining}% used` : `${remaining}% left`;
+  };
+}
+
 export function barColor(driver: ServerProvider["driver"]): string {
   const presentation = Object.values(PROVIDER_PRESENTATION).find(
     (entry) => entry.driverKind === driver,
@@ -133,16 +142,21 @@ function WindowBar({
 }) {
   const timestampFormat = usePrimarySettings((settings) => settings.timestampFormat);
   const paceOptions = useLimitPaceOptions();
+  const fillUsed = usePrimarySettings((settings) => settings.usageBarsFillUsed);
   const remaining = remainingPercent(window);
   const timeLeft = paceRemainingPercent(window, now, paceOptions);
-  const [barRef, paceMark] = usePaceMark(timeLeft);
+  // Filling with the quota spent, the even-spending mark moves with the time elapsed instead.
+  const filled = fillUsed ? 100 - remaining : remaining;
+  const mark = timeLeft === null ? null : fillUsed ? 100 - timeLeft : timeLeft;
+  const [barRef, paceMark] = usePaceMark(mark);
   const resetsIn = formatResetsIn(window, now);
   const resetsAt = window.resetsAt
     ? formatUpcomingTimestamp(window.resetsAt, timestampFormat, now)
     : null;
-  const summary = `${window.label}: ${remaining}% left${
-    timeLeft === null ? "" : `, ${timeLeft}% of the window left`
-  }${resetsIn ? `, ${resetsIn}` : ""}`;
+  const percentText = fillUsed ? `${filled}% used` : `${filled}% left`;
+  const markText = mark === null ? null : `${mark}% of the window ${fillUsed ? "elapsed" : "left"}`;
+  const reading = [percentText, markText].filter(Boolean).join(" · ");
+  const summary = `${window.label}: ${[percentText, markText, resetsIn].filter(Boolean).join(", ")}`;
 
   return (
     <Tooltip>
@@ -160,10 +174,10 @@ function WindowBar({
         {/* Clip both layers so the gap exposes even a translucent composer surface. */}
         <div className="absolute inset-0" style={paceMark?.gap}>
           <div className="absolute inset-x-0 inset-y-1.5 rounded-full bg-muted" />
-          {remaining > 0 ? (
+          {filled > 0 ? (
             <div
               className="absolute inset-y-1.5 left-0 rounded-full"
-              style={{ width: `${remaining}%`, backgroundColor: color }}
+              style={{ width: `${filled}%`, backgroundColor: color }}
             />
           ) : null}
         </div>
@@ -177,10 +191,8 @@ function WindowBar({
       </TooltipTrigger>
       <TooltipPopup side="top">
         <div className="flex flex-col gap-0.5">
-          <span className="text-foreground">
-            {remaining}% left{timeLeft !== null ? ` · ${timeLeft}% of the window left` : ""}
-          </span>
-          {timeLeft !== null ? (
+          <span className="text-foreground">{reading}</span>
+          {mark !== null ? (
             <span className="text-muted-foreground">The line is where even spending would be.</span>
           ) : null}
           {resetsAt ? (
@@ -208,6 +220,7 @@ export function LimitWindows({
 }) {
   const color = barColor(driver);
   const paceOptions = useLimitPaceOptions();
+  const readLimit = useLimitReading();
   return (
     <div
       className={
@@ -224,7 +237,7 @@ export function LimitWindows({
             <span className="flex min-w-0 items-center gap-2 text-xs">
               <span className="truncate text-muted-foreground">{window.label}</span>
               <span className="ms-auto shrink-0 font-medium text-foreground tabular-nums">
-                {remainingPercent(window)}% left
+                {readLimit(window)}
               </span>
             </span>
             <WindowBar color={color} window={window} now={now} />
@@ -255,6 +268,7 @@ export function LimitWindowsStacked({
 }) {
   const color = barColor(driver);
   const paceOptions = useLimitPaceOptions();
+  const readLimit = useLimitReading();
   return (
     <div className="flex flex-col gap-1.5">
       {windows.map((window) => {
@@ -269,7 +283,7 @@ export function LimitWindowsStacked({
                 {pace ? <PaceIcon pace={pace} /> : null}
               </span>
               <span className="shrink-0 font-medium text-foreground tabular-nums">
-                {remainingPercent(window)}% left
+                {readLimit(window)}
               </span>
             </div>
             <WindowBar color={color} window={window} now={now} />

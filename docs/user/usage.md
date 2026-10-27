@@ -107,6 +107,10 @@ spend against it. By default the line crosses a weekly window over all seven day
 work weekends, turn off **Count weekends in usage pace** in **Settings → General**. The line then
 advances only from Monday to Friday, so it holds still over the weekend.
 
+Each account's bars fill with the quota you used. To fill them with what is left instead, turn off
+**Usage bars show what is used** in **Settings → General**. The pooled bars always show what is
+left.
+
 Opening Limits checks the selected connected environments automatically. Each client waits at
 least five minutes between automatic checks of an environment, including after a failed check.
 If a window still looks stale, refresh Limits to re-check every provider and hub.

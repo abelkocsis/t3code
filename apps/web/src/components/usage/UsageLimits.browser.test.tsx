@@ -11,7 +11,15 @@ vi.mock("../../state/session", () => ({
 }));
 vi.mock("../../state/server", () => ({ serverEnvironment: { consumeResetCredit: null } }));
 vi.mock("../../state/use-atom-command", () => ({ useAtomCommand: () => vi.fn() }));
-vi.mock("../../hooks/useSettings", () => ({ usePrimarySettings: () => "24h" }));
+const settings = vi.hoisted(() => ({ usageBarsFillUsed: false }));
+vi.mock("../../hooks/useSettings", () => ({
+  usePrimarySettings: (select: (value: object) => unknown) =>
+    select({ timestampFormat: "24h", usagePaceIncludesWeekends: true, ...settings }),
+}));
+
+const setup = ({ fillUsed = false }: { readonly fillUsed?: boolean } = {}) => {
+  settings.usageBarsFillUsed = fillUsed;
+};
 
 import { LimitWindows } from "./UsageLimits";
 
@@ -48,6 +56,7 @@ const bar = () => {
 };
 
 it("places the even-pace tick in a gap at the share of the window left", async () => {
+  setup();
   await using _screen = await render(
     <LimitWindows driver={codex} windows={[sessionWindow(90)]} now={now} />,
     { container: sized("640px") },
@@ -57,7 +66,19 @@ it("places the even-pace tick in a gap at the share of the window left", async (
   expect(clip).toMatch(/^polygon/);
 });
 
+it("fills with the quota used and marks the time elapsed when bars show what is used", async () => {
+  setup({ fillUsed: true });
+  await using screen = await render(
+    <LimitWindows driver={codex} windows={[sessionWindow(90)]} now={now} />,
+    { container: sized("640px") },
+  );
+  const { rect, mark } = bar();
+  expect(mark!.left + mark!.width / 2 - rect.left).toBeCloseTo(rect.width * 0.7, 0);
+  await expect.element(screen.getByText("40% used")).toBeInTheDocument();
+});
+
 it("keeps the tick inside the bar at both ends of the window", async () => {
+  setup();
   for (const minutesUntilReset of [0, 300]) {
     await using _screen = await render(
       <LimitWindows driver={codex} windows={[sessionWindow(minutesUntilReset)]} now={now} />,
@@ -70,6 +91,7 @@ it("keeps the tick inside the bar at both ends of the window", async () => {
 });
 
 it("draws a continuous bar when the window timing is unknown", async () => {
+  setup();
   await using _screen = await render(
     <LimitWindows driver={codex} windows={[sessionWindow(null)]} now={now} />,
     { container: sized("640px") },
@@ -78,6 +100,7 @@ it("draws a continuous bar when the window timing is unknown", async () => {
 });
 
 it("draws neither gap nor tick on a bar narrower than 6px", async () => {
+  setup();
   // 11rem + 1rem + 3.5px + 1rem + 7rem: the bar column gets 3.5px.
   await using _screen = await render(
     <LimitWindows driver={codex} windows={[sessionWindow(300)]} now={now} />,
