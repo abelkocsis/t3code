@@ -429,6 +429,33 @@ describe("sidebar collision detection", () => {
     expect(folderSlotAtY(items, rects, 176)).toBeNull();
   });
 
+  it("keeps the last folder's rows in its band while the preview pushes them down", () => {
+    // Folder f1 holds w1 and s1, and the inbox follows. Lifting an inbox row
+    // over w1 pushes the folder's rows down past the inbox's stand-in row,
+    // which has no height and stays where it was.
+    const items: SidebarListItem[] = [
+      pinnedHeader,
+      divider,
+      marker(folderHeaderMarker("f1")),
+      thread("w1", sidebarFolderSection("f1")),
+      thread("s1", sidebarFolderSection("f1")),
+      marker("active-placeholder"),
+      thread("a1", "active"),
+    ];
+    const rects = new Map([
+      [sidebarMarkerId("pinned-header"), { top: 90, bottom: 90 }],
+      [sidebarMarkerId("pinned-divider"), { top: 95, bottom: 95 }],
+      [sidebarMarkerId(folderHeaderMarker("f1")), { top: 100, bottom: 132 }],
+      ["w1", { top: 216, bottom: 252 }],
+      ["s1", { top: 253, bottom: 289 }],
+      [sidebarMarkerId("active-placeholder"), { top: 206, bottom: 206 }],
+      ["a1", { top: 290, bottom: 372 }],
+    ]);
+    expect(folderSlotAtY(items, rects, 240)?.slotId).toBe("w1");
+    expect(folderSlotAtY(items, rects, 270)?.slotId).toBe("s1");
+    expect(folderSlotAtY(items, rects, 300)).toBeNull();
+  });
+
   it("returns no collision if an unsupported target has no source fallback", () => {
     const args = collisionArgs();
     const detector = createSidebarCollisionDetection(() => false);

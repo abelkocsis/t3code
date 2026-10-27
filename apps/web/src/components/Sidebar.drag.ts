@@ -89,7 +89,11 @@ export function folderSlotAtY(
       last = next;
     }
     const top = measured[index - 1]?.rect.bottom;
-    const bottom = measured[last + 1]?.rect.top;
+    // The inbox's stand-in row has no height and the preview leaves it in place while it
+    // pushes the last folder's rows down, so the band below runs to the next real row.
+    const bottom = measured
+      .slice(last + 1)
+      .find((candidate) => candidate.rect.bottom > candidate.rect.top)?.rect.top;
     const bandTop = top === undefined ? entry.rect.top : (top + entry.rect.top) / 2;
     const bandBottom =
       bottom === undefined
