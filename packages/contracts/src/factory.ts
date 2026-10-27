@@ -174,6 +174,8 @@ export const ThreadFactory = Schema.Struct({
   folderId: Schema.optional(Schema.NullOr(TrimmedNonEmptyString)),
   /** How many times the human sent it to reviewers. Zero until the first review request. */
   reviewRound: Schema.optional(NonNegativeInt),
+  /** Also list the thread in the sidebar. Off by default: the Factory page is its home. */
+  showInSidebar: Schema.optional(Schema.Boolean),
   /**
    * The pull request this task sleeps behind. The thread is snoozed far ahead while this is
    * set; the server wakes it when that pull request merges.

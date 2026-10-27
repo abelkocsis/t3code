@@ -425,6 +425,8 @@ interface SidebarThreadPartitionInput {
   readonly folderIdByThreadKey: ReadonlyMap<string, string | null>;
   /** Folders the connected servers still list; a stale id reads as no folder. */
   readonly knownFolderIds: ReadonlySet<string>;
+  /** Factory tasks live on the Factory page unless the user asked to list them here. */
+  readonly hiddenFactoryThreadKeys: ReadonlySet<string>;
   // Snooze wakes and the queued-turn grace depend on the clock, so the minute
   // tick and the precise snooze-wake tick are inputs: a new key repartitions.
   readonly clockKey: string;
@@ -495,8 +497,12 @@ function useSidebarThreads(input: {
   const forkThreadStates = useForkThreadStates();
   const folderIdByThreadKey = new Map<string, string | null>();
   const slackThreadByThreadKey = new Map<string, SlackThreadRef>();
+  const hiddenFactoryThreadKeys = new Set<string>();
   for (const [threadKey, state] of forkThreadStates) {
     if (state.folderId !== null) folderIdByThreadKey.set(threadKey, state.folderId);
+    if (state.factory != null && state.factory.showInSidebar !== true) {
+      hiddenFactoryThreadKeys.add(threadKey);
+    }
     if (state.slackThread !== null) slackThreadByThreadKey.set(threadKey, state.slackThread);
   }
   const knownFolderIds = new Set(threadFolders.folders.map((folder) => folder.id as string));
@@ -571,6 +577,7 @@ function useSidebarThreads(input: {
     workingShelfEnabled,
     folderIdByThreadKey,
     knownFolderIds,
+    hiddenFactoryThreadKeys,
     clockKey: `${nowMinute}:${snoozeWakeTick}`,
   });
   const partitionNextWakeAt = partition.snoozedThreads[0]?.snoozedUntil ?? null;
@@ -725,9 +732,15 @@ function partitionSidebarThreads(input: SidebarThreadPartitionInput) {
     workingShelfEnabled,
     folderIdByThreadKey,
     knownFolderIds,
+    hiddenFactoryThreadKeys,
   } = input;
   const preciseNow = new Date().toISOString();
-  const visible = filterSidebarV2VisibleThreads(threads, scopedProjectKeys);
+  const visible = filterSidebarV2VisibleThreads(threads, scopedProjectKeys).filter(
+    (thread) =>
+      !hiddenFactoryThreadKeys.has(
+        scopedThreadKey(scopeThreadRef(thread.environmentId, thread.id)),
+      ),
+  );
   inboxReturns.observe(workingShelfEnabled ? threads : null);
   const pinned: EnvironmentThreadShell[] = [];
   const active: EnvironmentThreadShell[] = [];

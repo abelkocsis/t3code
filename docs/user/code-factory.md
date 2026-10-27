@@ -33,8 +33,8 @@ waits on you. Select a row to see the agent's open question with its options,
 its last reply, and a reply box. Tasks can be grouped in folders and dragged
 between them. Right-click the pull request icon to copy its link.
 
-A factory task is also a thread, marked with a factory icon in the sidebar.
-It asks for attention, in the sidebar, the overlay, and a notification, only
+A factory task is also a thread. It stays off the sidebar unless you tick
+**Show in sidebar** in the row's menu; there it carries a factory icon. It asks for attention, in the sidebar, the overlay, and a notification, only
 when it needs you: at a gate, on a question or approval, on held work, or on a
 failure. While the agent or the review loop works it reads as working, however
 many turns finish. Opening the thread clears the highlight.

@@ -132,6 +132,7 @@ import { Checkbox } from "../ui/checkbox";
 import { Input } from "../ui/input";
 import {
   Menu,
+  MenuCheckboxItem,
   MenuItem,
   MenuPopup,
   MenuSeparator,
@@ -1314,6 +1315,18 @@ function TaskMenu({ task }: { task: FactoryTask }) {
               ))}
             </MenuSubPopup>
           </MenuSub>
+          <MenuSeparator />
+          <MenuCheckboxItem
+            checked={task.factory.showInSidebar === true}
+            onCheckedChange={(checked) => {
+              void update({ ...task.factory, showInSidebar: checked === true }).then((result) => {
+                if (result._tag === "Failure")
+                  report(false, "Could not change the sidebar setting");
+              });
+            }}
+          >
+            Show in sidebar
+          </MenuCheckboxItem>
           <MenuSeparator />
           <MenuItem onClick={() => void removeFromFactory(task.thread, task.factory)}>
             <MessageSquareIcon aria-hidden className="size-3.5" />
