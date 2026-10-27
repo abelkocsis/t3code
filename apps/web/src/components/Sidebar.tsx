@@ -87,6 +87,7 @@ import {
   ClockIcon,
   FactoryIcon,
   FolderIcon,
+  FolderPlusIcon,
   GitBranchIcon,
   ListFilterIcon,
   MessageCircleQuestionIcon,
@@ -5315,7 +5316,7 @@ export default function Sidebar() {
             />
             {/* Starting a thread is the sidebar's most-used action, so it gets
                 a labelled row rather than an unlabelled icon sharing the header
-                with search and scope. New folder sits beside it. */}
+                with search and scope. New folder sits beside it as an icon. */}
             <div className="mt-1 flex w-full items-center gap-2">
               <Tooltip>
                 <TooltipTrigger
@@ -5364,13 +5365,13 @@ export default function Sidebar() {
                       <Button
                         type="button"
                         variant="outline"
-                        className="min-w-0 flex-1"
+                        size="icon"
+                        aria-label="New folder"
                         onClick={() => void createFolder()}
                       />
                     }
                   >
-                    <FolderIcon />
-                    <span className="truncate">New folder</span>
+                    <FolderPlusIcon />
                   </TooltipTrigger>
                   <TooltipPopup side="right">New folder</TooltipPopup>
                 </Tooltip>
