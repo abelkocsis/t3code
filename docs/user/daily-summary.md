@@ -60,3 +60,6 @@ T3 Code never posts to Slack or anywhere else. Copying and pasting stays your de
 
 The summary uses the same model as T3 Code's other short generations, such as commit messages and
 thread titles. Change it under **Settings → General → Text generation model**.
+
+The rules the model follows, such as the item length and the tone, are in **Settings → General →
+Daily summary prompt**. Edit them there, or reset them to the default.

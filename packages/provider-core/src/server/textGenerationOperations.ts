@@ -183,6 +183,7 @@ export function fromRunner(name: string, run: Runner): ProviderTextGeneration {
         facts: input.facts,
         keptItems: input.keptItems,
         excludedItems: input.excludedItems,
+        instructions: input.instructions,
       }),
     });
     return { items: sanitizeDailySummaryItems(generated.items) };

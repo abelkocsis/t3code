@@ -420,6 +420,7 @@ export const make = Effect.gen(function* () {
           excludedItems: (previous?.items ?? [])
             .filter((item) => item.excluded)
             .map((item) => item.text),
+          instructions: settings.dailySummaryInstructions,
           modelSelection: settings.textGenerationModelSelection,
         })
         .pipe(

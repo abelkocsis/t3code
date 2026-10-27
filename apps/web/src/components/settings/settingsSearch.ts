@@ -461,6 +461,13 @@ export const SETTINGS_SEARCH_ITEMS = [
     searchTerms: ["code factory task first message prompt template input"],
   },
   {
+    id: "daily-summary-instructions",
+    title: "Daily summary prompt",
+    to: "/settings/general",
+    scope: "environment-defaults",
+    searchTerms: ["daily summary standup recap prompt rules instructions"],
+  },
+  {
     id: "factory-token-saving",
     title: "Factory token saving",
     to: "/settings/general",

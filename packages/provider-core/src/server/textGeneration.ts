@@ -108,6 +108,8 @@ export interface DailySummaryGenerationInput {
   keptItems: ReadonlyArray<string>;
   /** Bullets the user removed from the same day. */
   excludedItems: ReadonlyArray<string>;
+  /** The user's rules for the summary, from settings. */
+  instructions: string;
   modelSelection: ModelSelection;
 }
 

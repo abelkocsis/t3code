@@ -55,6 +55,9 @@ base goes to the agent, which fixes it or pushes back and reports under the
 pull request. An approved, green pull request reads **Ready to merge**; press
 **Merge** to merge it with the project's merge method.
 
+To ask for several reviews in one message, press **Select** at the top of the
+page, tick the tasks that wait for review, and copy the combined request.
+
 ## Token saving
 
 Turn on **Token saving** at the top of the page to keep watching pull requests

@@ -46,6 +46,7 @@ import {
   ProviderDriverKind,
 } from "./providerInstance.ts";
 import { DEFAULT_FACTORY_PROMPT_TEMPLATE, FactoryFolder } from "./factory.ts";
+import { DEFAULT_DAILY_SUMMARY_INSTRUCTIONS } from "./standup.ts";
 import { PullRequestMergeMethod } from "./pullRequest.ts";
 
 export const TimestampFormat = Schema.Literals(["locale", "12-hour", "24-hour"]);
@@ -1262,6 +1263,10 @@ export const ServerSettings = Schema.Struct({
    * holds review work until the human starts it from the Factory page.
    */
   factoryTokenSaving: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(false))),
+  /** The rules the daily summary model follows; the server adds output format and evidence. */
+  dailySummaryInstructions: TrimmedString.pipe(
+    Schema.withDecodingDefault(Effect.succeed(DEFAULT_DAILY_SUMMARY_INSTRUCTIONS)),
+  ),
   snoozeLimitedThreads: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(false))),
   autoResumeLimitedThreads: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(false))),
   sidebarAutoSettleKeepPullRequests: Schema.Boolean.pipe(
@@ -1592,6 +1597,7 @@ export const ServerSettingsPatch = Schema.Struct({
   factoryFolders: Schema.optionalKey(Schema.Array(FactoryFolder)),
   factoryPromptTemplate: Schema.optionalKey(TrimmedString),
   factoryTokenSaving: Schema.optionalKey(Schema.Boolean),
+  dailySummaryInstructions: Schema.optionalKey(TrimmedString),
   sidebarAutoSettleKeepPullRequests: Schema.optionalKey(Schema.Boolean),
   sidebarAutoSettleOnMerge: Schema.optionalKey(Schema.Boolean),
   sidebarFolders: Schema.optionalKey(Schema.Array(SidebarFolder)),

@@ -57,6 +57,7 @@ import {
   GripVerticalIcon,
   CircleDotIcon,
   ListChecksIcon,
+  SquareCheckIcon,
   MessageSquareIcon,
   MilestoneIcon,
   PencilIcon,
@@ -252,6 +253,8 @@ function useRowFoldLevel(
 
 const FOLDER_DROP_PREFIX = "folder:";
 const COLLAPSED_KEY = "t3code:factory-collapsed-folders:v1";
+/** Shares the folders' collapse memory; folder ids never take this form. */
+const COMPLETED_SECTION_KEY = "completed";
 const CollapsedSchema = Schema.Array(Schema.String);
 
 function readCollapsed(): ReadonlySet<string> {
@@ -291,8 +294,13 @@ export function FactoryPage() {
   const active = tasks.filter((task) => task.state !== "done");
   const completed = tasks.filter((task) => task.state === "done");
   const [selectedKey, setSelectedKey] = useState<string | null>(null);
-  // Tasks ticked for one combined review request.
+  // Tasks ticked for one combined review request. The checkboxes show only in select mode.
+  const [selecting, setSelecting] = useState(false);
   const [checkedKeys, setCheckedKeys] = useState<ReadonlySet<string>>(new Set());
+  const stopSelecting = () => {
+    setSelecting(false);
+    setCheckedKeys(new Set());
+  };
   const [collapsed, setCollapsed] = useState<ReadonlySet<string>>(readCollapsed);
   const [folderDialog, setFolderDialog] = useState<
     | { readonly mode: "create" }
@@ -428,7 +436,7 @@ export function FactoryPage() {
           task={task}
           now={now}
           selected={selected}
-          checked={canRequestReview(task) ? checkedKeys.has(key) : null}
+          checked={selecting && canRequestReview(task) ? checkedKeys.has(key) : null}
           onCheckedChange={(next) =>
             setCheckedKeys((current) => {
               const set = new Set(current);
@@ -447,6 +455,7 @@ export function FactoryPage() {
   const checked = active.filter(
     (task) => canRequestReview(task) && checkedKeys.has(factoryTaskKey(task)),
   );
+  const hasReviewable = active.some(canRequestReview);
 
   return (
     <SidebarInset className="h-dvh min-h-0 overflow-hidden overscroll-y-none isolate">
@@ -458,8 +467,18 @@ export function FactoryPage() {
                 <h1>Factory</h1>
               </WorkspaceBreadcrumbItem>
             </WorkspaceBreadcrumb>
-            {checked.length > 0 ? (
-              <CombinedReviewRequest tasks={checked} onDone={() => setCheckedKeys(new Set())} />
+            {selecting && checked.length > 0 ? (
+              <CombinedReviewRequest tasks={checked} onDone={stopSelecting} />
+            ) : null}
+            {selecting ? (
+              <Button size="xs" variant="ghost" onClick={stopSelecting}>
+                Cancel
+              </Button>
+            ) : hasReviewable ? (
+              <Button size="xs" variant="ghost" onClick={() => setSelecting(true)}>
+                <SquareCheckIcon aria-hidden className="size-3.5" />
+                Select
+              </Button>
             ) : null}
             <TokenSavingSwitch />
             {folders.supported ? (
@@ -563,11 +582,30 @@ export function FactoryPage() {
                 </DndContext>
                 {completed.length > 0 ? (
                   <section className="flex flex-col gap-2">
-                    <h2 className="text-sm font-medium text-foreground">
-                      Completed{" "}
-                      <span className="text-muted-foreground tabular-nums">{completed.length}</span>
+                    <h2>
+                      <button
+                        type="button"
+                        aria-expanded={!collapsed.has(COMPLETED_SECTION_KEY)}
+                        onClick={() => toggleFolder(COMPLETED_SECTION_KEY)}
+                        className="flex items-center gap-1.5 rounded-md px-1 py-1 text-start text-sm font-medium text-foreground hover:bg-accent/50"
+                      >
+                        {collapsed.has(COMPLETED_SECTION_KEY) ? (
+                          <ChevronRightIcon
+                            aria-hidden
+                            className="size-3.5 text-muted-foreground"
+                          />
+                        ) : (
+                          <ChevronDownIcon aria-hidden className="size-3.5 text-muted-foreground" />
+                        )}
+                        Completed
+                        <span className="text-muted-foreground tabular-nums">
+                          {completed.length}
+                        </span>
+                      </button>
                     </h2>
-                    <div className="flex flex-col gap-2">{completed.map(renderRow)}</div>
+                    {collapsed.has(COMPLETED_SECTION_KEY) ? null : (
+                      <div className="flex flex-col gap-2">{completed.map(renderRow)}</div>
+                    )}
                   </section>
                 ) : null}
               </div>

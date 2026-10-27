@@ -2090,10 +2090,12 @@ function LegacyFeaturesSection() {
  * The prompt template is long, so it edits in a draft and commits on blur: a server round
  * trip per keystroke would make the field lag.
  */
-function FactoryPromptTemplateField({
+function PromptTemplateField({
+  label,
   value,
   onCommit,
 }: {
+  label: string;
   value: string;
   onCommit: (next: string) => void;
 }) {
@@ -2104,7 +2106,7 @@ function FactoryPromptTemplateField({
       rows={8}
       value={draft ?? value}
       spellCheck={false}
-      aria-label="Factory prompt template"
+      aria-label={label}
       onChange={(event) => setDraft(event.target.value)}
       onBlur={() => {
         if (draft !== null && draft !== value) onCommit(draft);
@@ -3412,6 +3414,33 @@ export function GeneralSettingsPanel() {
             )
           }
         />
+
+        <SettingsRow
+          serverScoped
+          settingKeys={["dailySummaryInstructions"]}
+          {...searchableSetting("daily-summary-instructions")}
+          description="The rules the model follows when it writes a daily summary. The output format and the day's evidence are added automatically."
+          resetAction={
+            settings.dailySummaryInstructions !==
+            DEFAULT_UNIFIED_SETTINGS.dailySummaryInstructions ? (
+              <SettingResetButton
+                label="daily summary prompt"
+                onClick={() =>
+                  updateSettings({
+                    dailySummaryInstructions: DEFAULT_UNIFIED_SETTINGS.dailySummaryInstructions,
+                  })
+                }
+              />
+            ) : null
+          }
+          control={
+            <PromptTemplateField
+              label="Daily summary prompt"
+              value={settings.dailySummaryInstructions}
+              onCommit={(next) => updateSettings({ dailySummaryInstructions: next })}
+            />
+          }
+        />
       </SettingsSection>
 
       <SettingsSection id="about" title="About">
@@ -3496,7 +3525,8 @@ export function GeneralSettingsPanel() {
             ) : null
           }
           control={
-            <FactoryPromptTemplateField
+            <PromptTemplateField
+              label="Factory prompt template"
               value={settings.factoryPromptTemplate}
               onCommit={(next) => updateSettings({ factoryPromptTemplate: next })}
             />

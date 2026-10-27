@@ -3,6 +3,7 @@ import { describe, expect, it } from "vite-plus/test";
 import {
   buildBranchNamePrompt,
   buildCommitMessagePrompt,
+  buildDailySummaryPrompt,
   buildPrContentPrompt,
   buildReviewGuidePrompt,
   buildThreadTitlePrompt,
@@ -415,5 +416,23 @@ describe("normalizeCliError", () => {
 
     expect(result.detail).toBe("Failed to generate a commit message");
     expect(result.message).not.toContain("secret-token");
+  });
+});
+
+describe("buildDailySummaryPrompt", () => {
+  it("follows the user's instructions and keeps the output format the parser needs", () => {
+    const result = buildDailySummaryPrompt({
+      day: "2026-10-26",
+      facts: "commit abc fix cursor",
+      keptItems: [],
+      excludedItems: [],
+      instructions: "Write in Hungarian. Three items at most.",
+    });
+
+    expect(result.prompt.startsWith("Write in Hungarian. Three items at most.")).toBe(true);
+    expect(result.prompt).not.toContain("Twenty words maximum");
+    expect(result.prompt).toContain("Return a JSON object with key: items.");
+    expect(result.prompt).toContain("The day is 2026-10-26.");
+    expect(result.prompt).toContain("commit abc fix cursor");
   });
 });
