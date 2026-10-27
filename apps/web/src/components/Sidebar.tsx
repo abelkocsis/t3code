@@ -40,6 +40,10 @@ import {
   threadWokeAt,
 } from "@t3tools/client-runtime/state/thread-settled";
 import { createInboxReturnTracker } from "@t3tools/client-runtime/state/thread-inbox";
+import {
+  isThreadAttentionUnseen,
+  resolveThreadAttention,
+} from "@t3tools/client-runtime/state/thread-attention";
 import { formatDiffCount } from "@t3tools/client-runtime/diff-count";
 import {
   resolveSettledThreadTimestamp,
@@ -1051,6 +1055,45 @@ function WorkingDuration(props: { startedAt: string | null }) {
   return <WorkingDurationLabel startedMs={startedMs} />;
 }
 
+interface ThreadTopStatus {
+  readonly label: string;
+  readonly icon: "working" | "waiting" | "approval" | "input" | "failed" | "woke" | "done";
+  readonly className: string;
+}
+
+/** The status both row shapes show, so a compact row still says why it wants attention. */
+function ThreadStatusLabel(props: {
+  readonly status: ThreadTopStatus;
+  readonly durationStartedAt: string | null | undefined;
+}) {
+  const { status } = props;
+  return (
+    <span className={cn("inline-flex items-center gap-1 font-medium", status.className)}>
+      {status.icon === "working" ? (
+        <CircleDashedIcon aria-hidden className="size-4 shrink-0" />
+      ) : status.icon === "waiting" ? (
+        <CircleDotDashedIcon aria-hidden className="size-4 shrink-0" />
+      ) : status.icon === "input" ? (
+        <MessageCircleQuestionIcon aria-hidden className="size-4 shrink-0" />
+      ) : status.icon === "approval" ? (
+        <ShieldQuestionIcon aria-hidden className="size-4 shrink-0" />
+      ) : status.icon === "failed" ? (
+        <CircleAlertIcon aria-hidden className="size-4 shrink-0" />
+      ) : status.icon === "done" ? (
+        <CircleCheckIcon aria-hidden className="size-4 shrink-0" />
+      ) : null}
+      {/* The label alone is the live region: a role="status" wrapper around the ticking
+        duration would make screen readers announce every second. */}
+      <span role="status">{status.label}</span>
+      {props.durationStartedAt !== undefined ? (
+        <span aria-hidden>
+          <WorkingDuration startedAt={props.durationStartedAt} />
+        </span>
+      ) : null}
+    </span>
+  );
+}
+
 // Self-ticking so only this span re-renders each second, not the whole row;
 // the shared tick lands every working row's update in the same frame.
 function WorkingDurationLabel(props: { startedMs: number }) {
@@ -1918,6 +1961,17 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThreadRowP
       isFactoryGateUnseen(attention.gateAt, lastVisitedAt)
     : hasUnseenCompletion({ ...thread, lastVisitedAt });
   const status = attention?.status ?? resolveSidebarThreadStatus(thread);
+  // The phase behind an unseen row, so the highlight names what is waiting. Opening the
+  // thread clears it; the status label stays.
+  const threadAttention = attention ? null : resolveThreadAttention({ ...thread, status });
+  const unseenPhase = attention
+    ? isUnread
+      ? "completed"
+      : null
+    : threadAttention !== null &&
+        isThreadAttentionUnseen({ attention: threadAttention, lastVisitedAt })
+      ? threadAttention.phase
+      : null;
   const lastVisitedDate = lastVisitedAt === undefined ? null : parseTimestampDate(lastVisitedAt);
   const wokeAtDate = props.wokeAt === null ? null : parseTimestampDate(props.wokeAt);
   const isWoke =
@@ -1931,7 +1985,7 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThreadRowP
     isActive: props.isActive,
     isSelected,
   });
-  const topStatus =
+  const topStatus: ThreadTopStatus | null =
     status === "working"
       ? {
           label: thread.goal?.status === "active" ? "Goal" : "Working",
@@ -1982,6 +2036,12 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThreadRowP
                       }
                     : null;
   const isWokeStatus = topStatus?.icon === "woke";
+  const statusDurationStartedAt =
+    status === "working"
+      ? resolveWorkingStartedAt(thread)
+      : status === "waiting"
+        ? (thread.latestRun?.completedAt ?? null)
+        : undefined;
 
   const branchMismatch = resolveLocalCheckoutBranchMismatch({
     effectiveEnvMode: thread.worktreePath === null ? "local" : "worktree",
@@ -2185,6 +2245,13 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThreadRowP
     isFileDragOver && !props.isActive && !isSelected && "bg-sidebar-row-hover",
     props.sortable?.isDragging &&
       "bg-sidebar bg-linear-to-b from-sidebar-row-active to-sidebar-row-active text-sidebar-foreground opacity-100 shadow-lg",
+    // An unseen row carries a bar, a wash, and a ring in the colour of what it wants.
+    unseenPhase !== null &&
+      "before:absolute before:inset-y-0 before:left-0 before:w-[4px] before:content-[''] ring-1 ring-inset",
+    unseenPhase === "waiting_for_approval" && "before:bg-warning bg-warning/15 ring-warning/35",
+    unseenPhase === "waiting_for_input" && "before:bg-info bg-info/15 ring-info/35",
+    unseenPhase === "failed" && "before:bg-error bg-error/15 ring-error/35",
+    unseenPhase === "completed" && "before:bg-success bg-success/15 ring-success/35",
   );
   const sortable = props.sortable;
   const sortableRootProps = sortable
@@ -2244,7 +2311,7 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThreadRowP
         aria-hidden
         className={cn(
           "min-w-0 flex-1 text-sm transition-opacity motion-reduce:transition-none",
-          shouldRecede ? "font-normal" : "font-medium",
+          unseenPhase !== null ? "font-semibold" : shouldRecede ? "font-normal" : "font-medium",
           variant === "card"
             ? cn(
                 "truncate",
@@ -2404,7 +2471,9 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThreadRowP
             <span
               className={cn(
                 "flex shrink-0 items-center transition-opacity",
-                (!props.isActive || variantAction === "unsettle") &&
+                // Live compact rows keep their colour; they are still the work.
+                variantAction !== "settle" &&
+                  (!props.isActive || variantAction === "unsettle") &&
                   "opacity-40 grayscale group-focus-within/sidebar-row:opacity-100 group-focus-within/sidebar-row:grayscale-0 group-hover/sidebar-row:opacity-100 group-hover/sidebar-row:grayscale-0",
               )}
             >
@@ -2457,6 +2526,13 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThreadRowP
                       />
                       <TooltipPopup side="top">Dismiss Woke notification</TooltipPopup>
                     </Tooltip>
+                  ) : variantAction === "settle" && topStatus ? (
+                    <span className="text-xs">
+                      <ThreadStatusLabel
+                        status={topStatus}
+                        durationStartedAt={statusDurationStartedAt}
+                      />
+                    </span>
                   ) : (
                     <span className="text-xs">
                       <RelativeTimeLabel
@@ -2624,39 +2700,10 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThreadRowP
                           <TooltipPopup side="top">Dismiss Woke notification</TooltipPopup>
                         </Tooltip>
                       ) : (
-                        <span
-                          className={cn(
-                            "inline-flex items-center gap-1 font-medium",
-                            topStatus.className,
-                          )}
-                        >
-                          {topStatus.icon === "working" ? (
-                            <CircleDashedIcon aria-hidden className="size-4 shrink-0" />
-                          ) : topStatus.icon === "waiting" ? (
-                            <CircleDotDashedIcon aria-hidden className="size-4 shrink-0" />
-                          ) : topStatus.icon === "input" ? (
-                            <MessageCircleQuestionIcon aria-hidden className="size-4 shrink-0" />
-                          ) : topStatus.icon === "approval" ? (
-                            <ShieldQuestionIcon aria-hidden className="size-4 shrink-0" />
-                          ) : topStatus.icon === "failed" ? (
-                            <CircleAlertIcon aria-hidden className="size-4 shrink-0" />
-                          ) : topStatus.icon === "done" ? (
-                            <CircleCheckIcon aria-hidden className="size-4 shrink-0" />
-                          ) : null}
-                          {/* The label alone is the live region: a role="status"
-                            wrapper around the ticking duration would make
-                            screen readers announce every second. */}
-                          <span role="status">{topStatus.label}</span>
-                          {status === "working" ? (
-                            <span aria-hidden>
-                              <WorkingDuration startedAt={resolveWorkingStartedAt(thread)} />
-                            </span>
-                          ) : status === "waiting" ? (
-                            <span aria-hidden>
-                              <WorkingDuration startedAt={thread.latestRun?.completedAt ?? null} />
-                            </span>
-                          ) : null}
-                        </span>
+                        <ThreadStatusLabel
+                          status={topStatus}
+                          durationStartedAt={statusDurationStartedAt}
+                        />
                       )
                     ) : (
                       <RelativeTimeLabel timestamp={threadTimeTimestamp(thread)} />

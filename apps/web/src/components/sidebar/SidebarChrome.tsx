@@ -6,7 +6,10 @@ import { Link, useLocation, useNavigate } from "@tanstack/react-router";
 import { useEnvironmentIdentificationMode } from "../../hooks/useSettings";
 import { useUpstreamRelease } from "../../hooks/useUpstreamRelease";
 import { cn } from "../../lib/utils";
+import { useThreadShells } from "../../state/entities";
 import { usePullRequestsSupported } from "../../state/environments";
+import { useForkThreadStates } from "../../state/fork";
+import { collectFactoryTasks, countFactoryTasksWaiting } from "../factory/factory.logic";
 import { T3Wordmark } from "../T3Wordmark";
 import {
   resolveEnvironmentIdentificationPillLabel,
@@ -177,6 +180,26 @@ function SidebarUtilityItem({
   );
 }
 
+// Its own component so thread updates re-render this icon only, not the whole footer menu.
+function SidebarFactoryItem({ onClick }: { onClick: () => void }) {
+  const threads = useThreadShells();
+  const states = useForkThreadStates();
+  const waiting = countFactoryTasksWaiting(collectFactoryTasks(threads, states));
+  return (
+    <SidebarUtilityItem
+      icon={<FactoryIcon />}
+      label="Factory"
+      onClick={onClick}
+      badge={waiting > 0}
+      {...(waiting > 0
+        ? {
+            badgeLabel: `Factory. ${waiting} ${waiting === 1 ? "task waits" : "tasks wait"} on you`,
+          }
+        : {})}
+    />
+  );
+}
+
 export const SidebarUtilityMenu = memo(function SidebarUtilityMenu() {
   const navigate = useNavigate();
   const navigateToMainApp = useNavigateToMainApp();
@@ -253,7 +276,7 @@ export const SidebarUtilityMenu = memo(function SidebarUtilityMenu() {
             label="Usage"
             onClick={handleUsageClick}
           />
-          <SidebarUtilityItem icon={<FactoryIcon />} label="Factory" onClick={handleFactoryClick} />
+          <SidebarFactoryItem onClick={handleFactoryClick} />
         </>
       )}
       <SidebarUpdatePill />
