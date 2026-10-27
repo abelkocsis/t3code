@@ -1522,10 +1522,12 @@ export function RightPanelTabs(props: RightPanelTabsProps) {
         {ownsDesktopTitleBar && !props.layoutControls ? (
           <span aria-hidden className="hidden w-24 shrink-0 wco:block" />
         ) : null}
+        {/* Electron lets a later drag region win over the controls under it, so the strip
+          spans the measured cluster, however many toggles it holds. */}
         {ownsDesktopTitleBar ? (
           <span
             aria-hidden
-            className="pointer-events-none fixed top-[var(--workspace-controls-top)] right-[var(--workspace-controls-right)] h-[var(--workspace-topbar-height)] w-28 [-webkit-app-region:no-drag]"
+            className="pointer-events-none fixed top-[var(--workspace-controls-top)] right-0 h-[var(--workspace-topbar-height)] w-[var(--workspace-controls-inset,7rem)] [-webkit-app-region:no-drag]"
           />
         ) : null}
       </div>
