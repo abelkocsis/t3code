@@ -164,6 +164,7 @@ import { registerSettleAndAdvance } from "../settleAndAdvance";
 import { startNewThreadFromContext } from "../lib/chatThreadActions";
 import { useClientSettings } from "../hooks/useSettings";
 import { useCopyToClipboard } from "../hooks/useCopyToClipboard";
+import { useExportThread } from "../hooks/useExportThread";
 import { useLocalStorage } from "../hooks/useLocalStorage";
 import { useNowMinute } from "../hooks/useNowMinute";
 import { useNowSecond } from "../hooks/useNowSecond";
@@ -3060,6 +3061,7 @@ export default function Sidebar() {
   const projectGroupingSettings = useClientSettings(selectProjectGroupingSettings);
   const forkThreadStates = useForkThreadStates();
   const { addToFactory, removeFromFactory } = useFactoryMembership();
+  const exportThread = useExportThread();
   const {
     settleThread,
     unsettleThread,
@@ -5023,6 +5025,12 @@ export default function Sidebar() {
             return;
           case "copy-thread-id":
             copyThreadIdToClipboard(thread.id, { threadId: thread.id });
+            return;
+          case "export-human":
+            await exportThread(thread, "human");
+            return;
+          case "export-agent":
+            await exportThread(thread, "agent");
             return;
           case "archive": {
             if (confirmThreadArchive) {

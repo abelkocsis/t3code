@@ -258,6 +258,18 @@ and copying a thread reference. A copied reference uses the thread's pull reques
 link when available, otherwise its thread ID. See [keybindings](./keybindings.md)
 for custom configuration.
 
+## Share a thread as a file
+
+On web and desktop, right-click a thread and choose **Export**, or search the
+command palette for "export". **For a human** saves your messages and the agent's
+answers as readable Markdown. **For an agent** also saves the branch, worktree,
+pull requests, model, plans, the latest to-do list, and a short record of commands
+and file changes, so another agent can continue the work. Long command output is
+shortened and file diffs are left out, so the receiving agent should read the
+branch itself. Attachments appear by name only.
+
+An export is a copy at that moment. T3 Code cannot import it back as a thread.
+
 ## Inspect agent work
 
 **Limited** means the provider stopped on a usage or rate limit. The conversation

@@ -110,6 +110,7 @@ describe("buildThreadActionMenuItems", () => {
       "new-thread-on-branch",
       "mark-unread",
       "copy",
+      "export",
       "project-settings",
     ]);
     const allowed = buildThreadActionMenuItems({ ...baseState, canOperate: true });
@@ -135,6 +136,7 @@ describe("buildThreadActionMenuItems", () => {
       "mark-unread",
       "factory:add",
       "copy",
+      "export",
       "project-settings",
       "archive",
       "delete",
@@ -175,12 +177,13 @@ describe("buildThreadActionMenuItems", () => {
   it("groups project settings with utility actions before archive", () => {
     const items = buildThreadActionMenuItems(baseState);
     const copyIndex = items.findIndex((item) => item.id === "copy");
-    expect(items[copyIndex + 1]).toMatchObject({
+    expect(items[copyIndex + 1]?.id).toBe("export");
+    expect(items[copyIndex + 2]).toMatchObject({
       id: "project-settings",
       label: "Project settings",
       icon: "settings",
     });
-    expect(items[copyIndex + 2]?.id).toBe("archive");
+    expect(items[copyIndex + 3]?.id).toBe("archive");
   });
 
   it("offers project filtering only for surfaces with a scoped thread list", () => {

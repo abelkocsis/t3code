@@ -58,6 +58,7 @@ import {
 import { useLocation, useNavigate } from "@tanstack/react-router";
 import {
   ArrowLeftIcon,
+  DownloadIcon,
   ExternalLinkIcon,
   CalendarDaysIcon,
   ScrollTextIcon,
@@ -102,6 +103,7 @@ import { isDesktopLocalConnectionTarget } from "../connection/desktopLocal";
 import { useDesktopLocalBootstraps } from "../connection/useDesktopLocalBootstraps";
 import { useHandleNewThread } from "../hooks/useHandleNewThread";
 import { useThreadFolders } from "../hooks/useThreadFolders";
+import { useExportThread } from "../hooks/useExportThread";
 import { requestFolderName } from "./FolderNameDialog";
 import { useOpenPanelPullRequestUrl } from "../hooks/useOpenPanelPullRequestUrl";
 import { writeTextToClipboard } from "../hooks/useCopyToClipboard";
@@ -779,6 +781,7 @@ function OpenCommandPaletteDialog(props: {
   const { activeDraftThread, activeThread, defaultProjectRef, handleNewThread } =
     useHandleNewThread();
   const threadFolders = useThreadFolders();
+  const exportThread = useExportThread();
   const paletteRouteTarget = useThreadRouteTarget();
   const projects = useProjects();
   const referenceThreadRef =
@@ -1663,6 +1666,27 @@ function OpenCommandPaletteDialog(props: {
         if (name !== null) await threadFolders.createFolder(name);
       },
     });
+  }
+
+  if (activeThread) {
+    actionItems.push(
+      {
+        kind: "action",
+        value: "action:export-thread-human",
+        title: "Export thread for a human",
+        searchTerms: ["export", "share", "save", "transcript", "markdown", "download"],
+        icon: <DownloadIcon className={ITEM_ICON_CLASS} />,
+        run: () => exportThread(activeThread, "human"),
+      },
+      {
+        kind: "action",
+        value: "action:export-thread-agent",
+        title: "Export thread for an agent",
+        searchTerms: ["export", "share", "save", "handoff", "transcript", "markdown", "download"],
+        icon: <DownloadIcon className={ITEM_ICON_CLASS} />,
+        run: () => exportThread(activeThread, "agent"),
+      },
+    );
   }
 
   if (activeThreadId && supportsThreadFind) {

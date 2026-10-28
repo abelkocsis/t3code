@@ -49,6 +49,7 @@ import {
 import { buildPhysicalToLogicalProjectKeyMap } from "../sidebarProjectGrouping";
 import { threadRuntimeCanArchive } from "@t3tools/client-runtime/state/models";
 import { useCopyToClipboard } from "./useCopyToClipboard";
+import { useExportThread } from "./useExportThread";
 import { useNewThreadHandler } from "./useHandleNewThread";
 import { useClientSettings } from "./useSettings";
 import { useThreadActions } from "./useThreadActions";
@@ -103,6 +104,7 @@ export function useThreadActionMenu(input: {
   const setThreadFolder = useSetThreadFolder();
   const handleNewThread = useNewThreadHandler();
   const { addToFactory, removeFromFactory } = useFactoryMembership();
+  const exportThread = useExportThread();
   const confirmThreadDelete = useClientSettings((s) => s.confirmThreadDelete);
   const confirmThreadArchive = useClientSettings((s) => s.confirmThreadArchive);
   const timestampFormat = useClientSettings((s) => s.timestampFormat);
@@ -332,6 +334,12 @@ export function useThreadActionMenu(input: {
           return;
         case "copy-thread-id":
           copyThreadIdToClipboard(thread.id, { threadId: thread.id });
+          return;
+        case "export-human":
+          await exportThread(thread, "human");
+          return;
+        case "export-agent":
+          await exportThread(thread, "agent");
           return;
         case "archive": {
           if (confirmThreadArchive) {
