@@ -15,6 +15,9 @@ BRANCH="bitsafe"
 # app with no update feed at all, which is the difference between colleagues
 # updating themselves and colleagues re-downloading by hand forever.
 UPDATE_REPOSITORY="abelkocsis/t3code"
+# The Homebrew tap that pins this fork's cask to a version and a checksum.
+TAP_REPOSITORY="DLC-link/homebrew-tap"
+CASK_PATH="Casks/t3-code-bitsafe.rb"
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$REPO_ROOT"
@@ -127,9 +130,10 @@ for extra in "${DMG}.blockmap" "${ZIP}.blockmap"; do
   [ -f "$extra" ] && ASSETS+=("$extra")
 done
 
-# The Homebrew cask in abelkocsis/homebrew-t3code downloads
+# The old cask in abelkocsis/homebrew-t3code downloads
 # releases/latest/download/T3-Code-arm64.dmg. That redirect only resolves a
-# fixed asset name, so every release also carries the dmg under this name.
+# fixed asset name, so every release also carries the dmg under this name
+# until everyone has moved to the dlc-link/tap cask.
 STABLE_DMG="release/T3-Code-arm64.dmg"
 cp -f "$DMG" "$STABLE_DMG"
 ASSETS+=("$STABLE_DMG")
@@ -171,3 +175,32 @@ and offers the update." \
   "$DMG" "$ZIP" "$FEED" ${ASSETS[@]+"${ASSETS[@]}"}
 
 say "Published ${TAG}. Colleagues on an earlier build will be offered it."
+
+# ── Homebrew ─────────────────────────────────────────────────────────────────
+# The tap's main branch requires a signed commit and one approving review, so
+# the cask bump is a pull request. The contents API commits as the gh user and
+# GitHub signs that commit.
+say "Opening the cask pull request in ${TAP_REPOSITORY}…"
+SHA256="$(shasum -a 256 "$DMG" | cut -d' ' -f1)"
+CASK_BRANCH="release/cask-${VERSION}"
+UPDATED_CASK="$(mktemp)"
+BASE_SHA="$(gh api "repos/${TAP_REPOSITORY}/branches/main" --jq .commit.sha)"
+CASK_FILE_SHA="$(gh api "repos/${TAP_REPOSITORY}/contents/${CASK_PATH}?ref=${BASE_SHA}" --jq .sha)"
+gh api "repos/${TAP_REPOSITORY}/contents/${CASK_PATH}?ref=${BASE_SHA}" --jq .content | base64 -d > "$UPDATED_CASK"
+sed -i '' -E \
+  -e "s|^  version \".*\"$|  version \"${VERSION}\"|" \
+  -e "s|^  sha256 \".*\"$|  sha256 \"${SHA256}\"|" \
+  "$UPDATED_CASK"
+for line in "version \"${VERSION}\"" "sha256 \"${SHA256}\""; do
+  grep -qF "  $line" "$UPDATED_CASK" || die "${CASK_PATH} has no line matching: $line"
+done
+gh api "repos/${TAP_REPOSITORY}/git/refs" -f ref="refs/heads/${CASK_BRANCH}" -f sha="$BASE_SHA" > /dev/null
+gh api --method PUT "repos/${TAP_REPOSITORY}/contents/${CASK_PATH}" -f branch="$CASK_BRANCH" \
+  -f sha="$CASK_FILE_SHA" -f message="Update the T3 Code (BitSafe) cask to ${VERSION}" \
+  -f content="$(base64 -i "$UPDATED_CASK")" > /dev/null
+gh pr create --repo "$TAP_REPOSITORY" --base main --head "$CASK_BRANCH" \
+  --title "Update the T3 Code (BitSafe) cask to ${VERSION}" \
+  --body "Points the cask at the [${TAG} release](https://github.com/${UPDATE_REPOSITORY}/releases/tag/${TAG}). After it merges, \`brew upgrade --cask t3-code-bitsafe\` installs it."
+rm -f "$UPDATED_CASK"
+
+say "Cask pull request opened. It needs one approving review before brew sees ${VERSION}."
