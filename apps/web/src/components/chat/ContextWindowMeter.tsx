@@ -4,7 +4,11 @@ import type {
   UsageLimitSourceSnapshots,
   UsageLimitsReport,
 } from "@t3tools/contracts";
-import { collectProviderUsageLimits, limitsNotice } from "@t3tools/shared/usageLimits";
+import {
+  collectProviderUsageLimits,
+  limitsNotice,
+  remainingPercent,
+} from "@t3tools/shared/usageLimits";
 import { useState } from "react";
 
 import { Button } from "../ui/button";
@@ -14,7 +18,9 @@ import { LimitWindowsStacked } from "../usage/UsageLimits";
 import {
   formatContextWindowCompactionMessage,
   formatContextWindowCost,
+  usageLimitRingWindow,
 } from "./ContextWindowMeter.logic";
+import { usePrimarySettings } from "../../hooks/useSettings";
 import { Minimize2Icon } from "lucide-react";
 import { composerFloatingLayerProps } from "./composerEventScope";
 
@@ -73,15 +79,9 @@ export function ContextWindowMeter(props: {
   };
   const usedPercentage = formatPercentage(usage.usedPercentage);
   const normalizedPercentage = Math.max(0, Math.min(100, usage.usedPercentage ?? 0));
-  const radius = 9.75;
-  const circumference = 2 * Math.PI * radius;
-  const dashOffset = circumference * (1 - normalizedPercentage / 100);
   const totalProcessedTokens = usage.totalProcessedTokens ?? null;
   const showTotalProcessed = totalProcessedTokens !== null && totalProcessedTokens > 0;
-  const isOverloaded = normalizedPercentage > 90;
-  const usageColor = isOverloaded
-    ? "var(--color-error)"
-    : "color-mix(in oklab, var(--color-muted-foreground) 72%, transparent)";
+  const usageColor = meterColor(normalizedPercentage);
 
   return (
     <Popover
@@ -104,34 +104,7 @@ export function ContextWindowMeter(props: {
                 : `Context window ${formatContextWindowTokens(usage.usedTokens)} tokens used`
             }
           >
-            <span className="relative flex size-5 items-center justify-center">
-              <svg
-                viewBox="0 0 24 24"
-                className="-rotate-90 absolute inset-0 size-full transform-gpu mx-0!"
-                aria-hidden="true"
-              >
-                <circle
-                  cx="12"
-                  cy="12"
-                  r={radius}
-                  fill="none"
-                  className="stroke-muted-foreground/24"
-                  strokeWidth="3"
-                />
-                <circle
-                  cx="12"
-                  cy="12"
-                  r={radius}
-                  fill="none"
-                  stroke={usageColor}
-                  strokeWidth="3"
-                  strokeLinecap="round"
-                  strokeDasharray={circumference}
-                  strokeDashoffset={dashOffset}
-                  className="transition-[stroke-dashoffset,stroke] duration-500 ease-out motion-reduce:transition-none"
-                />
-              </svg>
-            </span>
+            <MeterRing percent={normalizedPercentage} color={usageColor} />
           </Button>
         }
       />
@@ -220,6 +193,118 @@ export function ContextWindowMeter(props: {
               ) : null}
             </>
           ) : null}
+        </div>
+      </PopoverPopup>
+    </Popover>
+  );
+}
+
+function meterColor(usedPercent: number): string {
+  return usedPercent > 90
+    ? "var(--color-error)"
+    : "color-mix(in oklab, var(--color-muted-foreground) 72%, transparent)";
+}
+
+function MeterRing({ percent, color }: { readonly percent: number; readonly color: string }) {
+  const radius = 9.75;
+  const circumference = 2 * Math.PI * radius;
+  const dashOffset = circumference * (1 - percent / 100);
+  return (
+    <span className="relative flex size-5 items-center justify-center">
+      <svg
+        viewBox="0 0 24 24"
+        className="-rotate-90 absolute inset-0 size-full transform-gpu mx-0!"
+        aria-hidden="true"
+      >
+        <circle
+          cx="12"
+          cy="12"
+          r={radius}
+          fill="none"
+          className="stroke-muted-foreground/24"
+          strokeWidth="3"
+        />
+        <circle
+          cx="12"
+          cy="12"
+          r={radius}
+          fill="none"
+          stroke={color}
+          strokeWidth="3"
+          strokeLinecap="round"
+          strokeDasharray={circumference}
+          strokeDashoffset={dashOffset}
+          className="transition-[stroke-dashoffset,stroke] duration-500 ease-out motion-reduce:transition-none"
+        />
+      </svg>
+    </span>
+  );
+}
+
+/**
+ * A thread with no messages has no context to measure, so its ring shows the
+ * session limit instead, read the same way as the usage bars (used or left).
+ */
+export function UsageLimitsMeter(props: {
+  usageLimitProviderInstanceId: ProviderInstanceId;
+  providers: ReadonlyArray<ServerProvider>;
+  usageLimitSources: UsageLimitSourceSnapshots;
+}) {
+  const { usageLimitProviderInstanceId, providers, usageLimitSources } = props;
+  const fillUsed = usePrimarySettings((settings) => settings.usageBarsFillUsed);
+  const [opened, setOpened] = useState<{
+    readonly report: UsageLimitsReport;
+    readonly now: number;
+  } | null>(null);
+  // `now` only stamps the report's createdAt, so a constant keeps render pure.
+  const ringWindow = usageLimitRingWindow(
+    collectProviderUsageLimits(usageLimitProviderInstanceId, providers, usageLimitSources, 0),
+  );
+  if (!ringWindow) return null;
+  const remaining = remainingPercent(ringWindow);
+  const fill = fillUsed ? 100 - remaining : remaining;
+  const reading = fillUsed ? `${100 - remaining}% used` : `${remaining}% left`;
+
+  return (
+    <Popover
+      onOpenChange={(open) => {
+        if (!open) return;
+        const now = Date.now();
+        const report = collectProviderUsageLimits(
+          usageLimitProviderInstanceId,
+          providers,
+          usageLimitSources,
+          now,
+        );
+        setOpened(report && report.accounts.length > 0 ? { report, now } : null);
+      }}
+    >
+      <PopoverTrigger
+        openOnHover
+        delay={150}
+        closeDelay={0}
+        render={
+          <Button
+            size="icon-sm"
+            variant="ghost-muted"
+            className="size-7"
+            aria-label={`${ringWindow.label} limit ${reading}`}
+          >
+            <MeterRing percent={fill} color={meterColor(100 - remaining)} />
+          </Button>
+        }
+      />
+      <PopoverPopup
+        {...composerFloatingLayerProps}
+        tooltipStyle
+        side="top"
+        align="end"
+        padding="none"
+        width="md"
+        className="text-left whitespace-normal"
+      >
+        <div className="flex flex-col gap-2 p-(--floating-content-inset)">
+          {opened ? <UsageLimitsSummary report={opened.report} now={opened.now} /> : null}
         </div>
       </PopoverPopup>
     </Popover>

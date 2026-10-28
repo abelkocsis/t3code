@@ -1,4 +1,10 @@
-import { ProviderDriverKind, ProviderInstanceId, type ServerProvider } from "@t3tools/contracts";
+import {
+  ProviderDriverKind,
+  ProviderInstanceId,
+  type ServerProvider,
+  type ServerProviderUsageWindow,
+  type UsageLimitsReport,
+} from "@t3tools/contracts";
 import { describe, expect, it } from "vite-plus/test";
 import { deriveProviderInstanceEntries } from "../../providerInstances";
 import {
@@ -9,6 +15,7 @@ import {
   resolveContextWindowModelDisplayName,
   shouldOfferResumeCompaction,
   shouldReserveContextWindowMeter,
+  usageLimitRingWindow,
 } from "./ContextWindowMeter.logic";
 
 function claudeProvider(input: {
@@ -305,5 +312,61 @@ describe("formatContextWindowCost", () => {
   it("keeps ordinary and sub-cent ACP costs readable", () => {
     expect(formatContextWindowCost({ amount: 0.42, currency: "USD" })).toBe("USD 0.42");
     expect(formatContextWindowCost({ amount: 0.0042, currency: "USD" })).toBe("USD 0.0042");
+  });
+});
+
+describe("usageLimitRingWindow", () => {
+  const window = (
+    id: string,
+    kind: ServerProviderUsageWindow["kind"],
+    usedPercent: number,
+  ): ServerProviderUsageWindow => ({ id, kind, label: id, usedPercent });
+  const report = (
+    ...accounts: ReadonlyArray<UsageLimitsReport["accounts"][number]["limits"]>
+  ): UsageLimitsReport => ({
+    createdAt: "2026-10-28T12:00:00.000Z",
+    accounts: accounts.map((limits, index) => ({
+      id: `account-${index}`,
+      driver: ProviderDriverKind.make("claudeAgent"),
+      label: `Account ${index}`,
+      limits,
+    })),
+    notices: [],
+  });
+  const checkedAt = "2026-10-28T12:00:00.000Z";
+
+  it("shows the session window even when a weekly window is fuller", () => {
+    expect(
+      usageLimitRingWindow(
+        report({
+          checkedAt,
+          windows: [window("weekly", "weekly", 80), window("session", "session", 41)],
+        }),
+      )?.id,
+    ).toBe("session");
+  });
+
+  it("falls back to the most-used window when there is no session window", () => {
+    expect(
+      usageLimitRingWindow(
+        report({
+          checkedAt,
+          windows: [window("weekly", "weekly", 20), window("monthly", "monthly", 55)],
+        }),
+      )?.id,
+    ).toBe("monthly");
+  });
+
+  it("skips accounts that cannot report limits", () => {
+    expect(
+      usageLimitRingWindow(
+        report(
+          { checkedAt, windows: [], unavailable: { reason: "unsupported" } },
+          { checkedAt, windows: [window("session", "session", 10)] },
+        ),
+      )?.id,
+    ).toBe("session");
+    expect(usageLimitRingWindow(report({ checkedAt, windows: [] }))).toBeNull();
+    expect(usageLimitRingWindow(null)).toBeNull();
   });
 });

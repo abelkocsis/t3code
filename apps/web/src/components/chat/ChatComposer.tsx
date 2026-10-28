@@ -328,7 +328,11 @@ import {
   renderProviderTraitsMenuContent,
   renderProviderTraitsPicker,
 } from "./composerProviderState";
-import { ContextWindowMeter, ContextWindowMeterPlaceholder } from "./ContextWindowMeter";
+import {
+  ContextWindowMeter,
+  ContextWindowMeterPlaceholder,
+  UsageLimitsMeter,
+} from "./ContextWindowMeter";
 import {
   providerSupportsManualCompaction,
   resolveContextWindowModelDisplayName,
@@ -1356,6 +1360,7 @@ const ComposerFooterPrimaryActions = memo(function ComposerFooterPrimaryActions(
   canOperateThread: boolean;
   activeContextWindow: ContextWindowSnapshot | null;
   reserveContextWindowMeter: boolean;
+  showUsageLimitsMeter: boolean;
   usageLimitProviderInstanceId: ProviderInstanceId;
   providers: ReadonlyArray<ServerProvider>;
   usageLimitSources: UsageLimitSourceSnapshots;
@@ -1410,6 +1415,12 @@ const ComposerFooterPrimaryActions = memo(function ComposerFooterPrimaryActions(
         />
       ) : props.reserveContextWindowMeter ? (
         <ContextWindowMeterPlaceholder />
+      ) : props.showUsageLimitsMeter ? (
+        <UsageLimitsMeter
+          usageLimitProviderInstanceId={props.usageLimitProviderInstanceId}
+          providers={props.providers}
+          usageLimitSources={props.usageLimitSources}
+        />
       ) : null}
       <ComposerPrimaryActions
         compact={props.compact}
@@ -7372,6 +7383,10 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
                       settings.contextWindowMeterEnabled ? activeContextWindow : null
                     }
                     reserveContextWindowMeter={reserveContextWindowMeter}
+                    showUsageLimitsMeter={
+                      settings.contextWindowMeterEnabled &&
+                      !threadShellHasStarted(props.activeThreadShell)
+                    }
                     usageLimitProviderInstanceId={selectedInstanceId}
                     providers={providerStatuses}
                     usageLimitSources={usageLimitSources}

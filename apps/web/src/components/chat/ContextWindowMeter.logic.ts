@@ -1,4 +1,11 @@
-import type { ModelSelection, ProviderDriverKind, ProviderInstanceId } from "@t3tools/contracts";
+import type {
+  ModelSelection,
+  ProviderDriverKind,
+  ProviderInstanceId,
+  ServerProviderUsageWindow,
+  UsageLimitsReport,
+} from "@t3tools/contracts";
+import { limitsNotice } from "@t3tools/shared/usageLimits";
 import {
   CLAUDE_RESUME_COMPACTION_NEVER_ANSWER,
   COMPACTION_SUGGESTION_MIN_TOKENS,
@@ -109,6 +116,23 @@ export function formatContextWindowCompactionMessage(
   return modelDisplayName
     ? `Context for ${modelDisplayName} compacts automatically when needed.`
     : "Context compacts automatically when needed.";
+}
+
+/**
+ * The window a new thread's ring shows: the session window of the first
+ * account that reports limits, or its most-used window when the provider has
+ * no session window.
+ */
+export function usageLimitRingWindow(
+  report: UsageLimitsReport | null,
+): ServerProviderUsageWindow | null {
+  const account = report?.accounts.find((candidate) => limitsNotice(candidate.limits) === null);
+  if (!account) return null;
+  const { windows } = account.limits;
+  return (
+    windows.find((window) => window.kind === "session") ??
+    windows.reduce((most, window) => (window.usedPercent > most.usedPercent ? window : most))
+  );
 }
 
 export function shouldReserveContextWindowMeter(input: {
