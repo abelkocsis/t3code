@@ -15,6 +15,7 @@ import type {
 import {
   FACTORY_PHASE_MARKER,
   FACTORY_SIGNING_RULE,
+  FACTORY_IGNORE_CI_RULE,
   factoryHeldWorkMessage,
 } from "@t3tools/contracts";
 import { visibleThreadPullRequests } from "@t3tools/shared/threadPullRequests";
@@ -350,14 +351,18 @@ function withoutClearedWork(factory: ThreadFactory, target: FactoryReviewTarget)
 export function decideFactoryReview(
   input: FactoryReviewInput,
   now: string,
-  options: { readonly tokenSaving: boolean } = { tokenSaving: false },
+  options: { readonly tokenSaving: boolean; readonly ignoreCi?: boolean } = { tokenSaving: false },
 ): FactoryReviewDecision | null {
   if (input.thread.archivedAt !== null) return null;
   const target = input.pullRequest;
   if (target === null) return null;
-  const factory = withoutClearedWork(input.factory, target);
+  // Treat CI as passing only inside this policy; the host result stays visible.
+  const effectiveTarget = options.ignoreCi
+    ? { ...target, view: { ...target.view, checksState: "passing" as const } }
+    : target;
+  const factory = withoutClearedWork(input.factory, effectiveTarget);
   return (
-    decideWithFactory(input.thread, factory, target, now, options) ??
+    decideWithFactory(input.thread, factory, effectiveTarget, now, options) ??
     (factory === input.factory ? null : { factory, message: null })
   );
 }
@@ -367,7 +372,7 @@ function decideWithFactory(
   factory: ThreadFactory,
   target: FactoryReviewTarget,
   now: string,
-  options: { readonly tokenSaving: boolean },
+  options: { readonly tokenSaving: boolean; readonly ignoreCi?: boolean },
 ): FactoryReviewDecision | null {
   const { link, view } = target;
   const stage = (phase: ThreadFactory["phase"], summary: string | null, memo?: FactoryReviewMemo) =>
@@ -407,7 +412,7 @@ function decideWithFactory(
         updatedAt: now,
         pendingWork: null,
       },
-      message: factoryHeldWorkMessage(held),
+      message: factoryHeldWorkMessage(held, options.ignoreCi),
     };
   }
   // Holding replaces sending. Work already held is kept, so nothing found earlier is lost; a
@@ -531,10 +536,13 @@ function decideWithFactory(
         : []),
     ];
     const composed = composeWork(parts);
+
     return send(
       {
         ...stage("fix", composed.summary, memoOf(view, input.seenReviewId, input.seenCommentId)),
-        message: composed.message,
+        message: options.ignoreCi
+          ? `${composed.message}\n\n${FACTORY_IGNORE_CI_RULE}`
+          : composed.message,
       },
       parts,
     );
@@ -563,7 +571,7 @@ function decideWithFactory(
       : dropHeld(
           stage(
             "ready-to-merge",
-            "Approved and green.",
+            options.ignoreCi ? "Approved; CI is ignored." : "Approved and green.",
             memoOf(view, view.lastReviewId ?? seenReviewId, seenCommentId),
           ),
         );

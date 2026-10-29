@@ -228,6 +228,7 @@ export const make = Effect.gen(function* () {
     threadId: ThreadId,
     factory: ThreadFactory,
     tokenSaving: boolean,
+    ignoreCi: boolean,
   ) {
     const thread = yield* projections.getThreadShell(threadId);
     if (thread === null || thread.archivedAt !== null) return;
@@ -249,7 +250,7 @@ export const make = Effect.gen(function* () {
     const decision = decideFactoryReview(
       { thread, factory, pullRequest: { link, view } },
       yield* nowIso,
-      { tokenSaving },
+      { tokenSaving, ignoreCi },
     );
     if (decision === null) return;
     if (decision.factory !== null) yield* setFactory(threadId, decision.factory);
@@ -257,15 +258,19 @@ export const make = Effect.gen(function* () {
   });
 
   const sweep = Effect.fn("FactoryReviewReactor.sweep")(function* (only: ThreadId | undefined) {
-    const { factoryTokenSaving } = yield* settingsService.getSettings;
+    const { factoryTokenSaving, factoryIgnoreCiEnabled, factoryIgnoreCi } =
+      yield* settingsService.getSettings;
     const targets =
       only === undefined ? [...tasks] : [...tasks].filter(([threadId]) => threadId === only);
     yield* Effect.forEach(
       targets,
       ([threadId, factory]) =>
-        sweepThread(threadId, factory, factoryTokenSaving).pipe(
-          Effect.catchCause(logSkipped("factory review step skipped", { threadId })),
-        ),
+        sweepThread(
+          threadId,
+          factory,
+          factoryTokenSaving,
+          factoryIgnoreCiEnabled && factoryIgnoreCi,
+        ).pipe(Effect.catchCause(logSkipped("factory review step skipped", { threadId }))),
       { concurrency: 4, discard: true },
     );
   });

@@ -1265,6 +1265,8 @@ export const ServerSettings = Schema.Struct({
    * holds review work until the human starts it from the Factory page.
    */
   factoryTokenSaving: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(false))),
+  factoryIgnoreCiEnabled: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(false))),
+  factoryIgnoreCi: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(false))),
   /** The rules the daily summary model follows; the server adds output format and evidence. */
   dailySummaryInstructions: TrimmedString.pipe(
     Schema.withDecodingDefault(Effect.succeed(DEFAULT_DAILY_SUMMARY_INSTRUCTIONS)),
@@ -1599,6 +1601,8 @@ export const ServerSettingsPatch = Schema.Struct({
   factoryFolders: Schema.optionalKey(Schema.Array(FactoryFolder)),
   factoryPromptTemplate: Schema.optionalKey(TrimmedString),
   factoryTokenSaving: Schema.optionalKey(Schema.Boolean),
+  factoryIgnoreCiEnabled: Schema.optionalKey(Schema.Boolean),
+  factoryIgnoreCi: Schema.optionalKey(Schema.Boolean),
   dailySummaryInstructions: Schema.optionalKey(TrimmedString),
   sidebarAutoSettleKeepPullRequests: Schema.optionalKey(Schema.Boolean),
   sidebarAutoSettleOnMerge: Schema.optionalKey(Schema.Boolean),

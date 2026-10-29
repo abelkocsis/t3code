@@ -2,6 +2,7 @@ import type { EnvironmentProject } from "@t3tools/client-runtime/state/models";
 import { squashAtomCommandFailure } from "@t3tools/client-runtime/state/runtime";
 import {
   DEFAULT_SERVER_SETTINGS,
+  FACTORY_IGNORE_CI_RULE,
   renderFactoryPrompt,
   type FactoryInput,
   type ModelSelection,
@@ -82,7 +83,12 @@ export function useStartFactoryTask(): (
         message: {
           messageId: newMessageId(),
           role: "user",
-          text: renderFactoryPrompt(settings.factoryPromptTemplate, input),
+          text: [
+            renderFactoryPrompt(settings.factoryPromptTemplate, input),
+            ...(settings.factoryIgnoreCiEnabled && settings.factoryIgnoreCi
+              ? [FACTORY_IGNORE_CI_RULE]
+              : []),
+          ].join("\n\n"),
           attachments: [],
         },
         modelSelection,

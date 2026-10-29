@@ -85,10 +85,71 @@ function input(overrides: {
 
 const decide = (
   overrides: Parameters<typeof input>[0],
-  options?: { readonly tokenSaving: boolean },
+  options?: { readonly tokenSaving: boolean; readonly ignoreCi?: boolean },
 ) => decideFactoryReview(input(overrides), NOW, options);
 
 describe("decideFactoryReview", () => {
+  it.each(["ready-for-review", "under-review", "ready-to-merge"] as const)(
+    "ignores failing CI in %s and restores handling when disabled",
+    (phase) => {
+      const current = factory({ phase });
+      const ignored = decide(
+        { factory: current, view: { checksState: "failing" } },
+        { tokenSaving: false, ignoreCi: true },
+      );
+      expect(ignored?.message ?? null).toBeNull();
+      expect(ignored?.factory?.phase ?? phase).not.toBe("fix");
+      const restored = decide({
+        factory: ignored?.factory ?? current,
+        view: { checksState: "failing" },
+      });
+      expect(restored?.message).toContain("CI is failing");
+    },
+  );
+
+  it.each(["failing", "pending", null] as const)("allows approval despite %s CI", (checksState) => {
+    const result = decide(
+      { view: { reviewDecision: "approved", checksState } },
+      { tokenSaving: false, ignoreCi: true },
+    );
+    expect(result?.factory?.phase).toBe("ready-to-merge");
+    expect(result?.factory?.summary).toBe("Approved; CI is ignored.");
+  });
+
+  it("still handles comments and conflicts while ignoring CI", () => {
+    const result = decide(
+      { view: { checksState: "failing", mergeState: "dirty", lastCommentId: "new-comment" } },
+      { tokenSaving: false, ignoreCi: true },
+    );
+    expect(result?.factory?.phase).toBe("fix");
+    expect(result?.message).toContain("New review activity");
+    expect(result?.message).toContain("Rebase this branch");
+    expect(result?.message).not.toContain("CI is failing");
+    expect(result?.message).toContain("Ignore CI is active");
+  });
+
+  it("drops held CI work but preserves other held work", () => {
+    const held = decide(
+      { view: { checksState: "failing", mergeState: "dirty" } },
+      { tokenSaving: true },
+    );
+    const result = decide(
+      { factory: held!.factory!, view: { checksState: "failing", mergeState: "dirty" } },
+      { tokenSaving: false, ignoreCi: true },
+    );
+    expect(result?.message).toContain("Rebase this branch");
+    expect(result?.message).not.toContain("CI is failing");
+    expect(result?.message).not.toContain("Fix CI if it fails");
+    const ciOnly = decide({ view: { checksState: "failing" } }, { tokenSaving: true });
+    const cleared = decide(
+      { factory: ciOnly!.factory!, view: { checksState: "failing" } },
+      { tokenSaving: false, ignoreCi: true },
+    );
+    expect(cleared?.factory?.pendingWork).toBeNull();
+    expect(cleared?.factory?.phase).toBe("under-review");
+    expect(cleared?.message).toBeNull();
+  });
+
   it("leaves a task without a pull request alone", () => {
     expect(decide({ view: null })).toBeNull();
   });
@@ -299,6 +360,7 @@ describe("decideFactoryReview", () => {
   it("asks the agent to look at a failed check and a stale base once each", () => {
     const failing = decide({ view: { checksState: "failing" } });
     expect(failing?.message).toContain("CI is failing");
+    expect(failing?.message).not.toContain("Ignore CI is active");
     expect(failing?.factory?.review?.seenChecksState).toBe("failing");
 
     const behind = decide({ view: { mergeState: "behind" } });
@@ -315,6 +377,7 @@ describe("decideFactoryReview", () => {
     const failing = decide({ factory: readyForReview, view: { checksState: "failing" } });
     expect(failing?.factory?.phase).toBe("fix");
     expect(failing?.message).toContain("CI is failing");
+    expect(failing?.message).not.toContain("Ignore CI is active");
 
     // Nobody reviews yet, so comments wait until the task is under review.
     expect(

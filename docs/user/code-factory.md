@@ -64,3 +64,18 @@ Turn on **Token saving** at the top of the page to keep watching pull requests
 without spending tokens. Review work is held on the task with a **Start work**
 button instead of going to the agent at once. Turning it off sends the held
 work.
+
+## Ignore CI
+
+Enable **Settings → General → Code factory → Enable Ignore CI in Code Factory**
+to reveal **Ignore CI** on the Factory page. Turn it on to ignore CI results for
+all Factory tasks on environments where you enabled the setting. The server
+stops requesting CI fixes and allows approved tasks to reach Ready to merge
+without passing checks. Reviews, comments, and merge conflicts still trigger work.
+GitHub's merge requirements still apply.
+
+Turn off **Ignore CI**, or disable the setting, to restore CI handling. Work
+already running continues.
+
+The **BitSafe** settings group contains the fork's settings with the same editable
+controls and links to their original sections.

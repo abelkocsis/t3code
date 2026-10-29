@@ -1,3 +1,4 @@
+import { BITSAFE_SETTING_LOCATIONS } from "./bitsafeSettingCatalog";
 import { HOSTED_APP_CHANNEL } from "~/branding";
 import { isElectron } from "~/env";
 import { isMacPlatform, isWindowsPlatform, normalizeSearchText } from "~/lib/utils";
@@ -14,6 +15,7 @@ import {
 } from "./settingsScope";
 
 export type SettingsPath =
+  | "/settings/bitsafe"
   | "/settings/projects"
   | "/settings/general"
   | "/settings/diagnostics"
@@ -72,6 +74,7 @@ export interface SettingsSearchAvailability {
 }
 
 export const SETTINGS_SECTION_LABELS: Readonly<Record<SettingsPath, string>> = {
+  "/settings/bitsafe": "BitSafe",
   "/settings/diagnostics": "Diagnostics",
   "/settings/projects": "Project",
   "/settings/general": "General",
@@ -472,6 +475,13 @@ export const SETTINGS_SEARCH_ITEMS = [
     to: "/settings/general",
     scope: "environment-defaults",
     searchTerms: ["daily summary standup recap prompt rules instructions"],
+  },
+  {
+    id: "factory-ignore-ci-enabled",
+    title: "Enable Ignore CI in Code Factory",
+    to: "/settings/general",
+    scope: "environment-defaults",
+    searchTerms: ["factory ignore ci checks failures bypass"],
   },
   {
     id: "factory-token-saving",
@@ -1096,6 +1106,7 @@ export type SettingsSearchItemId = (typeof SETTINGS_SEARCH_ITEMS)[number]["id"];
 const SEARCH_ITEMS_BY_ID = new Map(SETTINGS_SEARCH_ITEMS.map((item) => [item.id, item] as const));
 
 const SETTINGS_CATEGORY_SCOPES: Readonly<Record<SettingsPath, SettingsSearchScope | null>> = {
+  "/settings/bitsafe": null,
   "/settings/diagnostics": "environment",
   "/settings/projects": "project",
   "/settings/general": null,
@@ -1244,6 +1255,7 @@ export function searchSettings(
       const title = normalizeSearchText(item.title);
       const fields = [
         title,
+        ...(BITSAFE_SETTING_LOCATIONS[item.id] ? ["bitsafe feature"] : []),
         normalizeSearchText(SETTINGS_SECTION_LABELS[item.to]),
         ...(item.searchTerms ?? []).map(normalizeSearchText),
       ];
