@@ -174,6 +174,10 @@ it out. A thread dragged into a folder is unpinned, un-settled, or woken first, 
 drop in the active list does. Drag a thread up or down inside its folder to arrange the
 folder's rows, and drag a folder's header up or down to arrange the folders.
 
+To start a thread straight in a folder, hover its header and press **+**, or right-click the
+header and choose **New thread in folder**. You pick the project as for any new thread; the
+new thread shows in the folder once you send its first message.
+
 Right-click a folder header for **Rename folder** and **Delete folder**. A rename changes
 only the name. Deleting asks first, then returns its threads to the list. Neither action
 deletes a thread.

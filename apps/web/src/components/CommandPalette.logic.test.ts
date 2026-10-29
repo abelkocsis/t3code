@@ -1,5 +1,11 @@
 import { describe, expect, it, vi } from "vite-plus/test";
-import { EnvironmentId, ProjectId, ProviderInstanceId, ThreadId } from "@t3tools/contracts";
+import {
+  EnvironmentId,
+  ProjectId,
+  ProviderInstanceId,
+  ThreadFolderId,
+  ThreadId,
+} from "@t3tools/contracts";
 import type { Project, Thread } from "../types";
 import { makeThreadFixture } from "../test-fixtures";
 import {
@@ -256,6 +262,12 @@ describe("reduceCommandPaletteUiState", () => {
       open: true,
       mode: "command",
       openIntent: { kind: "new-thread-in" },
+    });
+    const folderId = ThreadFolderId.make("folder_reviewing");
+    expect(reduceCommandPaletteUiState(filesOpen, { _tag: "OpenNewThreadIn", folderId })).toEqual({
+      open: true,
+      mode: "command",
+      openIntent: { kind: "new-thread-in", folderId },
     });
   });
 

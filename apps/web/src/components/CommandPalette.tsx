@@ -52,6 +52,8 @@ import {
   type SourceControlDiscoveryResult,
   SourceControlProviderKind,
   type SourceControlRepositoryInfo,
+  type ThreadFolderId,
+  type ThreadId,
   PRIMARY_LOCAL_ENVIRONMENT_ID,
   resolveEnvironmentMachineKind,
 } from "@t3tools/contracts";
@@ -103,6 +105,7 @@ import { isDesktopLocalConnectionTarget } from "../connection/desktopLocal";
 import { useDesktopLocalBootstraps } from "../connection/useDesktopLocalBootstraps";
 import { useHandleNewThread } from "../hooks/useHandleNewThread";
 import { useThreadFolders } from "../hooks/useThreadFolders";
+import { useSetThreadFolder } from "../state/fork";
 import { useExportThread } from "../hooks/useExportThread";
 import { requestFolderName } from "./FolderNameDialog";
 import { useOpenPanelPullRequestUrl } from "../hooks/useOpenPanelPullRequestUrl";
@@ -505,7 +508,8 @@ export function CommandPalette({ children }: { children: ReactNode }) {
   const setOpen = (open: boolean) => dispatch({ _tag: "SetOpen", open });
   const toggleMode = (mode: SearchOverlayMode) => dispatch({ _tag: "ToggleMode", mode });
   const openAddProject = () => dispatch({ _tag: "OpenAddProject" });
-  const openNewThreadIn = () => dispatch({ _tag: "OpenNewThreadIn" });
+  const openNewThreadIn = (folderId?: ThreadFolderId) =>
+    dispatch({ _tag: "OpenNewThreadIn", ...(folderId ? { folderId } : {}) });
   const clearOpenIntent = () => dispatch({ _tag: "ClearOpenIntent" });
   const openChildSearch = (mode: "files" | "content", context: CommandPaletteReturnContext) =>
     dispatch({ _tag: "OpenChildSearch", mode, context });
@@ -618,7 +622,7 @@ export function CommandPalette({ children }: { children: ReactNode }) {
     () =>
       onOpenCommandPalette((detail) => {
         if (detail.open === "new-thread-in") {
-          openNewThreadIn();
+          openNewThreadIn(detail.folderId);
         } else if (detail.open === "add-project") {
           openAddProject();
         } else if (detail.query !== undefined) {
@@ -781,6 +785,16 @@ function OpenCommandPaletteDialog(props: {
   const { activeDraftThread, activeThread, defaultProjectRef, handleNewThread } =
     useHandleNewThread();
   const threadFolders = useThreadFolders();
+  const setThreadFolder = useSetThreadFolder();
+  // Set by a folder's "New thread in folder"; the picked project's thread joins it.
+  const [newThreadFolderId, setNewThreadFolderId] = useState<ThreadFolderId | null>(null);
+  const joinNewThreadFolder = async (
+    created: { threadId: ThreadId } | null,
+    environmentId: EnvironmentId,
+  ) => {
+    if (created === null || newThreadFolderId === null) return;
+    await setThreadFolder(environmentId, created.threadId, newThreadFolderId);
+  };
   const exportThread = useExportThread();
   const paletteRouteTarget = useThreadRouteTarget();
   const projects = useProjects();
@@ -1220,11 +1234,10 @@ function OpenCommandPaletteDialog(props: {
                 projectRef.environmentId === contextualProjectRef.environmentId &&
                 projectRef.projectId === contextualProjectRef.projectId,
             );
-          await handleNewThread(
-            contextualRefBelongsToGroup
-              ? contextualProjectRef
-              : scopeProjectRef(project.environmentId, project.id),
-          );
+          const projectRef = contextualRefBelongsToGroup
+            ? contextualProjectRef
+            : scopeProjectRef(project.environmentId, project.id);
+          await joinNewThreadFolder(await handleNewThread(projectRef), projectRef.environmentId);
         },
       }),
     );
@@ -1240,7 +1253,11 @@ function OpenCommandPaletteDialog(props: {
         title: "No project",
         icon: <MessageSquareDashedIcon className={ITEM_ICON_CLASS} />,
         shortcutCommand: "chat.newWithoutProject" as const,
-        run: () => startScratchThread(scratchTargetEnvironmentId),
+        run: async () =>
+          joinNewThreadFolder(
+            await startScratchThread(scratchTargetEnvironmentId),
+            scratchTargetEnvironmentId,
+          ),
       },
       ...projectItems.slice(noProjectIndex),
     ];
@@ -1645,7 +1662,9 @@ function OpenCommandPaletteDialog(props: {
       title: "New thread without a project",
       icon: <MessageSquareDashedIcon className={ITEM_ICON_CLASS} />,
       shortcutCommand: "chat.newWithoutProject",
-      run: () => startScratchThread(scratchTargetEnvironmentId),
+      run: async () => {
+        await startScratchThread(scratchTargetEnvironmentId);
+      },
     });
   }
 
@@ -2033,6 +2052,7 @@ function OpenCommandPaletteDialog(props: {
         openAddProjectFlow();
         return;
       case "new-thread-in":
+        setNewThreadFolderId(intent.folderId ?? null);
         pushPaletteView({
           addonIcon: <SquarePenIcon className={ADDON_ICON_CLASS} />,
           groups: [{ value: "projects", label: "Projects", items: projectThreadItems }],
