@@ -93,6 +93,7 @@ import * as TodoStore from "./todos/TodoStore.ts";
 import * as AgentInstructionsService from "./fork/AgentInstructionsService.ts";
 import * as DatabaseStorage from "./persistence/DatabaseStorage.ts";
 import * as TerminalManager from "./terminal/Manager.ts";
+import * as ThreadWorktreeRestore from "./workspace/ThreadWorktreeRestore.ts";
 import * as ThreadLaunchService from "./orchestration-v2/ThreadLaunchService.ts";
 import * as ThreadSearch from "./orchestration-v2/ThreadSearch.ts";
 import * as UsageLimitSources from "./usage/UsageLimitSources.ts";
@@ -515,6 +516,7 @@ const layerUnusedConfigRpcServices = Layer.mergeAll(
   Layer.mock(AgentInstructionsService.AgentInstructionsService)({}),
   Layer.mock(DatabaseStorage.DatabaseStorage)({}),
   Layer.mock(TerminalManager.TerminalManager)({}),
+  Layer.mock(ThreadWorktreeRestore.ThreadWorktreeRestore)({}),
   Layer.mock(ThreadLaunchService.ThreadLaunchService)({}),
   Layer.mock(ThreadManagement.ThreadManagementService)({}),
   Layer.mock(ThreadSearch.ThreadSearch)({}),

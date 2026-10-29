@@ -629,7 +629,7 @@ export function StorageSettingsPanel() {
             <SettingsRow
               title="Delete unchanged worktrees"
               status={ruleStatus("worktreeUnchanged")}
-              description="Remove worktrees with no commits beyond the default branch."
+              description="Remove worktrees of settled threads with no commits beyond the default branch."
               serverScoped={!isProjectScope}
               control={
                 <Switch

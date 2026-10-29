@@ -930,7 +930,9 @@ const make = Effect.gen(function* () {
             allowNonZeroExit: true,
           });
           const integrated = ancestor.exitCode === 0;
-          eligible = integrated && settings.worktreeUnchanged;
+          // An unsettled thread with no commits yet is still being worked in.
+          const unsettled = thread.settledAt === null;
+          eligible = integrated && settings.worktreeUnchanged && !unsettled;
           if (eligible) removalReason = "no commits beyond the default branch";
           if (!eligible && settings.worktreeOnMerge && thread.branch !== null) {
             const pullRequest = yield* gitManager.branchPullRequest(
@@ -953,6 +955,8 @@ const make = Effect.gen(function* () {
               eligible = true;
             if (eligible) removalReason = "pull request was merged";
           }
+          if (!eligible && integrated && settings.worktreeUnchanged && unsettled)
+            return keep("thread is not settled");
         }
         if (!eligible)
           return keep(

@@ -541,6 +541,8 @@ function TerminalSessionViewport({
   const canResizeTerminal =
     canOperateTerminal && terminalSession.version > 0 && terminalSession.status === "running";
   const resizeSessionGeneration = canResizeTerminal ? terminalSession.output.generation : null;
+  // Input to a terminal that failed to start only repeats its error.
+  const terminalFailed = useEffectEvent(() => terminalSession.status === "error");
   const writeTerminal = useEffectEvent((data: string) =>
     runTerminalWrite({
       environmentId,
@@ -884,7 +886,7 @@ function TerminalSessionViewport({
       };
 
       const sendTerminalInput = async (data: string, fallbackError: string) => {
-        if (!hasTerminalWriteAccess()) return;
+        if (!hasTerminalWriteAccess() || terminalFailed()) return;
         const activeTerminal = terminalRef.current;
         if (!activeTerminal) return;
         const result = await writeTerminal(data);
@@ -985,7 +987,7 @@ function TerminalSessionViewport({
       }
 
       function handleData(data: string): void {
-        if (!hasTerminalWriteAccess()) return;
+        if (!hasTerminalWriteAccess() || terminalFailed()) return;
         void (async () => {
           const result = await writeTerminal(data);
           if (result._tag === "Success" || isAtomCommandInterrupted(result)) return;
@@ -1096,11 +1098,14 @@ function TerminalSessionViewport({
 
     const previous = previousSessionRef.current;
     synchronizeTerminalStatus(terminal, current.status, current.version);
-    if (current.version === previous.version && current.output === previous.output) {
-      return;
+    // A failed start changes only the error, not the output.
+    if (current.version !== previous.version || current.output !== previous.output) {
+      outputCursorRef.current = synchronizeTerminalOutput(
+        terminal,
+        current,
+        outputCursorRef.current,
+      );
     }
-
-    outputCursorRef.current = synchronizeTerminalOutput(terminal, current, outputCursorRef.current);
 
     if (current.error !== null && current.error !== previous.error) {
       writeSystemMessage(terminal, current.error);
