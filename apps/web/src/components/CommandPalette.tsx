@@ -787,13 +787,15 @@ function OpenCommandPaletteDialog(props: {
   const threadFolders = useThreadFolders();
   const setThreadFolder = useSetThreadFolder();
   // Set by a folder's "New thread in folder"; the picked project's thread joins it.
-  const [newThreadFolderId, setNewThreadFolderId] = useState<ThreadFolderId | null>(null);
+  // A ref, because the pushed project view keeps the items of the render that opened it.
+  const newThreadFolderIdRef = useRef<ThreadFolderId | null>(null);
   const joinNewThreadFolder = async (
     created: { threadId: ThreadId } | null,
     environmentId: EnvironmentId,
   ) => {
-    if (created === null || newThreadFolderId === null) return;
-    await setThreadFolder(environmentId, created.threadId, newThreadFolderId);
+    const folderId = newThreadFolderIdRef.current;
+    if (created === null || folderId === null) return;
+    await setThreadFolder(environmentId, created.threadId, folderId);
   };
   const exportThread = useExportThread();
   const paletteRouteTarget = useThreadRouteTarget();
@@ -2044,6 +2046,8 @@ function OpenCommandPaletteDialog(props: {
     setAddProjectCloneFlow(null);
     setNewProjectFlow(null);
     setLinkedThreadSearch(intent.kind === "search" ? intent : null);
+    newThreadFolderIdRef.current =
+      intent.kind === "new-thread-in" ? (intent.folderId ?? null) : null;
     dispatchSearch({ type: "reset", query: intent.kind === "search" ? intent.query : "" });
     switch (intent.kind) {
       case "search":
@@ -2052,7 +2056,6 @@ function OpenCommandPaletteDialog(props: {
         openAddProjectFlow();
         return;
       case "new-thread-in":
-        setNewThreadFolderId(intent.folderId ?? null);
         pushPaletteView({
           addonIcon: <SquarePenIcon className={ADDON_ICON_CLASS} />,
           groups: [{ value: "projects", label: "Projects", items: projectThreadItems }],
