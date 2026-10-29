@@ -15,6 +15,7 @@ import type {
 
 const state = vi.hoisted(() => ({
   allowed: true,
+  session: null as unknown,
   listeners: new Set<() => void>(),
   resize: vi.fn(),
   otherCommand: vi.fn(),
@@ -55,7 +56,7 @@ vi.mock(import("../state/use-atom-command"), async (original) => ({
 }));
 vi.mock(import("../state/terminalSessions"), async (original) => ({
   ...(await original()),
-  useAttachedTerminalSession: (() => session) as never,
+  useAttachedTerminalSession: (() => state.session) as never,
 }));
 vi.mock(import("~/terminal/ghostty/surface"), async (original) => ({
   ...(await original()),
@@ -91,6 +92,7 @@ const session = { ...nextTerminalAttachSeedState(), status: "running" as const, 
 // The mocked modules read `state`, so every test starts by resetting all of it.
 function setup() {
   state.allowed = true;
+  state.session = session;
   state.listeners.clear();
   state.resize.mockReset().mockResolvedValue(AsyncResult.success(undefined));
   state.otherCommand.mockReset().mockResolvedValue(AsyncResult.success(undefined));
@@ -241,4 +243,62 @@ it("keeps held Kitty keys and the original surface through split, focus, and uns
     ["\x1b[57442;5u", "\x1b[57442;1:3u", "\x1b[98u", "\x1b[98;1:3u", "\x1b[99u", "\x1b[99;1:3u"],
     [],
   ]);
+});
+
+it("shows a terminal start failure and stops sending input to it", async () => {
+  setup();
+  const { GhosttyTerminalSurface } = await vi.importActual<
+    typeof import("~/terminal/ghostty/surface")
+  >("~/terminal/ghostty/surface");
+  state.createSurface.mockImplementation((mount, options) =>
+    GhosttyTerminalSurface.create(mount, options),
+  );
+  const viewport = () => (
+    <TerminalViewport
+      advancedTypography={false}
+      threadRef={threadRef}
+      threadId={threadRef.threadId}
+      terminalId="terminal-1"
+      terminalLabel="Terminal 1"
+      cwd="/repo"
+      onSessionExited={state.otherCommand}
+      focusRequestId={0}
+      autoFocus={false}
+      visible={true}
+      resizeEpoch={0}
+      drawerHeight={200}
+      keybindings={[]}
+    />
+  );
+  await using screen = await render(viewport());
+  await act(async () => {
+    await state.createSurface.mock.results[0]!.value;
+  });
+  const surface = await state.createSurface.mock.results[0]!.value;
+  const write = vi.spyOn(surface, "write");
+  const sentInput = expect.objectContaining({
+    input: expect.objectContaining({ data: expect.anything() }),
+  });
+  const typeKey = () => {
+    surface.focus();
+    surface.input.dispatchEvent(
+      new KeyboardEvent("keydown", { bubbles: true, cancelable: true, key: "a", code: "KeyA" }),
+    );
+  };
+  typeKey();
+  expect(state.otherCommand).toHaveBeenCalledWith(sentInput);
+  state.otherCommand.mockClear();
+
+  state.session = {
+    ...session,
+    status: "error",
+    error: "Terminal cwd does not exist: /repo",
+  };
+  await screen.rerender(viewport());
+  expect(write).toHaveBeenCalledWith(
+    expect.stringContaining("[terminal] Terminal cwd does not exist: /repo"),
+  );
+
+  typeKey();
+  expect(state.otherCommand).not.toHaveBeenCalledWith(sentInput);
 });

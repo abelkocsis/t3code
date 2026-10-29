@@ -1867,15 +1867,45 @@ describe("storage cleanup reports and local file policies", () => {
       }),
     ),
   );
+  it.live("keeps an unchanged worktree until its thread settles", () =>
+    runCleanupTest(
+      Effect.gen(function* () {
+        const fixture = yield* cleanupFixture({ ...OFF_CLEANUP, worktreeUnchanged: true });
+        const { service, fs, repo, worktree, command } = fixture;
+        const remote = yield* fs.makeTempDirectoryScoped({ prefix: "cleanup-remote-" });
+        yield* command(remote, ["init", "--bare", "-b", "main"]);
+        yield* command(repo, ["remote", "add", "origin", remote]);
+        yield* command(repo, ["push", "origin", "main"]);
+
+        const unsettled = yield* service.runNow;
+        expect(unsettled.entries[0]).toMatchObject({
+          outcome: "kept",
+          reason: "Thread is not settled",
+        });
+        expect(yield* fs.exists(worktree)).toBe(true);
+
+        fixture.setThreads([
+          shell({ branch: "feature", worktreePath: worktree, settledAt: at(-DAY_MS) }),
+        ]);
+        const settled = yield* service.runNow;
+        expect(settled.entries[0]).toMatchObject({
+          outcome: "removed",
+          reason: "No commits beyond the default branch",
+        });
+        expect(yield* fs.exists(worktree)).toBe(false);
+      }),
+    ),
+  );
   it.live(
     "discovers trunk without a remote HEAD or tracking ref and removes an integrated worktree",
     () =>
       runCleanupTest(
         Effect.gen(function* () {
-          const { service, fs, repo, worktree, command } = yield* cleanupFixture({
-            ...OFF_CLEANUP,
-            worktreeUnchanged: true,
-          });
+          const fixture = yield* cleanupFixture({ ...OFF_CLEANUP, worktreeUnchanged: true });
+          const { service, fs, repo, worktree, command } = fixture;
+          fixture.setThreads([
+            shell({ branch: "feature", worktreePath: worktree, settledAt: at(-DAY_MS) }),
+          ]);
           const remote = yield* fs.makeTempDirectoryScoped({ prefix: "cleanup-remote-" });
           yield* command(remote, ["init", "--bare", "-b", "trunk"]);
           yield* command(repo, ["remote", "add", "origin", remote]);
