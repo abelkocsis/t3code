@@ -161,7 +161,7 @@ import { useSidebarProjectGroups } from "../hooks/useSidebarProjectGroups";
 import { useTerminalFocus } from "../hooks/useTerminalFocus";
 import { isCommandPaletteOpen, openCommandPalette } from "../commandPaletteBus";
 import { registerSettleAndAdvance } from "../settleAndAdvance";
-import { startNewThreadFromContext } from "../lib/chatThreadActions";
+import { resolveThreadActionProjectRef, startNewThreadFromContext } from "../lib/chatThreadActions";
 import { useClientSettings } from "../hooks/useSettings";
 import { useCopyToClipboard } from "../hooks/useCopyToClipboard";
 import { useExportThread } from "../hooks/useExportThread";
@@ -1556,10 +1556,13 @@ function SidebarSectionHeader(props: {
   icon?: "folder";
   draggable?: boolean;
   onContextMenu?: (event: ReactMouseEvent) => void;
+  /** Folder headings show a hover button that starts a thread in the folder. */
+  onNewThread?: (event: ReactMouseEvent) => void;
   dragging?: boolean;
   isDropTarget?: boolean;
   toggle: { expanded: boolean; onToggle: () => void };
 }) {
+  const { onNewThread } = props;
   const shelf =
     props.marker === "working-header"
       ? "working"
@@ -1574,7 +1577,7 @@ function SidebarSectionHeader(props: {
       marker={props.marker}
       draggable={props.draggable === true}
       data-testid={`sidebar-${props.marker}`}
-      className={cn("mx-0.5 h-8", props.className)}
+      className={cn("group/folder-header relative mx-0.5 h-8", props.className)}
     >
       <CollapsibleSectionHeader
         onClick={props.toggle.onToggle}
@@ -1594,6 +1597,35 @@ function SidebarSectionHeader(props: {
           props.label
         )}
       </CollapsibleSectionHeader>
+      {onNewThread ? (
+        // The header is itself a button, so the plus sits on a layer above it.
+        // An invisible copy of the label puts the plus right after the name.
+        <span className="pointer-events-none absolute inset-y-0 left-0 flex items-center gap-1 px-2 text-xs font-medium">
+          <span aria-hidden className="invisible flex items-center gap-1.5">
+            <FolderIcon className="size-3 shrink-0" />
+            <span className="max-w-40 truncate">{props.label}</span>
+          </span>
+          <Tooltip>
+            <TooltipTrigger
+              render={
+                <button
+                  type="button"
+                  aria-label="New thread in folder"
+                  onPointerDown={(event) => event.stopPropagation()}
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    onNewThread(event);
+                  }}
+                  className="pointer-events-none inline-flex size-5 cursor-pointer items-center justify-center rounded-md bg-sidebar text-muted-foreground opacity-0 transition-opacity hover:text-foreground focus-visible:pointer-events-auto focus-visible:opacity-100 group-hover/folder-header:pointer-events-auto group-hover/folder-header:opacity-100"
+                />
+              }
+            >
+              <PlusIcon className="size-3" />
+            </TooltipTrigger>
+            <TooltipPopup side="top">New thread in folder</TooltipPopup>
+          </Tooltip>
+        </span>
+      ) : null}
     </SortableSidebarMarker>
   );
 }
@@ -4726,6 +4758,28 @@ export default function Sidebar() {
    * is one write; a delete drops the entry and takes every member out of it,
    * parked ones included, rather than leaving them pointing at nothing.
    */
+  // Mirrors the New thread button: the project picker when there is a choice,
+  // the current project on Shift or with a single project.
+  const handleNewThreadInFolder = useStableCallback((folderId: string, event: ReactMouseEvent) => {
+    if (isMobile) setOpenMobile(false);
+    const folder = ThreadFolderId.make(folderId);
+    if (!shouldCreateNewThreadInCurrentProject(event.shiftKey, projectGroups.length)) {
+      openCommandPalette({ open: "new-thread-in", folderId: folder });
+      return;
+    }
+    const projectRef = resolveThreadActionProjectRef({
+      activeDraftThread: newThreadContext.activeDraftThread,
+      activeThread: newThreadContext.activeThread ?? undefined,
+      defaultProjectRef: newThreadContext.defaultProjectRef,
+      handleNewThread: newThreadContext.handleNewThread,
+    });
+    if (!projectRef) return;
+    void (async () => {
+      const created = await newThreadContext.handleNewThread(projectRef);
+      if (created) await setThreadFolder(projectRef.environmentId, created.threadId, folder);
+    })();
+  });
+
   const handleFolderContextMenu = useStableCallback((folderId: string, event: ReactMouseEvent) => {
     event.preventDefault();
     void (async () => {
@@ -4737,13 +4791,18 @@ export default function Sidebar() {
       const clicked = await settlePromise(() =>
         api.contextMenu.show(
           [
-            { id: "rename", label: "Rename folder", icon: "pencil" },
+            { id: "new-thread", label: "New thread in folder", icon: "message-square-plus" },
+            { id: "rename", label: "Rename folder", icon: "pencil", separatorBefore: true },
             { id: "delete", label: "Delete folder", icon: "trash", destructive: true },
           ],
           { x: event.clientX, y: event.clientY },
         ),
       );
       if (clicked._tag === "Failure" || clicked.value === null) return;
+      if (clicked.value === "new-thread") {
+        handleNewThreadInFolder(folder.id, event);
+        return;
+      }
       if (clicked.value === "rename") {
         const name = await requestFolderName({
           title: "Rename folder",
@@ -5661,6 +5720,7 @@ export default function Sidebar() {
                                 dragging={from !== null}
                                 isDropTarget={isDropTarget}
                                 onContextMenu={(event) => handleFolderContextMenu(group.id, event)}
+                                onNewThread={(event) => handleNewThreadInFolder(group.id, event)}
                                 toggle={{
                                   expanded: group.expanded,
                                   onToggle: () => toggleFolder(group.id),

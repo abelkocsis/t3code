@@ -1,4 +1,8 @@
-import type { EnvironmentId, PullRequestLinkedThreadsResult } from "@t3tools/contracts";
+import type {
+  EnvironmentId,
+  PullRequestLinkedThreadsResult,
+  ThreadFolderId,
+} from "@t3tools/contracts";
 
 export interface CommandPaletteLinkedThreads {
   readonly environmentId: EnvironmentId;
@@ -9,6 +13,8 @@ const COMMAND_PALETTE_OPEN_EVENT = "t3code:open-command-palette";
 
 export interface CommandPaletteOpenDetail {
   readonly open?: "add-project" | "new-thread-in";
+  /** With "new-thread-in": the sidebar folder the new thread joins. */
+  readonly folderId?: ThreadFolderId;
   readonly query?: string;
   readonly linkedThreads?: CommandPaletteLinkedThreads;
 }

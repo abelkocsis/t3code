@@ -55,11 +55,13 @@ export function useScratchProject() {
 
   const startScratchThread = async (environmentId: EnvironmentId) => {
     const project = await openScratchProject(environmentId);
-    if (project) {
-      await handleNewThread(scopeProjectRef(project.environmentId, project.id)).catch(
-        (error: unknown) => reportScratchFailure("Could not start without a project", error),
-      );
-    }
+    if (!project) return null;
+    return handleNewThread(scopeProjectRef(project.environmentId, project.id)).catch(
+      (error: unknown) => {
+        reportScratchFailure("Could not start without a project", error);
+        return null;
+      },
+    );
   };
 
   return { scratchWorkspaceRootFor, scratchEnvironmentId, openScratchProject, startScratchThread };
