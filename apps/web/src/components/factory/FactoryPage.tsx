@@ -85,6 +85,7 @@ import {
   showPullRequestLinkContextMenu,
 } from "../pullRequest/pullRequestLinkContextMenu";
 import { useFactoryFolders } from "../../hooks/useFactoryFolders";
+import { useFactoryIgnoreCi } from "../../hooks/useFactoryIgnoreCi";
 import { useFactoryTokenSaving } from "../../hooks/useFactoryTokenSaving";
 import { getLocalStorageItem, setLocalStorageItem } from "../../hooks/useLocalStorage";
 import { useEscapeToGoBack } from "../../hooks/useNavigateBack";
@@ -482,6 +483,7 @@ export function FactoryPage() {
               </Button>
             ) : null}
             <TokenSavingSwitch />
+            <IgnoreCiSwitch />
             {folders.supported ? (
               <Button size="xs" variant="ghost" onClick={() => setFolderDialog({ mode: "create" })}>
                 <FolderPlusIcon aria-hidden className="size-3.5" />
@@ -1397,6 +1399,35 @@ function BlockingPullRequestDialog({
   );
 }
 
+function IgnoreCiSwitch() {
+  const ignoreCi = useFactoryIgnoreCi();
+  if (!ignoreCi.supported) return null;
+  return (
+    <Tooltip>
+      <TooltipTrigger
+        render={
+          <label className="flex shrink-0 cursor-pointer items-center gap-1.5 text-xs text-muted-foreground [-webkit-app-region:no-drag]" />
+        }
+      >
+        <Switch
+          checked={ignoreCi.enabled}
+          aria-label="Ignore CI"
+          onCheckedChange={(checked) =>
+            void ignoreCi
+              .setEnabled(Boolean(checked))
+              .catch(() => toastManager.add({ type: "error", title: "Could not change Ignore CI" }))
+          }
+        />
+        Ignore CI
+      </TooltipTrigger>
+      <TooltipPopup>
+        Ignore CI results for all Factory tasks on environments that enable this option. Reviews and
+        conflicts still trigger work.
+      </TooltipPopup>
+    </Tooltip>
+  );
+}
+
 /** Token saving on every task: the server watches pull requests but starts no work. */
 function TokenSavingSwitch() {
   const tokenSaving = useFactoryTokenSaving();
@@ -1433,6 +1464,9 @@ function StartWorkButton({ task }: { task: FactoryTask }) {
   const setFactory = useSetThreadFactory();
   const startTurn = useAtomCommand(threadEnvironment.startTurn, { reportFailure: false });
   const [busy, setBusy] = useState(false);
+  const configs = useServerConfigs();
+  const settings = configs.get(task.thread.environmentId)?.settings;
+  const ignoreCi = settings?.factoryIgnoreCiEnabled === true && settings.factoryIgnoreCi === true;
   const pending = task.factory.pendingWork ?? null;
   if (pending === null) return null;
 
@@ -1457,7 +1491,7 @@ function StartWorkButton({ task }: { task: FactoryTask }) {
         message: {
           messageId: newMessageId(),
           role: "user",
-          text: factoryHeldWorkMessage(pending),
+          text: factoryHeldWorkMessage(pending, ignoreCi),
           attachments: [],
         },
         runtimeMode: task.thread.runtimeMode,

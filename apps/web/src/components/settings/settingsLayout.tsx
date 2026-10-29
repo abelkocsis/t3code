@@ -1,3 +1,6 @@
+import { BITSAFE_SETTING_LOCATIONS, useBitSafeSettingsView } from "./bitsafeSettingCatalog";
+import { Link } from "@tanstack/react-router";
+import { Badge } from "../ui/badge";
 import { SettingsGroup } from "./SettingsGroup";
 import { AuthSettingsWriteScope } from "@t3tools/contracts";
 import { usePrimaryEnvironmentId, usePrimaryEnvironment } from "../../state/environments";
@@ -333,6 +336,8 @@ export function SettingsRow({
   mixed?: boolean;
   children?: ReactNode;
 }) {
+  const bitsafeLocation = rowProps.id ? BITSAFE_SETTING_LOCATIONS[rowProps.id] : undefined;
+  const bitsafeView = useBitSafeSettingsView();
   const targetRef = useSettingsSearchTarget<HTMLDivElement>(rowProps.id);
   const primarySettingsAvailable = usePrimarySettingsAvailable();
   const context = useOptionalSettingsScope();
@@ -482,6 +487,11 @@ export function SettingsRow({
         <div className="min-w-0 flex-1 space-y-1">
           <div className="flex min-h-5 items-center gap-1.5">
             <h3 className="text-sm font-medium text-foreground">{title}</h3>
+            {bitsafeLocation && (
+              <Badge variant="outline" size="sm">
+                BitSafe feature
+              </Badge>
+            )}
             {renderedInheritance ? (
               <span className="inline-flex h-5 w-5 shrink-0 items-center justify-center">
                 {renderedInheritance}
@@ -491,6 +501,16 @@ export function SettingsRow({
               {renderedReset}
             </span>
           </div>
+          {bitsafeLocation && bitsafeView && (
+            <Link
+              to={bitsafeLocation.to}
+              hash={bitsafeLocation.hash}
+              search={(previous) => previous}
+              className="text-xs text-muted-foreground underline"
+            >
+              Also in {bitsafeLocation.label}
+            </Link>
+          )}
           {description ? (
             <p className="max-w-xl text-xs leading-normal text-muted-foreground/80">
               {description}

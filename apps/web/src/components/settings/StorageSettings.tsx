@@ -424,7 +424,7 @@ function CleanupSection() {
   );
 }
 
-export function StorageSettingsPanel() {
+export function StorageSettingsPanel({ bitsafeOnly = false }: { bitsafeOnly?: boolean } = {}) {
   const { scope, environments, connectedEnvironments, targets, target } = useSettingsScope();
   const scopedSettings = useScopedSettings();
   const isProjectScope = scope.kind === "project" || scope.kind === "checkout";
@@ -460,6 +460,42 @@ export function StorageSettingsPanel() {
       ? updateSettings({ worktreeCleanup: { mode: "custom", rules: patch } })
       : update(patch);
 
+  const ignorePatternsRow = (
+    <>
+      {(bitsafeOnly || settings.worktreeKeepWhen === "any-local-files") && (
+        <SettingsRow
+          {...searchableSetting("storage-worktree-ignore-patterns")}
+          status={ruleStatus("worktreeIgnorePatterns")}
+          description={
+            settings.worktreeKeepWhen === "any-local-files"
+              ? "Ignored paths that match these patterns, such as build output, no longer keep the worktree. One .gitignore pattern per line."
+              : "Choose Any local files under Storage → Keep worktrees with local changes to use these patterns."
+          }
+          serverScoped={!isProjectScope}
+        >
+          <div className="mt-3 max-w-2xl pb-3.5">
+            <Textarea
+              key={settings.worktreeIgnorePatterns.join("\n")}
+              defaultValue={settings.worktreeIgnorePatterns.join("\n")}
+              onBlur={(event) => {
+                const worktreeIgnorePatterns = event.target.value
+                  .split("\n")
+                  .map((line) => line.trim())
+                  .filter((line) => line !== "");
+                if (!Equal.equals(worktreeIgnorePatterns, settings.worktreeIgnorePatterns))
+                  updateWorktree({ worktreeIgnorePatterns });
+              }}
+              rows={3}
+              placeholder={"target/\ndist/"}
+              aria-label="Ignore matching gitignored files"
+              disabled={settings.worktreeKeepWhen !== "any-local-files"}
+            />
+          </div>
+        </SettingsRow>
+      )}
+    </>
+  );
+
   if (
     isProjectScope &&
     connectedEnvironments.some(
@@ -494,6 +530,8 @@ export function StorageSettingsPanel() {
       </SettingsScopeNotice>
     );
   }
+
+  if (bitsafeOnly) return <SettingsSection title="Storage">{ignorePatternsRow}</SettingsSection>;
 
   return (
     <SettingsPageContainer>
@@ -682,32 +720,7 @@ export function StorageSettingsPanel() {
                 }
               />
             )}
-            {settings.worktreeKeepWhen === "any-local-files" && (
-              <SettingsRow
-                {...searchableSetting("storage-worktree-ignore-patterns")}
-                status={ruleStatus("worktreeIgnorePatterns")}
-                description="Ignored paths that match these patterns, such as build output, no longer keep the worktree. One .gitignore pattern per line."
-                serverScoped={!isProjectScope}
-              >
-                <div className="mt-3 max-w-2xl pb-3.5">
-                  <Textarea
-                    key={settings.worktreeIgnorePatterns.join("\n")}
-                    defaultValue={settings.worktreeIgnorePatterns.join("\n")}
-                    onBlur={(event) => {
-                      const worktreeIgnorePatterns = event.target.value
-                        .split("\n")
-                        .map((line) => line.trim())
-                        .filter((line) => line !== "");
-                      if (!Equal.equals(worktreeIgnorePatterns, settings.worktreeIgnorePatterns))
-                        updateWorktree({ worktreeIgnorePatterns });
-                    }}
-                    rows={3}
-                    placeholder={"target/\ndist/"}
-                    aria-label="Ignore matching gitignored files"
-                  />
-                </div>
-              </SettingsRow>
-            )}
+            {ignorePatternsRow}
           </>
         )}
       </SettingsSection>

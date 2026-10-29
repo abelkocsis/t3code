@@ -321,6 +321,29 @@ describe("FactoryReviewReactor", () => {
     ),
   );
 
+  it.effect.each([false, true])("only ignores CI when enabled in settings (%s)", (allowed) =>
+    Effect.scoped(
+      Effect.gen(function* () {
+        const harness = yield* makeHarness({
+          shell: shell({ pullRequests: [link({ checksState: "failing" })] }),
+          factory: factory(),
+          settings: {
+            ...DEFAULT_SERVER_SETTINGS,
+            factoryIgnoreCiEnabled: allowed,
+            factoryIgnoreCi: true,
+          },
+        });
+        yield* Effect.gen(function* () {
+          const { store } = yield* startHarness(harness, factory());
+          const sent = yield* Ref.get(harness.sent);
+          assert.strictEqual(sent.length, allowed ? 0 : 1);
+          const states = yield* store.list;
+          assert.strictEqual(states[0]?.factory?.phase, allowed ? "under-review" : "fix");
+        }).pipe(Effect.provide(harness.layer));
+      }),
+    ),
+  );
+
   it.effect("holds the work under token saving instead of messaging the agent", () =>
     Effect.scoped(
       Effect.gen(function* () {

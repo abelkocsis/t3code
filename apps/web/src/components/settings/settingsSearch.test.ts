@@ -585,3 +585,15 @@ describe("settings sidebar scope", () => {
     expect(isSettingsOverviewVisible({ project: "project", checkout: "checkout" })).toBe(true);
   });
 });
+
+import { BITSAFE_SETTING_LOCATIONS } from "./bitsafeSettingCatalog";
+
+it("finds every BitSafe setting by branch and preserves its original destination", () => {
+  const results = searchSettings("bitsafe");
+  for (const [id, location] of Object.entries(BITSAFE_SETTING_LOCATIONS)) {
+    const result = results.find((item) => item.id === id);
+    expect(result?.to, id).toBe(location.to);
+    expect(searchableSetting(id as Parameters<typeof searchableSetting>[0]).title).toBeTruthy();
+  }
+  expect(results.some((item) => item.id === "word-wrap")).toBe(false);
+});
