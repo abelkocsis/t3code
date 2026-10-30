@@ -24,7 +24,7 @@ import { useUiStateStore } from "../uiStateStore";
 export interface AttentionThreads {
   /** Threads whose current phase the user has not looked at, in shell order. */
   readonly unseen: readonly OverlayItem[];
-  /** Threads with an agent still running or waiting on other work. */
+  /** Threads with an agent still running or waiting on other work. Idle and snoozed factory tasks do not count. */
   readonly workingCount: number;
   /** Threads the user hid from the overlay but has still not read. */
   readonly dismissedCount: number;
@@ -62,7 +62,9 @@ export function useAttentionThreads(): AttentionThreads {
     let status = fromFactory?.status ?? resolveSidebarThreadStatus(thread);
     if (status === "ready" && thread.latestRun?.status === "failed") status = "failed";
     if (status === "working" || status === "waiting") {
-      if (thread.archivedAt === null) workingCount += 1;
+      // A factory task reads "waiting" only when idle or snoozed: no agent runs for it.
+      const isIdleFactoryTask = fromFactory?.status === "waiting";
+      if (thread.archivedAt === null && !isIdleFactoryTask) workingCount += 1;
       continue;
     }
     const key = scopedThreadKey(scopeThreadRef(thread.environmentId, thread.id));
