@@ -1026,6 +1026,23 @@ describe("resolveSidebarThreadStatus", () => {
     ).toBe(false);
   });
 
+  it("reports waiting while a background command runs after the turn ended", () => {
+    expect(
+      resolveSidebarThreadStatus({
+        ...idle,
+        runtime: { ...runtime, status: "completed" as const },
+        pendingBackgroundTasks: [{ taskId: "task-1", kind: "command", description: "tests" }],
+      }),
+    ).toBe("waiting");
+    expect(
+      resolveSidebarThreadStatus({
+        ...idle,
+        runtime: { ...runtime, status: "failed" as const, lastError: "boom" },
+        pendingBackgroundTasks: [{ taskId: "task-1", kind: "command" }],
+      }),
+    ).toBe("failed");
+  });
+
   it("reports failed only while the latest run failed", () => {
     expect(
       resolveSidebarThreadStatus({
@@ -2207,8 +2224,22 @@ describe("navigation after parking a thread", () => {
 
 describe("unseen completion with background work", () => {
   it.each([
-    { kind: "command", status: "ready", topStatus: "done", receded: false, pill: "Completed" },
-    { kind: "monitor", status: "waiting", topStatus: "waiting", receded: true, pill: "Waiting" },
+    {
+      kind: "command",
+      status: "waiting",
+      topStatus: "waiting",
+      receded: true,
+      working: false,
+      pill: "Completed",
+    },
+    {
+      kind: "monitor",
+      status: "waiting",
+      topStatus: "waiting",
+      receded: true,
+      working: true,
+      pill: "Waiting",
+    },
   ] as const)("presents a completed thread with a $kind roster", (expected) => {
     const thread = presentThreadShell(localEnvironmentId, {
       ...makeThreadFixture().source,
@@ -2233,7 +2264,7 @@ describe("unseen completion with background work", () => {
         isSelected: false,
       }),
     ).toBe(expected.receded);
-    expect(isSidebarThreadWorking(thread)).toBe(expected.receded);
+    expect(isSidebarThreadWorking(thread)).toBe(expected.working);
     expect(resolveThreadStatusPill({ thread })).toMatchObject({ label: expected.pill });
   });
 });
