@@ -76,10 +76,10 @@ say "Releasing ${TAG} from ${BRANCH} (upstream base ${BASE_TAG})"
 
 # ── Prove it ─────────────────────────────────────────────────────────────────
 say "Typechecking…"
-vp run --filter t3 --filter @t3tools/web --filter @t3tools/desktop \
-       --filter @t3tools/client-runtime --filter @t3tools/contracts \
-       --filter @t3tools/shared typecheck \
-  || die "Typecheck failed. Nothing was built or published."
+for project in apps/server apps/web apps/desktop packages/client-runtime packages/contracts packages/shared; do
+  vp exec effect-tsgo tsrs --noEmit -p "${project}/tsconfig.json" \
+    || die "Typecheck failed for ${project}. Nothing was built or published."
+done
 
 say "Running the tests that cover this fork's changes…"
 vp test run \
@@ -178,15 +178,16 @@ say "Published ${TAG}. Colleagues on an earlier build will be offered it."
 
 # ── Homebrew ─────────────────────────────────────────────────────────────────
 # The tap's main branch requires a signed commit and one approving review, so
-# the cask bump is a pull request. The contents API commits as the gh user and
-# GitHub signs that commit.
+# the cask bump uses the configured local signer. The contents API does not
+# guarantee a signed commit.
 say "Opening the cask pull request in ${TAP_REPOSITORY}…"
 SHA256="$(shasum -a 256 "$DMG" | cut -d' ' -f1)"
 CASK_BRANCH="release/cask-${VERSION}"
-UPDATED_CASK="$(mktemp)"
-BASE_SHA="$(gh api "repos/${TAP_REPOSITORY}/branches/main" --jq .commit.sha)"
-CASK_FILE_SHA="$(gh api "repos/${TAP_REPOSITORY}/contents/${CASK_PATH}?ref=${BASE_SHA}" --jq .sha)"
-gh api "repos/${TAP_REPOSITORY}/contents/${CASK_PATH}?ref=${BASE_SHA}" --jq .content | base64 -d > "$UPDATED_CASK"
+TAP_WORKDIR="$(mktemp -d)"
+trap 'rm -rf "$TAP_WORKDIR"' EXIT
+gh repo clone "$TAP_REPOSITORY" "$TAP_WORKDIR" -- --single-branch --branch main
+git -C "$TAP_WORKDIR" switch -c "$CASK_BRANCH"
+UPDATED_CASK="${TAP_WORKDIR}/${CASK_PATH}"
 sed -i '' -E \
   -e "s|^  version \".*\"$|  version \"${VERSION}\"|" \
   -e "s|^  sha256 \".*\"$|  sha256 \"${SHA256}\"|" \
@@ -194,13 +195,19 @@ sed -i '' -E \
 for line in "version \"${VERSION}\"" "sha256 \"${SHA256}\""; do
   grep -qF "  $line" "$UPDATED_CASK" || die "${CASK_PATH} has no line matching: $line"
 done
-gh api "repos/${TAP_REPOSITORY}/git/refs" -f ref="refs/heads/${CASK_BRANCH}" -f sha="$BASE_SHA" > /dev/null
-gh api --method PUT "repos/${TAP_REPOSITORY}/contents/${CASK_PATH}" -f branch="$CASK_BRANCH" \
-  -f sha="$CASK_FILE_SHA" -f message="Update the T3 Code (BitSafe) cask to ${VERSION}" \
-  -f content="$(base64 -i "$UPDATED_CASK")" > /dev/null
+git -C "$TAP_WORKDIR" add "$CASK_PATH"
+if git -C "$TAP_WORKDIR" diff --cached --quiet; then
+  say "The cask already matches ${VERSION}; no pull request is needed."
+  exit 0
+fi
+git -C "$TAP_WORKDIR" commit -S -m "Update the T3 Code (BitSafe) cask to ${VERSION}"
+CASK_COMMIT="$(git -C "$TAP_WORKDIR" rev-parse HEAD)"
+git -C "$TAP_WORKDIR" push origin "$CASK_BRANCH"
+VERIFIED="$(gh api "repos/${TAP_REPOSITORY}/commits/${CASK_COMMIT}" --jq .commit.verification.verified)"
+[ "$VERIFIED" = "true" ] \
+  || die "GitHub does not verify cask commit ${CASK_COMMIT}. No pull request was opened; fix its signature first."
 gh pr create --repo "$TAP_REPOSITORY" --base main --head "$CASK_BRANCH" \
   --title "Update the T3 Code (BitSafe) cask to ${VERSION}" \
   --body "Points the cask at the [${TAG} release](https://github.com/${UPDATE_REPOSITORY}/releases/tag/${TAG}). After it merges, \`brew upgrade --cask t3-code-bitsafe\` installs it."
-rm -f "$UPDATED_CASK"
 
 say "Cask pull request opened. It needs one approving review before brew sees ${VERSION}."

@@ -3,7 +3,7 @@ import * as Effect from "effect/Effect";
 import * as SqlClient from "effect/sql/SqlClient";
 import * as NodeSqliteClient from "@t3tools/shared/nodeSqliteClient";
 
-import { runMigrations } from "../persistence/Migrations.ts";
+import { migrationManifest, runMigrations } from "../persistence/Migrations.ts";
 
 const readLedger = Effect.gen(function* () {
   const sql = yield* SqlClient.SqlClient;
@@ -32,10 +32,10 @@ describe("legacy fork ledger", () => {
       const executed = yield* runMigrations();
       assert.deepStrictEqual(
         executed.map(([id]) => id),
-        [55, 56, 57, 58, 59, 60, 61, 62, 63, 64, 65, 66, 67],
+        migrationManifest.filter(([id]) => id > 54).map(([id]) => id),
       );
       const ledger = yield* readLedger;
-      assert.strictEqual(ledger.at(-1)?.[0], 67);
+      assert.strictEqual(ledger.at(-1)?.[0], migrationManifest.at(-1)?.[0]);
       assert.deepStrictEqual(
         ledger.filter(([id]) => id === 55).map(([, name]) => name),
         ["OrchestrationV2"],

@@ -1,3 +1,4 @@
+import { useTitlebarControlsInset } from "../../hooks/useTitlebarControlsInset";
 import {
   CalendarDaysIcon,
   CoffeeIcon,
@@ -196,14 +197,7 @@ function StepAwayToggle() {
   );
 }
 
-/**
- * Opens the to-do list, which spans the whole environment rather than the
- * thread it is opened from. A second press closes the panel while the list is
- * the tab on screen.
- *
- * It sits next to step away rather than only inside the right panel's "+" menu
- * because the list is what the user reaches for between threads.
- */
+/** The environment-wide list stays one click away while switching threads. */
 function TodoToggle({ open, onOpen }: { open: boolean; onOpen: () => void }) {
   return (
     <Tooltip>
@@ -224,13 +218,7 @@ function TodoToggle({ open, onOpen }: { open: boolean; onOpen: () => void }) {
   );
 }
 
-/**
- * Opens the daily summary beside the thread, and closes the panel when the
- * summary is the tab on screen. Like the to-do list it spans every project in
- * the environment, so it lives in this row and not in the thread's own tabs.
- * Offered on the web as well as the desktop, unlike step away, because nothing
- * about it needs an Electron window.
- */
+/** The environment-wide summary stays accessible beside every thread. */
 function StandupToggle({ open, onOpen }: { open: boolean; onOpen: () => void }) {
   return (
     <Tooltip>
@@ -325,8 +313,10 @@ export function WorkspaceTitlebarControls(props: {
   readonly onToggleMaximized: () => void;
   readonly children: ReactNode;
 }) {
+  const controlsRef = useTitlebarControlsInset();
   return (
     <div
+      ref={controlsRef}
       className="pointer-events-none fixed top-[var(--workspace-controls-top)] right-[var(--workspace-controls-right)] z-50 mr-px flex h-[var(--workspace-topbar-height)] items-center gap-1 [-webkit-app-region:no-drag]"
       data-workspace-titlebar-controls
     >
