@@ -62,7 +62,7 @@ export const make = Effect.gen(function* () {
   });
 
   return ThreadWorktreeRestore.of({
-    restoreMissing: (threadId) =>
+    restoreMissing: Effect.fn("ThreadWorktreeRestore.restoreMissing")((threadId) =>
       semaphore
         .withPermits(1)(restoreMissing(threadId))
         .pipe(
@@ -70,6 +70,7 @@ export const make = Effect.gen(function* () {
             Effect.logWarning("failed to recreate missing worktree", { threadId, error }),
           ),
         ),
+    ),
   });
 });
 

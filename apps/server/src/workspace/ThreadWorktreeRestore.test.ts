@@ -4,7 +4,6 @@ import { ProjectId, ThreadId } from "@t3tools/contracts";
 import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
 import * as Layer from "effect/Layer";
-import * as Option from "effect/Option";
 import * as Path from "effect/Path";
 
 import * as ServerConfig from "../config.ts";
@@ -49,7 +48,7 @@ it.effect.each([
           Layer.mock(ProjectStore.ProjectStoreV2)({
             get: (id) => {
               assert.equal(id, projectId);
-              return Effect.succeed(Option.some({ workspaceRoot } as never));
+              return Effect.succeedSome({ workspaceRoot } as never);
             },
           }),
           Layer.mock(GitWorkflow.GitWorkflowService)({

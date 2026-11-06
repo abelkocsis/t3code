@@ -28,30 +28,31 @@ export class SlackReplyService extends Context.Service<
 export const make = Effect.gen(function* () {
   const registry = yield* ProviderInstanceRegistry.ProviderInstanceRegistry;
 
-  const replyInThread: SlackReplyService["Service"]["replyInThread"] = (input) =>
-    Effect.gen(function* () {
-      const instances = yield* registry.listInstances;
-      const sender = instances.find(
-        (instance) => instance.enabled && instance.replyInSlackThread !== undefined,
+  const replyInThread: SlackReplyService["Service"]["replyInThread"] = Effect.fn(
+    "SlackReplyService.replyInThread",
+  )(function* (input) {
+    const instances = yield* registry.listInstances;
+    const sender = instances.find(
+      (instance) => instance.enabled && instance.replyInSlackThread !== undefined,
+    );
+    if (sender?.replyInSlackThread === undefined) {
+      return yield* new SlackThreadReplyError({
+        reason: "unavailable",
+        detail: "No enabled Claude provider on this server can reach Slack.",
+      });
+    }
+    return yield* sender
+      .replyInSlackThread({
+        channelId: input.thread.channelId,
+        threadTs: input.thread.threadTs,
+        text: input.text,
+      })
+      .pipe(
+        Effect.mapError(
+          (cause) => new SlackThreadReplyError({ reason: "failed", detail: cause.detail }),
+        ),
       );
-      if (sender?.replyInSlackThread === undefined) {
-        return yield* new SlackThreadReplyError({
-          reason: "unavailable",
-          detail: "No enabled Claude provider on this server can reach Slack.",
-        });
-      }
-      return yield* sender
-        .replyInSlackThread({
-          channelId: input.thread.channelId,
-          threadTs: input.thread.threadTs,
-          text: input.text,
-        })
-        .pipe(
-          Effect.mapError(
-            (cause) => new SlackThreadReplyError({ reason: "failed", detail: cause.detail }),
-          ),
-        );
-    });
+  });
 
   return SlackReplyService.of({ replyInThread });
 });

@@ -1,6 +1,6 @@
+import { sourceControlClients } from "@t3tools/client-runtime/source-control-clients";
 import type { EnvironmentProject } from "@t3tools/client-runtime/state/models";
 import { scopeThreadRef } from "@t3tools/client-runtime/environment";
-import { sourceControlClients } from "@t3tools/client-runtime/source-control-clients";
 import { squashAtomCommandFailure } from "@t3tools/client-runtime/state/runtime";
 import { derivePendingThreadRequests } from "@t3tools/client-runtime/state/thread-requests";
 import {
@@ -19,7 +19,6 @@ import {
   type PullRequestMergeMethod,
   type ThreadFactory,
 } from "@t3tools/contracts";
-import { parseChangeRequestUrl } from "@t3tools/shared/changeRequestUrl";
 import { resolveProjectSettings } from "@t3tools/shared/projectSettings";
 import {
   closestCenter,
@@ -96,7 +95,7 @@ import {
   resolvePendingUserInputAnswer,
   togglePendingUserInputOptionSelection,
   type PendingUserInputDraftAnswer,
-} from "../../pendingUserInput";
+} from "@t3tools/client-runtime/state/pending-user-input";
 import { useRightPanelStore } from "../../rightPanelStore";
 import {
   useProjects,
@@ -117,7 +116,7 @@ import {
   readableFailure,
 } from "../pullRequest/pullRequestDetail.logic";
 import { PullRequestGlyph } from "../pullRequest/pullRequestIcons";
-import { resolveSnoozePresets, snoozeWakeDescription } from "../Sidebar.snooze";
+import { resolveSnoozePresets, snoozeWakeLabel } from "../Sidebar.snooze";
 import {
   AlertDialog,
   AlertDialogClose,
@@ -1165,7 +1164,7 @@ function TaskMenu({ task }: { task: FactoryTask }) {
   const timestampFormat = useClientSettings((s) => s.timestampFormat);
   const [blockDialogOpen, setBlockDialogOpen] = useState(false);
   const ref = scopeThreadRef(task.thread.environmentId, task.thread.id);
-  const presets = resolveSnoozePresets(new Date(), timestampFormat);
+  const presets = resolveSnoozePresets(new Date(), timestampFormat, task.thread.environmentId);
   const blockedBy = task.factory.blockedBy ?? null;
 
   const report = (ok: boolean, title: string) => {
@@ -1192,7 +1191,7 @@ function TaskMenu({ task }: { task: FactoryTask }) {
     }
   };
   const blockOn = async (url: string) => {
-    const parsed = parseChangeRequestUrl(url);
+    const parsed = sourceControlClients.parseChangeRequestUrl(url)?.link;
     if (!parsed) {
       toastManager.add({ type: "error", title: "That is not a pull request link" });
       return;
@@ -1251,7 +1250,7 @@ function TaskMenu({ task }: { task: FactoryTask }) {
   const wakeLabel = blockedBy
     ? `Wake up (sleeping until ${blockedBy.repository}#${blockedBy.number} merges)`
     : task.thread.snoozedUntil
-      ? `Wake up (snoozed until ${snoozeWakeDescription(task.thread.snoozedUntil, new Date(), timestampFormat)})`
+      ? `Wake up (snoozed until ${snoozeWakeLabel(task.thread.snoozedUntil, { now: new Date().toISOString() })})`
       : "Wake up";
 
   return (
@@ -1745,8 +1744,8 @@ function MergeButton({ task }: { task: FactoryTask }) {
 function collectAnswers(
   questions: ReadonlyArray<Parameters<typeof resolvePendingUserInputAnswer>[0]>,
   drafts: Record<string, PendingUserInputDraftAnswer>,
-): Record<string, string | string[]> | null {
-  const answers: Record<string, string | string[]> = {};
+): Record<string, string | ReadonlyArray<string>> | null {
+  const answers: Record<string, string | ReadonlyArray<string>> = {};
   for (const question of questions) {
     const answer = resolvePendingUserInputAnswer(question, drafts[question.id]);
     if (answer === null) return null;

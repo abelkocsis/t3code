@@ -20,6 +20,11 @@ import { resolveClaudeHomePath } from "./Drivers/ClaudeHome.ts";
 import { deriveProviderInstanceConfigMap } from "./ProviderInstanceRegistryHydration.ts";
 import { workspaceStateLinks, type WorkspaceStateLink } from "./providerWorkspaceState.ts";
 
+class WorkspaceStateLinkError extends Schema.TaggedError<WorkspaceStateLinkError>()(
+  "WorkspaceStateLinkError",
+  { cause: Schema.Defect() },
+) {}
+
 const decodeClaudeSettings = Schema.decodeUnknownOption(ClaudeSettings);
 
 /**
@@ -87,7 +92,10 @@ export const make = Effect.gen(function* () {
       if (!(yield* fileSystem.exists(source))) return;
       if (yield* fileSystem.exists(destination)) return;
       yield* fileSystem.makeDirectory(path.dirname(destination), { recursive: true });
-      yield* Effect.tryPromise(() => NodeFSP.symlink(source, destination, linkType));
+      yield* Effect.tryPromise({
+        try: () => NodeFSP.symlink(source, destination, linkType),
+        catch: (cause) => new WorkspaceStateLinkError({ cause }),
+      });
       yield* Effect.logDebug("carried provider state into a new workspace", {
         driver: input.link.driver,
         state: input.link.label,
@@ -123,7 +131,7 @@ export const make = Effect.gen(function* () {
   );
 
   return ProviderWorkspaceStateService.of({
-    linkForWorktree: (input) =>
+    linkForWorktree: Effect.fn("ProviderWorkspaceStateService.linkForWorktree")((input) =>
       linkForWorktree(input).pipe(
         Effect.catchCause((cause) =>
           Effect.logWarning("provider workspace state was not carried over", {
@@ -132,6 +140,7 @@ export const make = Effect.gen(function* () {
           }),
         ),
       ),
+    ),
   });
 });
 

@@ -64,10 +64,11 @@ export const make = Effect.gen(function* () {
   });
 
   return ElectronPowerSaveBlocker.of({
-    hold: (active) =>
+    hold: Effect.fn("ElectronPowerSaveBlocker.hold")((active) =>
       (active ? start : stop).pipe(
         Effect.catchTags({ ElectronPowerSaveBlockerError: logAndContinue }),
       ),
+    ),
     isHolding: Ref.get(blockerIdRef).pipe(
       Effect.map((id) => id !== null && Electron.powerSaveBlocker.isStarted(id)),
     ),

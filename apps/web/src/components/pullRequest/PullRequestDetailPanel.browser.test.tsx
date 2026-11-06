@@ -55,7 +55,7 @@ vi.mock(import("~/hooks/useHandleNewThread"), async (original) => ({
   ...(await original()),
   useNewThreadHandler: (() => newThread) as never,
 }));
-vi.mock(import("~/lib/sourceControlActions"), async (original) => ({
+vi.mock(import("~/state/sourceControlActions"), async (original) => ({
   ...(await original()),
   usePreparePullRequestThreadAction: (() => ({
     run: prepareThread,
@@ -585,9 +585,9 @@ it("restores the selected PR tab when switching threads and remounting the right
         getShortcutContext={shortcutContext}
         onSendAnnotation={() => {}}
         onCloseSurface={() => {}}
+        sideChatParentPanel={{ openToolDiff: () => {}, runShellCommand: () => {} }}
         terminal={{
           launchContext: null,
-          focusRequestId: 0,
           keybindings: [],
           onAddTerminalContext: () => {},
           onSplitTerminal: () => {},

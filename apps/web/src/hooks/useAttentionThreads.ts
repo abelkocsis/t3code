@@ -80,7 +80,10 @@ export function useAttentionThreads(): AttentionThreads {
       if (!isFactoryGateUnseen(fromFactory.gateAt, lastVisitedAt)) continue;
       attention = { phase: "completed", at: fromFactory.gateAt };
     } else {
-      const resolved = resolveThreadAttention({ ...thread, status });
+      const resolved = resolveThreadAttention({
+        ...thread,
+        status: status === "request" ? "input" : status === "preparing" ? "working" : status,
+      });
       if (resolved === null) continue;
       if (!isThreadAttentionUnseen({ attention: resolved, lastVisitedAt })) continue;
       attention = resolved;

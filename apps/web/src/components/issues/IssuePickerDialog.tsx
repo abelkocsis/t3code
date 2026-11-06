@@ -665,8 +665,6 @@ function IssueModelPicker({
         instanceId={selection.instanceId}
         models={activeEntry.models}
         model={selection.model}
-        prompt=""
-        onPromptChange={() => {}}
         modelOptions={selection.options ?? []}
         allowPromptInjectedEffort={false}
         planModeEnabled={settings.planModeEnabled}

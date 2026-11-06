@@ -13,7 +13,7 @@ import { scopedThreadKey, scopeThreadRef } from "@t3tools/client-runtime/environ
 
 import { connectionAtomRuntime } from "../connection/runtime";
 import { environmentAtomList, environmentIdsKey } from "./environmentAtomList";
-import { useEnvironmentIds } from "./environments";
+import { environmentSummaries } from "./presentation";
 import { useAtomCommand } from "./use-atom-command";
 
 export const forkEnvironment = createForkEnvironmentAtoms(connectionAtomRuntime);
@@ -30,7 +30,7 @@ const EMPTY: ReadonlyMap<string, ForkThreadState> = new Map();
  * Environments that have not answered yet contribute nothing.
  */
 export function useForkThreadStates(): ReadonlyMap<string, ForkThreadState> {
-  const environmentIds = useEnvironmentIds();
+  const environmentIds = useAtomValue(environmentSummaries.environmentIdsAtom);
   const results = useAtomValue(forkThreadStatesAtom(environmentIdsKey(environmentIds)));
   let merged: Map<string, ForkThreadState> | null = null;
   results.forEach((result, index) => {

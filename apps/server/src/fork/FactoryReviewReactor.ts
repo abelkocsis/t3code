@@ -14,7 +14,7 @@ import { makeDrainableWorker } from "@t3tools/shared/DrainableWorker";
 import * as Cause from "effect/Cause";
 import * as Clock from "effect/Clock";
 import * as Context from "effect/Context";
-import * as Crypto from "effect/Crypto";
+import * as SecureRandom from "effect/crypto/SecureRandom";
 import * as DateTime from "effect/DateTime";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
@@ -115,7 +115,7 @@ export const make = Effect.gen(function* () {
   const pullRequests = yield* PullRequestService.PullRequestService;
   const store = yield* ForkThreadStateStore.ForkThreadStateStore;
   const settingsService = yield* ServerSettings.ServerSettingsService;
-  const crypto = yield* Crypto.Crypto;
+  const crypto = yield* SecureRandom.SecureRandom;
 
   // The tasks, kept current from the store stream, so an event needs no table read.
   const tasks = new Map<ThreadId, ThreadFactory>();
@@ -161,7 +161,7 @@ export const make = Effect.gen(function* () {
     text: string,
   ) {
     if (yield* contextNearlyFull(thread)) {
-      const compactId = yield* crypto.randomUUIDv4();
+      const compactId = yield* crypto.uuidV4();
       yield* engine
         .dispatch({
           type: "message.dispatch",
@@ -180,7 +180,7 @@ export const make = Effect.gen(function* () {
           ),
         );
     }
-    const uuid = yield* crypto.randomUUIDv4();
+    const uuid = yield* crypto.uuidV4();
     yield* threadManagement.sendToThread({
       projectId: thread.projectId,
       commandId: CommandId.make(`server:factory-review-message:${thread.id}:${uuid}`),
@@ -305,7 +305,7 @@ export const make = Effect.gen(function* () {
             summary: `${blockedBy.repository}#${blockedBy.number} merged.`,
             updatedAt: yield* nowIso,
           });
-          const wake = yield* crypto.randomUUIDv4();
+          const wake = yield* crypto.uuidV4();
           yield* engine.dispatch({
             type: "thread.unsnooze",
             commandId: CommandId.make(`server:factory-unblock-wake:${threadId}:${wake}`),

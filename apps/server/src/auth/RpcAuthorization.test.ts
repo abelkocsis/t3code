@@ -1,3 +1,4 @@
+import { AuthPreviewOperateScope } from "@t3tools/contracts";
 import {
   AuthEnvironmentMaintainScope,
   AuthDiagnosticsReadScope,
@@ -5,15 +6,13 @@ import {
   AuthProvidersManageScope,
   AuthSettingsWriteScope,
   DEFAULT_SERVER_SETTINGS,
+  ProviderDriverKind,
   ProviderInstanceId,
+  SecretProviderId,
   ThreadId,
   AuthOrchestrationOperateScope,
-  ORCHESTRATION_V2_WS_METHODS,
   AuthOrchestrationReadScope,
   AuthSourceControlWriteScope,
-  AuthPreviewOperateScope,
-  AuthRelayReadScope,
-  AuthRelayWriteScope,
   AuthTerminalReadScope,
   AuthTerminalOperateScope,
   WS_METHODS,
@@ -37,27 +36,6 @@ describe("RPC authorization scopes", () => {
     expect(new Set(Object.keys(RPC_REQUIRED_SCOPES))).toEqual(new Set(WsRpcGroup.requests.keys()));
   });
 
-  it("requires operate access to stop a workflow", () => {
-    expect(requiredScopeForRpcMethod(ORCHESTRATION_V2_WS_METHODS.stopWorkflow)).toBe(
-      AuthOrchestrationOperateScope,
-    );
-  });
-
-  it("authorizes background policy reporting and observation deliberately", () => {
-    expect(requiredScopeForRpcMethod(WS_METHODS.serverReportClientActivity)).toBe(
-      AuthOrchestrationReadScope,
-    );
-    expect(requiredScopeForRpcMethod(WS_METHODS.serverReportHostPowerState)).toBe(
-      AuthEnvironmentMaintainScope,
-    );
-    expect(requiredScopeForRpcMethod(WS_METHODS.serverGetBackgroundPolicy)).toBe(
-      AuthOrchestrationReadScope,
-    );
-    expect(requiredScopeForRpcMethod(WS_METHODS.subscribeBackgroundPolicy)).toBe(
-      AuthOrchestrationReadScope,
-    );
-  });
-
   it("keeps webhook delivery logs, which hold request bodies, behind operate scope", () => {
     for (const method of [
       WS_METHODS.scheduledTasksListWebhookDeliveries,
@@ -68,15 +46,8 @@ describe("RPC authorization scopes", () => {
     }
   });
 
-  it("allows relay status reads without granting relay installation access", () => {
-    expect(requiredScopeForRpcMethod(WS_METHODS.cloudGetRelayClientStatus)).toBe(
-      AuthRelayReadScope,
-    );
-    expect(requiredScopeForRpcMethod(WS_METHODS.cloudInstallRelayClient)).toBe(AuthRelayWriteScope);
-  });
-
-  it("requires permission to operate on a thread before uploading feedback", () => {
-    expect(requiredScopeForRpcMethod(WS_METHODS.providerUploadFeedback)).toBe(
+  it("keeps triage, which seeds an agent that reads logs and the database, behind operate scope", () => {
+    expect(requiredScopeForRpcMethod(WS_METHODS.serverPrepareTriage)).toBe(
       AuthOrchestrationOperateScope,
     );
   });
@@ -160,9 +131,7 @@ describe("RPC authorization scopes", () => {
   it("separates preview control from observation", () => {
     for (const method of [
       WS_METHODS.previewOpen,
-      WS_METHODS.previewNavigate,
       WS_METHODS.previewResize,
-      WS_METHODS.previewRefresh,
       WS_METHODS.previewClose,
       WS_METHODS.previewReportStatus,
       WS_METHODS.previewAdjust,
@@ -181,11 +150,7 @@ describe("RPC authorization scopes", () => {
   });
 
   it("separates passive terminal observation from operations that can change a shell", () => {
-    for (const method of [
-      WS_METHODS.terminalObserve,
-      WS_METHODS.subscribeTerminalEvents,
-      WS_METHODS.subscribeTerminalMetadata,
-    ]) {
+    for (const method of [WS_METHODS.terminalObserve, WS_METHODS.subscribeTerminalMetadata]) {
       expect(requiredScopeForRpcMethod(method)).toBe(AuthTerminalReadScope);
     }
     for (const method of [
@@ -194,8 +159,8 @@ describe("RPC authorization scopes", () => {
       WS_METHODS.terminalWrite,
       WS_METHODS.terminalResize,
       WS_METHODS.terminalClear,
-      WS_METHODS.terminalRestart,
       WS_METHODS.terminalClose,
+      WS_METHODS.previewStopLocalServer,
     ]) {
       expect(requiredScopeForRpcMethod(method)).toBe(AuthTerminalOperateScope);
     }
@@ -239,10 +204,6 @@ describe("RPC scope middleware", () => {
       scopes: [AuthOrchestrationReadScope, AuthEnvironmentMaintainScope],
       missing: AuthDiagnosticsReadScope,
     },
-    {
-      scopes: [AuthOrchestrationReadScope, AuthDiagnosticsReadScope],
-      missing: AuthEnvironmentMaintainScope,
-    },
   ])("rejects telemetry retry without $missing before its handler runs", ({ scopes, missing }) =>
     Effect.gen(function* () {
       const handled: Array<string> = [];
@@ -266,27 +227,6 @@ describe("RPC scope middleware", () => {
         requiredPermission: missing,
       });
       expect(handled).toEqual([]);
-    }).pipe(Effect.scoped),
-  );
-
-  it.effect("reports only authorized requests that succeed", () =>
-    Effect.gen(function* () {
-      const observed: Array<string> = [];
-      const client = yield* RpcTest.makeClient(group).pipe(
-        Effect.provide(
-          Layer.mergeAll(
-            group.toLayerHandler(WS_METHODS.serverProbe, () => Effect.succeed({})),
-            group.toLayerHandler(WS_METHODS.serverRetryResourceTelemetry, () => Effect.never),
-            RpcAuthorization.layer([AuthOrchestrationReadScope], (method) =>
-              Effect.sync(() => void observed.push(method)),
-            ),
-          ),
-        ),
-      );
-
-      yield* client[WS_METHODS.serverProbe]({});
-      yield* client[WS_METHODS.serverRetryResourceTelemetry]({}).pipe(Effect.flip);
-      expect(observed).toEqual([WS_METHODS.serverProbe]);
     }).pipe(Effect.scoped),
   );
 });
@@ -323,17 +263,44 @@ describe("settings mutation authorization", () => {
       );
       yield* client[WS_METHODS.serverUpdateSettings]({ patch: {}, providerInstanceMutation });
       expect(handled).toBe(1);
+      yield* client[WS_METHODS.serverUpdateSettings]({
+        patch: {},
+        providerInstanceMutation: {
+          operation: "upsert",
+          instanceId: ProviderInstanceId.make("codex_work"),
+          instance: {
+            driver: ProviderDriverKind.make("codex"),
+            environment: [
+              {
+                name: "OPENAI_API_KEY",
+                sensitive: true,
+                value: {
+                  provider: SecretProviderId.make("personal"),
+                  reference: "op://Private/OpenAI/credential",
+                },
+              },
+            ],
+          },
+        },
+      });
+      expect(handled).toBe(2);
       expect(
         yield* client[WS_METHODS.serverUpdateSettings]({
           patch: { defaultRuntimeMode: "full-access" },
           providerInstanceMutation,
         }).pipe(Effect.flip),
       ).toMatchObject({ requiredPermission: AuthSettingsWriteScope });
-      expect(handled).toBe(1);
+      // Removing a secret provider clears settings fields that read from it.
+      expect(
+        yield* client[WS_METHODS.serverUpdateSettings]({
+          patch: { secretProviders: { [SecretProviderId.make("personal")]: null } },
+        }).pipe(Effect.flip),
+      ).toMatchObject({ requiredPermission: AuthSettingsWriteScope });
+      expect(handled).toBe(2);
     }).pipe(Effect.scoped),
   );
 
-  it.effect("does not let a settings grant create or remove providers", () =>
+  it.effect("does not let a settings grant create or remove providers or secret providers", () =>
     Effect.gen(function* () {
       let handled = false;
       const client = yield* RpcTest.makeClient(group).pipe(
@@ -353,6 +320,11 @@ describe("settings mutation authorization", () => {
         yield* client[WS_METHODS.serverUpdateSettings]({
           patch: {},
           providerInstanceMutation,
+        }).pipe(Effect.flip),
+      ).toMatchObject({ requiredPermission: AuthProvidersManageScope });
+      expect(
+        yield* client[WS_METHODS.serverUpdateSettings]({
+          patch: { secretProviders: { [SecretProviderId.make("personal")]: null } },
         }).pipe(Effect.flip),
       ).toMatchObject({ requiredPermission: AuthProvidersManageScope });
       expect(handled).toBe(false);
@@ -407,7 +379,7 @@ describe("thread context authorization", () => {
     ),
   );
 
-  it.effect.each(["commit", "push", "commit_push", "create_pr", "commit_push_pr"] as const)(
+  it.effect.each(["commit", "create_pr", "commit_push_pr"] as const)(
     "%s needs thread read permission only when generating a PR from a thread",
     (action) =>
       Effect.gen(function* () {

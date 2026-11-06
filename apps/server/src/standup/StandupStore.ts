@@ -84,21 +84,23 @@ export const make = Effect.gen(function* () {
     },
     // A failed write costs the user their history, never the summary they
     // are looking at.
-    Effect.catchCause(() => Effect.void),
+    Effect.ignoreCause(),
   );
 
   return StandupStore.of({
     readAll,
 
-    read: (day) =>
+    read: Effect.fn("StandupStore.read")((day) =>
       readAll.pipe(Effect.map((summaries) => summaries.find((s) => s.day === day) ?? null)),
+    ),
 
-    write: (summary) =>
+    write: Effect.fn("StandupStore.write")((summary) =>
       readAll.pipe(
         Effect.flatMap((summaries) =>
           writeAll([summary, ...summaries.filter((s) => s.day !== summary.day)]),
         ),
       ),
+    ),
   });
 });
 

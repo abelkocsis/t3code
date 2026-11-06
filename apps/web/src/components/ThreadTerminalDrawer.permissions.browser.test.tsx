@@ -112,11 +112,8 @@ it("rechecks the target terminal grant when a retained surface callback reports 
       terminalLabel="Terminal 1"
       cwd="/repo"
       onSessionExited={state.otherCommand}
-      focusRequestId={0}
       autoFocus={false}
       visible={true}
-      resizeEpoch={0}
-      drawerHeight={200}
       keybindings={[]}
     />,
   );
@@ -185,7 +182,6 @@ it("keeps held Kitty keys and the original surface through split, focus, and uns
       activeTerminalId="original"
       terminalGroups={[{ id: "group", terminalIds }]}
       activeTerminalGroupId="group"
-      focusRequestId={0}
       onSplitTerminal={state.otherCommand}
       onSplitTerminalVertical={state.otherCommand}
       onNewTerminal={state.otherCommand}
@@ -262,11 +258,8 @@ it("shows a terminal start failure and stops sending input to it", async () => {
       terminalLabel="Terminal 1"
       cwd="/repo"
       onSessionExited={state.otherCommand}
-      focusRequestId={0}
       autoFocus={false}
       visible={true}
-      resizeEpoch={0}
-      drawerHeight={200}
       keybindings={[]}
     />
   );

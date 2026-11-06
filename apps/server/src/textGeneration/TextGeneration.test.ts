@@ -1,3 +1,4 @@
+import * as ServerSettings from "../serverSettings.ts";
 import { it } from "@effect/vitest";
 import * as Effect from "effect/Effect";
 import * as PubSub from "effect/PubSub";
@@ -25,6 +26,7 @@ const makeStubTextGeneration = (
     generateBranchName: () => Effect.die("generateBranchName stub not configured for this test"),
     generateThreadTitle: () => Effect.die("generateThreadTitle stub not configured for this test"),
     generateReviewGuide: () => Effect.die("generateReviewGuide stub not configured for this test"),
+    generateTranscriptionPostProcessing: () => Effect.die("Transcription not configured"),
     generateDailySummary: () =>
       Effect.die("generateDailySummary stub not configured for this test"),
     ...overrides,
@@ -43,7 +45,7 @@ const makeStubInstance = (
     },
     displayName: undefined,
     enabled: true,
-    snapshot: {} as ProviderInstance["snapshot"],
+    snapshot: { getSnapshot: Effect.succeed({ enabled: false }) } as ProviderInstance["snapshot"],
     orchestrationAdapter: {} as ProviderInstance["orchestrationAdapter"],
     textGeneration,
   }) satisfies ProviderInstance;
@@ -78,6 +80,7 @@ describe("TextGeneration.make", () => {
         }),
       );
       const generation = yield* TextGeneration.make.pipe(
+        Effect.provide(Layer.mock(ServerSettings.ServerSettingsService)({})),
         Effect.provideService(
           ProviderInstanceRegistry.ProviderInstanceRegistry,
           makeStubRegistry([instance]),
@@ -122,6 +125,7 @@ describe("TextGeneration.make", () => {
       );
 
       const tg = yield* TextGeneration.make.pipe(
+        Effect.provide(Layer.mock(ServerSettings.ServerSettingsService)({})),
         Effect.provideService(
           ProviderInstanceRegistry.ProviderInstanceRegistry,
           makeStubRegistry([personal, work]),
@@ -147,6 +151,7 @@ describe("TextGeneration.make", () => {
   it.effect("fails with TextGenerationError when the instance is unknown", () =>
     Effect.gen(function* () {
       const tg = yield* TextGeneration.make.pipe(
+        Effect.provide(Layer.mock(ServerSettings.ServerSettingsService)({})),
         Effect.provideService(
           ProviderInstanceRegistry.ProviderInstanceRegistry,
           makeStubRegistry([]),

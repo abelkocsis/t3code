@@ -36,16 +36,6 @@ const baseState: ThreadActionMenuState = {
   ],
 };
 
-function ids(state: ThreadActionMenuState): string[] {
-  return buildThreadActionMenuItems(state).map((item) => item.id);
-}
-
-function allIds(state: ThreadActionMenuState): string[] {
-  const flatten = (items: ReturnType<typeof buildThreadActionMenuItems>): string[] =>
-    items.flatMap((item) => [item.id, ...(item.children ? flatten(item.children) : [])]);
-  return flatten(buildThreadActionMenuItems(state));
-}
-
 describe("buildThreadActionMenuItems", () => {
   it("offers a new window in the main window and the way back in a thread window", () => {
     const branchState = { ...baseState, branch: "feature/x" };
@@ -313,4 +303,24 @@ describe("buildDraftActionMenuItems", () => {
     expect(items.map((item) => item.id)).toEqual(["copy", "discard"]);
     expect(items.at(-1)).toMatchObject({ label: "Discard draft", destructive: true });
   });
+
+  it("disables archive and turning into a project while running", () => {
+    const items = buildThreadActionMenuItems({
+      ...baseState,
+      isRunning: true,
+      canTurnIntoProject: true,
+    });
+    expect(items.find((item) => item.id === "archive")?.disabled).toBe(true);
+    expect(items.find((item) => item.id === "turn-into-project")?.disabled).toBe(true);
+  });
 });
+
+function ids(state: ThreadActionMenuState) {
+  return buildThreadActionMenuItems(state).map((item) => item.id);
+}
+function allIds(state: ThreadActionMenuState) {
+  return buildThreadActionMenuItems(state).flatMap((item) => [
+    item.id,
+    ...(item.children?.map((child) => child.id) ?? []),
+  ]);
+}

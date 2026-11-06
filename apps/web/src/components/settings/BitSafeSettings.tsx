@@ -1,6 +1,6 @@
 import { BitSafeGeneralSettings } from "./BitSafeGeneralSettings";
 import { BitSafeSettingsViewContext } from "./bitsafeSettingCatalog";
-import { StorageSettingsPanel } from "./StorageSettings";
+import { WorktreeCleanupSection } from "./StorageSettings";
 import { SettingsPageContainer, SettingsSection } from "./settingsLayout";
 
 export function BitSafeSettings() {
@@ -17,7 +17,7 @@ export function BitSafeSettings() {
           <BitSafeGeneralSettings section="text-generation" />
           <BitSafeGeneralSettings section="about" />
         </SettingsSection>
-        <StorageSettingsPanel bitsafeOnly />
+        <WorktreeCleanupSection bitsafeOnly />
       </SettingsPageContainer>
     </BitSafeSettingsViewContext>
   );

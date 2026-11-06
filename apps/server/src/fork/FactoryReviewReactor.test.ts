@@ -16,7 +16,7 @@ import {
   type ThreadFactory,
   type ThreadPullRequestLink,
 } from "@t3tools/contracts";
-import * as Crypto from "effect/Crypto";
+import * as SecureRandom from "effect/crypto/SecureRandom";
 import * as DateTime from "effect/DateTime";
 import * as Deferred from "effect/Deferred";
 import * as Effect from "effect/Effect";
@@ -41,10 +41,7 @@ const EARLIER = "2026-10-14T11:00:00.000Z";
 const PROJECT_ID = ProjectId.make("project-1");
 const THREAD_ID = ThreadId.make("thread-1");
 
-const testCrypto = Crypto.make({
-  randomBytes: (size) => new Uint8Array(size).fill(1),
-  digest: (_algorithm, data) => Effect.succeed(data),
-});
+const testCrypto = SecureRandom.make((size) => new Uint8Array(size).fill(1));
 
 const link = (overrides: Partial<NonNullable<ThreadPullRequestLink["snapshot"]>> = {}) =>
   ({
@@ -233,7 +230,7 @@ const makeHarness = Effect.fn("makeFactoryReviewHarness")(function* (options: Ha
     }),
     Layer.succeed(ServerSettings.ServerSettingsService, serverSettings),
     Layer.succeed(ServerActivation.ServerActivation, Deferred.await(activation)),
-    Layer.succeed(Crypto.Crypto, testCrypto),
+    Layer.succeed(SecureRandom.SecureRandom, testCrypto),
   );
   return {
     activation,
