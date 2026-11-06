@@ -1203,11 +1203,14 @@ effectIt.effect(
       }
     }).pipe(
       Effect.scoped,
-      Effect.provide(layerRealGit),
       Effect.provide(
-        Layer.mock(ProviderWorkspaceStateService.ProviderWorkspaceStateService)({
-          linkForWorktree: () => Effect.void,
-        }),
+        layerRealGit.pipe(
+          Layer.provideMerge(
+            Layer.mock(ProviderWorkspaceStateService.ProviderWorkspaceStateService)({
+              linkForWorktree: () => Effect.void,
+            }),
+          ),
+        ),
       ),
     ),
 );
