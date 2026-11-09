@@ -216,7 +216,7 @@ function buildConnectingSplashDataUrl(shouldUseDarkColors: boolean): string {
 }
 
 /** The renderer's hash route for a thread, matching `/_chat/$environmentId/$threadId`. */
-export function threadRouteHref(target: DesktopThreadWindowTarget): string {
+function threadRouteHref(target: DesktopThreadWindowTarget): string {
   return `/${encodeURIComponent(target.environmentId)}/${encodeURIComponent(target.threadId)}`;
 }
 

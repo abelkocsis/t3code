@@ -18,14 +18,6 @@ export class ElectronPowerSaveBlockerError extends Schema.TaggedError<ElectronPo
   }
 }
 
-/**
- * Holds off display sleep while overlay mode shows something.
- *
- * Idempotent on both sides: the renderer pushes desired state on every change,
- * so `hold(true)` while already holding must not stack a second blocker that
- * outlives the first. Only display sleep is blocked, never system suspend —
- * closing the lid still sleeps the Mac, and no app can prevent that.
- */
 export class ElectronPowerSaveBlocker extends Context.Service<
   ElectronPowerSaveBlocker,
   {
@@ -34,7 +26,7 @@ export class ElectronPowerSaveBlocker extends Context.Service<
   }
 >()("@t3tools/desktop/electron/ElectronPowerSaveBlocker") {}
 
-export const make = Effect.gen(function* () {
+const make = Effect.gen(function* () {
   const blockerIdRef = yield* Ref.make<number | null>(null);
 
   const logAndContinue = (error: ElectronPowerSaveBlockerError) =>

@@ -37,16 +37,6 @@ import {
 } from "./FactoryReviewPolicy.ts";
 import * as ForkThreadStateStore from "./ForkThreadStateStore.ts";
 
-/**
- * Drives factory tasks: reads each phase marker the agent prints, moves a task through the
- * review stages from its pull request, and sends the agent review work.
- *
- * The pull request sync keeps the snapshot current; the host is read for reviews, open
- * threads and comments, which the snapshot does not carry, and only when the snapshot moved
- * or a quiet period passed. A sweep runs on every synced pull request, on every finished
- * run, and once a minute, so a message held back while the agent was busy goes out on the
- * next pass.
- */
 export class FactoryReviewReactor extends Context.Service<
   FactoryReviewReactor,
   {
@@ -108,7 +98,7 @@ const logSkipped =
       ? Effect.interrupt
       : Effect.logWarning(message, { ...fields, cause: Cause.pretty(cause) });
 
-export const make = Effect.gen(function* () {
+const make = Effect.gen(function* () {
   const engine = yield* Orchestrator.OrchestratorV2;
   const projections = yield* ProjectionStore.ProjectionStoreV2;
   const threadManagement = yield* ThreadManagementService.ThreadManagementService;
@@ -137,11 +127,6 @@ export const make = Effect.gen(function* () {
       Effect.asVoid,
     );
 
-  /**
-   * A task whose last turn filled most of its context compacts before new work, so the work
-   * starts on a small context. The work queues behind the compaction; if that fails, the
-   * queued message still goes out. Providers that report no usage are left alone.
-   */
   const contextNearlyFull = (thread: OrchestrationV2ThreadShell) =>
     projections.getThreadRecords(thread.id, ["providerThreads"]).pipe(
       Effect.map((records) => {

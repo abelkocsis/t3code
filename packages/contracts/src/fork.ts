@@ -1,13 +1,3 @@
-/**
- * Per-thread state this fork keeps beside upstream's thread record.
- *
- * Upstream's thread payload and its event unions stay untouched: a fork field
- * there would break decoding on an upstream client and collide with whatever
- * upstream adds next. The fork keeps its own row per thread in its own table
- * and streams it to clients, which join it on the thread id.
- *
- * @module fork
- */
 import * as Schema from "effect/Schema";
 
 import { ThreadFolderId, ThreadId } from "./baseSchemas.ts";
@@ -25,15 +15,6 @@ export const ForkThreadState = Schema.Struct({
   updatedAt: Schema.String,
 });
 export type ForkThreadState = typeof ForkThreadState.Type;
-
-/** A fresh row for a thread the fork has not touched yet. */
-export const emptyForkThreadState = (threadId: ThreadId): ForkThreadState => ({
-  threadId,
-  folderId: null,
-  factory: null,
-  slackThread: null,
-  updatedAt: "1970-01-01T00:00:00.000Z",
-});
 
 /**
  * What the subscription stream carries: the whole table first, then one row

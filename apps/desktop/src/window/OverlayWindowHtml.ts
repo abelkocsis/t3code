@@ -1,11 +1,3 @@
-/**
- * The overlay window's whole document, served as a data URL.
- *
- * Deliberately plain HTML rather than the web app: the overlay must not open a
- * second websocket connection or mount a second React tree just to draw a list
- * the main renderer already computed. It receives finished text over IPC and
- * draws it. The CSP allows no network of any kind.
- */
 export const buildOverlayDataUrl = (): string => {
   const html = `<!doctype html>
 <html>
@@ -423,23 +415,15 @@ export const buildOverlayDataUrl = (): string => {
 };
 
 export const OVERLAY_WIDTH = 340;
-/**
- * Step away mode is the widest the page ever gets, so the clamp has to reach
- * it. The bound is a guard against a nonsense measurement, not the layout —
- * the page's own CSS decides the width within it.
- */
+
 const OVERLAY_MAX_WIDTH = 560;
 const OVERLAY_MIN_WIDTH = 120;
-/** The hide menu is 214px plus its border, and must never be clipped. */
-const OVERLAY_MENU_WIDTH = 216;
 
 /** Keeps a reported width inside the window's own bounds. */
 export function clampOverlayWidth(width: number): number {
   if (!Number.isFinite(width)) return OVERLAY_WIDTH;
   return Math.min(OVERLAY_MAX_WIDTH, Math.max(OVERLAY_MIN_WIDTH, Math.ceil(width)));
 }
-
-export { OVERLAY_MENU_WIDTH };
 /** Enough for the pill until the page reports what it actually needs. */
 export const OVERLAY_INITIAL_HEIGHT = 44;
 const OVERLAY_MIN_HEIGHT = 36;
@@ -452,25 +436,12 @@ const OVERLAY_ROW_HEIGHT = 48;
 const OVERLAY_ROW_GAP = 7;
 const OVERLAY_ESTIMATE_MAX_ROWS = 5;
 
-/**
- * A first guess at the height, used until the page measures itself.
- *
- * Only ever a starting point: the page reports its real height a frame later
- * and that wins. Its job is to keep the window usable if the measurement is
- * late or never arrives.
- */
 export function estimateOverlayHeight(itemCount: number): number {
   if (itemCount <= 0) return OVERLAY_PILL_HEIGHT;
   const rows = Math.min(itemCount, OVERLAY_ESTIMATE_MAX_ROWS);
   return OVERLAY_CHROME_HEIGHT + rows * OVERLAY_ROW_HEIGHT + (rows - 1) * OVERLAY_ROW_GAP;
 }
 
-/**
- * Keeps a reported height sane. The page measures itself, so this only guards
- * against a zero during a reflow and against a list long enough to cover the
- * screen; the max is above the list's own scroll limit, so it never truncates
- * content that would otherwise fit.
- */
 export function clampOverlayHeight(height: number): number {
   if (!Number.isFinite(height)) return OVERLAY_INITIAL_HEIGHT;
   return Math.min(OVERLAY_MAX_HEIGHT, Math.max(OVERLAY_MIN_HEIGHT, Math.ceil(height)));

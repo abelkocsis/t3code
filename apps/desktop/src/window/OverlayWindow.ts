@@ -41,19 +41,12 @@ export interface OverlayWindowServices {
   readonly current: Effect.Effect<BrowserWindow | null>;
 }
 
-/**
- * The always-on-top overlay window.
- *
- * The renderer decides everything about what to show; this service only obeys.
- * It creates the window on the first visible state, resizes it to fit the rows,
- * and destroys it when the state goes hidden, so a hidden overlay costs nothing.
- */
 export class OverlayWindow extends Context.Service<OverlayWindow, OverlayWindowServices>()(
   "@t3tools/desktop/window/OverlayWindow",
 ) {}
 
 /** Top-right of the work area, inset by a comfortable margin. */
-export function defaultOverlayPosition(input: {
+function defaultOverlayPosition(input: {
   readonly workArea: { readonly x: number; readonly y: number; readonly width: number };
   readonly margin: number;
 }): { readonly x: number; readonly y: number } {
@@ -67,7 +60,7 @@ const DEFAULT_MARGIN = 24;
 /** How long a drag must rest before its position is written to settings. */
 const MOVE_PERSIST_DELAY_MS = 400;
 
-export const make = Effect.gen(function* () {
+const make = Effect.gen(function* () {
   const environment = yield* DesktopEnvironment.DesktopEnvironment;
   const powerSaveBlocker = yield* ElectronPowerSaveBlocker.ElectronPowerSaveBlocker;
   const electronWindow = yield* ElectronWindow.ElectronWindow;
@@ -219,11 +212,7 @@ export const make = Effect.gen(function* () {
   const applyState = (window: BrowserWindow, state: DesktopOverlayState) =>
     Effect.try({
       try: () => {
-        // The estimate only seeds the very first show, so a lost measurement
-        // still leaves a usable window. After that the page owns the size:
-        // re-forcing it here stretched the window back to full width behind a
-        // hugged pill, and the page would not re-report because its own
-        // measurement had not changed.
+        // Only seed the first show; later measurements belong to the page.
         if (!window.isVisible()) {
           const estimate = estimateOverlayHeight(state.mode === "pill" ? 0 : state.items.length);
           window.setSize(OVERLAY_WIDTH, estimate, false);
@@ -258,11 +247,7 @@ export const make = Effect.gen(function* () {
       }
       const existing = yield* readWindow;
       const window = existing ?? (yield* create(state.position));
-      // No waiting for the load here. `create` already awaits loadURL, which
-      // resolves on did-finish-load, so the page is ready. An extra
-      // `once("did-finish-load")` waits for an event that has already fired and
-      // never resumes, and under the sync permit that deadlocks every later
-      // update — the overlay stops appearing at all.
+      // create already awaits loadURL; another load listener would never resume.
       yield* applyState(window, state);
       yield* powerSaveBlocker.hold(state.keepAwake);
     },

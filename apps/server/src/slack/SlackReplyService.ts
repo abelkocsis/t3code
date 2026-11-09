@@ -1,9 +1,3 @@
-/**
- * Replies in a Slack thread with a re-review request. T3 holds no Slack
- * credentials; a provider account whose own Slack connection can post does the sending.
- *
- * @module SlackReplyService
- */
 import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
@@ -25,7 +19,7 @@ export class SlackReplyService extends Context.Service<
   }
 >()("t3/slack/SlackReplyService") {}
 
-export const make = Effect.gen(function* () {
+const make = Effect.gen(function* () {
   const registry = yield* ProviderInstanceRegistry.ProviderInstanceRegistry;
 
   const replyInThread: SlackReplyService["Service"]["replyInThread"] = Effect.fn(

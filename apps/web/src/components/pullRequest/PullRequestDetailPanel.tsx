@@ -1352,6 +1352,7 @@ export function PullRequestDetailPanel({
                 />
               ) : null}
               <PullRequestPrimaryAction
+                checksState={checksState}
                 mergeBlockedReason={mergeBlockedReason}
                 pullRequestKey={pullRequestKey}
                 primaryAction={primaryAction}

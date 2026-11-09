@@ -41,6 +41,12 @@ const buttonVariants = cva(
         xs: "h-7 gap-1 px-[calc(--spacing(2)-1px)] text-sm sm:h-6 sm:text-xs [&_svg:not([class*='size-'])]:size-4 sm:[&_svg:not([class*='size-'])]:size-3.5",
       },
       variant: {
+        success:
+          "border-success bg-success text-success-button-foreground shadow-xs [:hover,[data-pressed]]:bg-success/90",
+        warning:
+          "border-warning bg-warning text-warning-button-foreground shadow-xs [:hover,[data-pressed]]:bg-warning/90",
+        caution:
+          "border-caution bg-caution text-caution-foreground shadow-xs [:hover,[data-pressed]]:bg-caution/90",
         default:
           "not-disabled:inset-shadow-[0_1px_--theme(--color-white/16%)] border-primary bg-primary text-primary-foreground shadow-primary/24 shadow-xs [:active,[data-pressed]]:inset-shadow-[0_1px_--theme(--color-black/8%)] [:disabled,:active,[data-pressed]]:shadow-none [:hover,[data-pressed]]:bg-primary/90",
         destructive:

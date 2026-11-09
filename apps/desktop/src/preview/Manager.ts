@@ -524,18 +524,7 @@ interface PreviewContextMenuTarget {
   readonly copyImageAt: (x: number, y: number) => void;
 }
 
-/**
- * Builds the preview guest's context menu.
- *
- * The items call the guest directly instead of using menu roles, because a role
- * acts on whichever WebContents holds focus and the guest is not the host
- * window. `Copy Link` stays on `http:` and `https:` targets, the schemes a
- * pasted link is useful for.
- *
- * The keyboard chords are handled by isPreviewEditingShortcut. This menu is the
- * second way to the clipboard, for a user who reaches for the right mouse button.
- */
-export const previewContextMenuTemplate = (
+const previewContextMenuTemplate = (
   params: Pick<Electron.ContextMenuParams, "editFlags" | "linkURL" | "mediaType" | "x" | "y">,
   target: PreviewContextMenuTarget,
   writeText: (text: string) => void,

@@ -9,14 +9,6 @@ import { useSyncExternalStore } from "react";
 
 import type { StateStorage } from "./lib/storage";
 
-/**
- * Desktop thread windows: one thread in its own window, without the sidebar.
- *
- * The main window is the only window that saves client state. A thread window
- * reads saved state when it starts, and sends its own thread's changes to the
- * main window through `postToMainWindow`.
- */
-
 const bridge = typeof window !== "undefined" ? window.desktopBridge?.threadWindows : undefined;
 
 function toThreadRef(target: DesktopThreadWindowTarget): ScopedThreadRef {
@@ -49,11 +41,6 @@ mainWindowBridge?.onChange((targets) => {
 function subscribePoppedOutThreads(listener: () => void): () => void {
   poppedOutListeners.add(listener);
   return () => poppedOutListeners.delete(listener);
-}
-
-/** True when the thread has its own window, so the main window must not show it. */
-export function isThreadPoppedOut(threadRef: ScopedThreadRef): boolean {
-  return poppedOutThreadKeys.has(scopedThreadKey(threadRef));
 }
 
 export function usePoppedOutThreadKeys(): ReadonlySet<string> {

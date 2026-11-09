@@ -1,14 +1,3 @@
-/**
- * Keeps the generated summaries on disk, one file for the whole environment.
- *
- * A summary is not event-sourced. It derives from work the event stream already
- * records, it belongs to no thread, and nothing else in the server reacts to
- * one. A small JSON file next to the usage rate cache is the whole requirement,
- * and it keeps the orchestration event stream free of a per-day write that no
- * decider needs to reason about.
- *
- * @module StandupStore
- */
 import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
@@ -21,14 +10,7 @@ import { StandupSummary } from "@t3tools/contracts";
 import * as ServerConfig from "../config.ts";
 import { writeFileStringAtomically } from "@t3tools/shared/atomicWrite";
 
-/**
- * How many days of summaries the file keeps.
- *
- * A user reads back the last few days at most, and a year of summaries would
- * make every read parse a file nobody looks at. Trimming on write keeps the
- * file small without a separate sweep.
- */
-export const MAX_STORED_DAYS = 180;
+const MAX_STORED_DAYS = 180;
 
 const CURRENT_VERSION = 1;
 
@@ -49,7 +31,7 @@ export class StandupStore extends Context.Service<
   }
 >()("t3/standup/StandupStore") {}
 
-export const make = Effect.gen(function* () {
+const make = Effect.gen(function* () {
   const config = yield* ServerConfig.ServerConfig;
   const fileSystem = yield* FileSystem.FileSystem;
   const path = yield* Path.Path;

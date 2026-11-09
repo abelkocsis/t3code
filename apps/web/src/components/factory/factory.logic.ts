@@ -18,11 +18,6 @@ import {
 } from "@t3tools/contracts";
 import { visibleThreadPullRequests } from "@t3tools/shared/threadPullRequests";
 
-/**
- * What the row says about the task right now. Waiting on the human comes first. A task that
- * is not waiting, failed, or done is working: an idle session between watcher ticks still
- * counts as the factory being busy.
- */
 export type FactoryTaskState = "waiting" | "working" | "idle" | "snoozed" | "error" | "done";
 
 export const FACTORY_TASK_STATE_LABELS: Record<FactoryTaskState, string> = {
@@ -35,7 +30,7 @@ export const FACTORY_TASK_STATE_LABELS: Record<FactoryTaskState, string> = {
 };
 
 /** A snoozed task is parked on purpose, so it never counts as waiting on the human. */
-export function isFactoryTaskSnoozed(thread: EnvironmentThreadShell, now: number): boolean {
+function isFactoryTaskSnoozed(thread: EnvironmentThreadShell, now: number): boolean {
   if (thread.snoozedUntil == null) return false;
   const wakeAt = Date.parse(thread.snoozedUntil);
   return !Number.isNaN(wakeAt) && wakeAt > now;
@@ -51,7 +46,7 @@ export interface FactoryTask {
 }
 
 /** The pull request a task follows: an open one first, then the newest linked one. */
-export function factoryTaskPullRequest(thread: EnvironmentThreadShell): FactoryTask["pullRequest"] {
+function factoryTaskPullRequest(thread: EnvironmentThreadShell): FactoryTask["pullRequest"] {
   const links = visibleThreadPullRequests(thread.pullRequests);
   return links.find((link) => link.snapshot?.state === "open") ?? links.at(-1) ?? null;
 }
@@ -68,13 +63,6 @@ export function isFactoryAgentRunning(thread: EnvironmentThreadShell): boolean {
   );
 }
 
-/**
- * Ready for review, ready to merge, and a human gate wait on the human while the agent is
- * quiet: one sends the review request, one presses Merge, one answers the agent's question.
- * Under review, a quiet agent is idle: the server watches the pull request and wakes it when
- * there is work. Everywhere else a quiet agent still counts as working, because the flow is
- * in its hands.
- */
 export function factoryTaskState(
   thread: EnvironmentThreadShell,
   factory: ThreadFactory,
@@ -101,20 +89,9 @@ export function factoryTaskState(
   return phase === "under-review" ? "idle" : "working";
 }
 
-/**
- * How the sidebar, the overlay, and notifications read a factory task, in place of the
- * thread's own status. The agent finishes turns all the time without needing anyone, so a
- * finished turn is not news on its own: the task asks for attention only when it waits on
- * the human (a gate, held work, a question, an approval) or when it failed. In between, the
- * agent or the server review loop is at work, and the task reads as working.
- */
 export interface FactoryAttention {
   readonly status: AttentionSourceStatus;
-  /**
-   * When the task started waiting on the human, set only with status "ready". The later of
-   * the stage change and the last finished turn: a visit after the gate opened counts as
-   * seen, and a turn the user started at the gate shows as new again. Null: nothing new.
-   */
+
   readonly gateAt: string | null;
 }
 
@@ -239,11 +216,6 @@ export function factoryProgress(task: Pick<FactoryTask, "factory" | "pullRequest
   };
 }
 
-/**
- * The factory state for an existing thread added by hand. A linked pull request decides the
- * stage: open, or not synced yet, is ready for review. Without one the agent works out the
- * phase, so `askAgent` is true and "requirements" holds the place until its marker line lands.
- */
 export function factoryJoinState(
   thread: EnvironmentThreadShell,
   now: string,

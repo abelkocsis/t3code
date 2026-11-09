@@ -46,11 +46,6 @@ export type FactoryReviewThread = Pick<
  */
 export type FactoryMergeState = "clean" | "behind" | "dirty" | "unknown";
 
-/**
- * The pull request as the review stages see it, put together from the sync snapshot and
- * the host's detail and activity reads. The snapshot alone does not carry review ids or
- * open thread counts, so the sweep reads the host for a task in a review stage.
- */
 export interface FactoryPullRequestView {
   readonly state: PullRequestState;
   readonly title: string;
@@ -134,12 +129,6 @@ function mergeStateOf(
   return detail.mergeability === "mergeable" ? "clean" : "unknown";
 }
 
-/**
- * Builds the review view. The snapshot gives the state the sync already tracks; the detail
- * gives the base comparison and the checks; the activity gives reviews, threads, and
- * comments. Without an activity read the review fields stay absent, so nothing fires on
- * them and nothing is forgotten.
- */
 export function factoryPullRequestView(
   snapshot: ThreadPullRequestSnapshot,
   detail: Pick<
@@ -198,7 +187,7 @@ export function watchedAfterReview(thread: FactoryReviewThread, factory: ThreadF
 }
 
 /** A message to the agent must not land mid-turn or jump an unanswered question. */
-export function canMessageThread(thread: FactoryReviewThread): boolean {
+function canMessageThread(thread: FactoryReviewThread): boolean {
   if (thread.archivedAt !== null) return false;
   if (
     thread.status === "preparing" ||
@@ -327,27 +316,6 @@ function withoutClearedWork(factory: ThreadFactory, target: FactoryReviewTarget)
   };
 }
 
-/**
- * Moves a task through the review stages from its pull request, and tells the agent when
- * review work is needed. The human marks "under-review" and merges; this never merges.
- *
- * - A merged pull request ends the task as "merged"; a closed one as "done".
- * - "done" with a pull request becomes "ready-for-review".
- * - Ready for review: nobody reviews yet, so only a failed check or a stale base (behind or
- *   in conflict) becomes a message to the agent, and the phase goes to "fix".
- * - Under review: approval plus green checks on a clean branch with no open threads gives
- *   "ready-to-merge", even when the approval is new. Otherwise a human review or conversation
- *   comment the agent was not sent yet comes first. More open threads than before (a bot's
- *   review), a failed check, or a stale base become a message to the agent and the phase goes
- *   to "fix". Each cause fires once, and again only after it cleared.
- * - Ready to merge falls back to the under-review rules when the pull request changes.
- * - After the review stages, "fix" and an answered human gate keep the ready-for-review rules
- *   once the agent stops, so a push that breaks CI or falls behind the base is not missed.
- * - Token saving holds each message as `pendingWork` instead of sending it, and leaves the
- *   phase alone, so the task waits on the human. Turning token saving off sends held work, and
- *   the agent also checks the whole pull request, because it may have moved on meanwhile.
- *   A held failed check or stale base that clears on its own leaves the held work.
- */
 export function decideFactoryReview(
   input: FactoryReviewInput,
   now: string,

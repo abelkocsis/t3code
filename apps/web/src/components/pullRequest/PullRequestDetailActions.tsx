@@ -4,6 +4,7 @@ import {
 } from "./pullRequestDetail.logic";
 import type {
   EnvironmentId,
+  PullRequestChecksState,
   PullRequestAction,
   PullRequestMergeMethod,
   PullRequestUpdateMethod,
@@ -206,6 +207,7 @@ export function PullRequestPrimaryAction({
   perform,
   resolveConflicts,
   blockers = [],
+  checksState = null,
 }: {
   pullRequestKey: string;
   primaryAction: ReturnType<typeof resolvePullRequestPrimaryControl> | null;
@@ -220,8 +222,15 @@ export function PullRequestPrimaryAction({
   perform: PerformPullRequestAction;
   resolveConflicts: ReactNode;
   blockers?: ReadonlyArray<PullRequestMergeBlocker>;
+  checksState?: PullRequestChecksState | null;
 }) {
   const inlineConfirm = useInlineActionConfirm(pullRequestKey);
+  const mergeWarning =
+    checksState === "failing"
+      ? "CI failed. Merge only if you accept the failed checks."
+      : checksState === "pending"
+        ? "CI is still running. Merge before checks finish?"
+        : null;
   const actionPending = pendingAction !== null;
   return (
     <>
@@ -358,10 +367,18 @@ export function PullRequestPrimaryAction({
               <span className="inline-flex shrink-0">
                 <Button
                   size="xs"
-                  variant="default"
+                  variant={
+                    checksState === "passing"
+                      ? "success"
+                      : checksState === "pending"
+                        ? "warning"
+                        : checksState === "failing"
+                          ? "caution"
+                          : "outline"
+                  }
                   disabled={actionPending}
                   aria-disabled={mergeBlockedReason !== null || undefined}
-                  aria-description={mergeBlockedReason ?? undefined}
+                  aria-description={mergeBlockedReason ?? mergeWarning ?? undefined}
                   {...(mergeBlockedReason === null
                     ? inlineConfirm.props("merge", () => void perform("merge", selectedMergeMethod))
                     : {})}
@@ -369,7 +386,11 @@ export function PullRequestPrimaryAction({
                     pendingAction === "merge"
                       ? "Merging..."
                       : inlineConfirm.isArmed("merge")
-                        ? "Confirm merge?"
+                        ? checksState === "failing"
+                          ? "Merge despite failed CI?"
+                          : checksState === "pending"
+                            ? "Merge before CI finishes?"
+                            : "Confirm merge?"
                         : selectedMergeMethodLabel
                   }
                 >
@@ -387,7 +408,11 @@ export function PullRequestPrimaryAction({
                         {pendingAction === "merge"
                           ? "Merging..."
                           : inlineConfirm.isArmed("merge")
-                            ? "Confirm merge?"
+                            ? checksState === "failing"
+                              ? "Merge despite failed CI?"
+                              : checksState === "pending"
+                                ? "Merge before CI finishes?"
+                                : "Confirm merge?"
                             : selectedMergeMethodLabel}
                       </span>
                     </span>
@@ -398,6 +423,7 @@ export function PullRequestPrimaryAction({
           />
           <TooltipPopup side="top">
             {mergeBlockedReason ??
+              mergeWarning ??
               (pendingAction === "merge"
                 ? "Merging..."
                 : inlineConfirm.isArmed("merge")

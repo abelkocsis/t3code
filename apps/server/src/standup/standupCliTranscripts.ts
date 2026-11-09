@@ -1,13 +1,3 @@
-/**
- * Pulls the day's prompts out of the Claude CLI's own session transcripts.
- *
- * Work done in a terminal never reaches T3 Code's projections, so without this
- * a summary silently drops it. The parser is the same shape as the usage
- * scanner's: one line at a time, cheap substring gate first, and every
- * malformed line skipped rather than failing the scan.
- *
- * @module standupCliTranscripts
- */
 import { parseIsoUtc } from "./standupDays.ts";
 
 /** A line longer than this is a pasted file or a tool result, not a prompt. */
@@ -20,24 +10,10 @@ export interface CliPrompt {
   readonly text: string;
 }
 
-/**
- * True when a line is worth handing to `JSON.parse`.
- *
- * Transcripts are mostly tool output and assistant turns. This gate skips most
- * of a file outright and is worth roughly an order of magnitude on a cold scan.
- */
-export function mightCarryPrompt(line: string): boolean {
+function mightCarryPrompt(line: string): boolean {
   return line.includes('"type":"user"') || line.includes('"type": "user"');
 }
 
-/**
- * Joins the text a transcript's `message.content` carries.
- *
- * The CLI writes a typed prompt as an array of blocks and an older one as a
- * plain string, so both shapes appear in the same directory. A `tool_result`
- * block is the CLI handing output back to itself as a user turn, so a line that
- * holds one carries no prompt at all and the whole line is dropped.
- */
 function readPromptText(content: unknown): string | null {
   if (typeof content === "string") return content;
   if (!Array.isArray(content)) return null;
@@ -51,12 +27,6 @@ function readPromptText(content: unknown): string | null {
   return texts.length > 0 ? texts.join("\n") : null;
 }
 
-/**
- * Reads one transcript line as a user prompt, or returns `null`.
- *
- * A `<...>` opener is an injected reminder rather than something the developer
- * asked for, so it is dropped for the same reason a tool result is.
- */
 export function parseCliPromptLine(line: string): CliPrompt | null {
   if (!mightCarryPrompt(line)) return null;
   let parsed: unknown;
@@ -94,11 +64,6 @@ export function parseCliPromptLine(line: string): CliPrompt | null {
   };
 }
 
-/**
- * The prefix of the scratch directories T3 Code runs its own CLI calls in.
- *
- * Kept in step with `ClaudeTextGeneration`, which names a title directory.
- */
 const T3_SCRATCH_PREFIX = "t3code-claude-";
 
 /** Splits a path on either separator, so a Windows transcript reads the same. */
@@ -106,15 +71,6 @@ function pathSegments(value: string): ReadonlyArray<string> {
   return value.split(/[/\\]/).filter((segment) => segment.length > 0);
 }
 
-/**
- * True when a session belongs in the summary.
- *
- * Two kinds of session do not. T3 Code writes a transcript for its own CLI
- * calls, such as thread titling, and reporting those as the user's work is
- * reporting the app to itself. A session inside a T3 Code worktree is a thread
- * the projections already carry, so counting it again gives one piece of work
- * two bullets.
- */
 export function isReportableWorkspace(input: {
   readonly cwd: string;
   readonly worktreesDir: string;
@@ -128,12 +84,6 @@ export function isReportableWorkspace(input: {
   return !worktrees.every((segment, index) => segments[index] === segment);
 }
 
-/**
- * Groups prompts into one entry per working directory, newest directory first.
- *
- * A developer runs many sessions in one repository over a day. The repository
- * is the unit the standup cares about, not the session id.
- */
 export function groupPromptsByWorkspace(
   prompts: ReadonlyArray<CliPrompt>,
   limits: { readonly workspaces: number; readonly promptsPerWorkspace: number },

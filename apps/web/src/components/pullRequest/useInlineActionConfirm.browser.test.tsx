@@ -112,3 +112,35 @@ it.each(["merge", "enable-auto-merge"] as const)(
     expect(perform).toHaveBeenCalledExactlyOnceWith(primaryAction, "squash");
   },
 );
+
+it.each([
+  ["pending", "CI is still running. Merge before checks finish?", "Merge before CI finishes?"],
+  ["failing", "CI failed. Merge only if you accept the failed checks.", "Merge despite failed CI?"],
+] as const)("warns before merging with %s CI", async (checksState, warning, confirmation) => {
+  const perform = vi.fn(async () => true);
+  const { PullRequestPrimaryAction } = await import("./PullRequestDetailActions");
+  await using screen = await render(
+    <PullRequestPrimaryAction
+      pullRequestKey="owner/repo/7"
+      primaryAction="merge"
+      checksState={checksState}
+      mergeBlockedReason={null}
+      autoMergeArmed={false}
+      armedAutoMergeLabel="Auto-merge enabled"
+      pendingAutoMergeLabel="Auto-merge (squash)"
+      selectedMergeMethod="squash"
+      selectedMergeMethodLabel="Squash and merge"
+      statePresentation={null}
+      pendingAction={null}
+      perform={perform}
+      resolveConflicts={null}
+    />,
+  );
+  const button = screen.getByRole("button");
+  await expect.element(button).toHaveAccessibleDescription(warning);
+  await userEvent.click(button);
+  await expect.element(button).toHaveAccessibleName(confirmation);
+  expect(perform).not.toHaveBeenCalled();
+  await userEvent.click(button);
+  expect(perform).toHaveBeenCalledExactlyOnceWith("merge", "squash");
+});

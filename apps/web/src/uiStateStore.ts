@@ -340,7 +340,7 @@ export function restoreOverlayDismissals(state: UiState): UiState {
   return { ...state, overlayDismissedAtById: {} };
 }
 
-export function setThreadChangedFilesExpanded(
+function setThreadChangedFilesExpanded(
   state: UiState,
   threadId: string,
   turnId: string,

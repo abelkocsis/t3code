@@ -1,15 +1,3 @@
-/**
- * Keeps the environment's to-do list on disk, in one JSON file.
- *
- * The list is typed by the user, derives from nothing, and no decider reasons
- * about it, so it stays out of the orchestration event stream. It sits beside
- * the standup summaries for the same reason they do.
- *
- * Unlike a summary, a to-do is not recoverable from anything else. A failed
- * write is therefore reported to the client rather than swallowed.
- *
- * @module TodoStore
- */
 import * as Context from "effect/Context";
 import * as DateTime from "effect/DateTime";
 import * as Effect from "effect/Effect";
@@ -23,25 +11,12 @@ import { TodoError, TodoItem, type TodoList } from "@t3tools/contracts";
 import * as ServerConfig from "../config.ts";
 import { writeFileStringAtomically } from "@t3tools/shared/atomicWrite";
 
-/**
- * How many items the file keeps.
- *
- * A hand-typed list never reaches this. The cap is there so a client bug
- * cannot grow the file without bound.
- */
-export const MAX_TODO_ITEMS = 500;
+const MAX_TODO_ITEMS = 500;
 
-/**
- * How long a cleared item stays in the archive.
- *
- * The archive exists so the daily summary can still report an item the user
- * ticked off and then cleared. A summary covers one recent day, so a month
- * covers every day the user can still ask for.
- */
 export const ARCHIVE_RETENTION_MS = 30 * 86_400_000;
 
 /** A hard stop on the archive, so a clear-happy day cannot grow the file. */
-export const MAX_ARCHIVED_ITEMS = 500;
+const MAX_ARCHIVED_ITEMS = 500;
 
 const CURRENT_VERSION = 2;
 
@@ -62,25 +37,11 @@ export class TodoStore extends Context.Service<
     readonly read: Effect.Effect<TodoList, TodoError>;
     /** Replaces the list and answers with what was stored. */
     readonly write: (items: ReadonlyArray<TodoItem>) => Effect.Effect<TodoList, TodoError>;
-    /**
-     * Every item the user has ticked off, still on the list or already cleared.
-     *
-     * The daily summary reads this and keeps the items whose `doneAt` falls in
-     * the day it reports.
-     */
+
     readonly readCompleted: Effect.Effect<ReadonlyArray<TodoItem>, TodoError>;
   }
 >()("t3/todos/TodoStore") {}
 
-/**
- * Carries the server's timestamps onto one item of an incoming list.
- *
- * The client sends the whole list on every change, with no timestamp it can be
- * trusted on, so the server derives both instants from what it already stored:
- * an item the previous list did not hold is new, and an item that was open and
- * is now done was ticked off just now. An item stored before this field existed
- * has no creation instant to recover, so it counts as created on this write.
- */
 function stampItem(input: {
   readonly item: TodoItem;
   readonly previous: TodoItem | undefined;
@@ -93,7 +54,7 @@ function stampItem(input: {
   return { itemId: item.itemId, text: item.text, done: true, createdAt, doneAt };
 }
 
-export const make = Effect.gen(function* () {
+const make = Effect.gen(function* () {
   const config = yield* ServerConfig.ServerConfig;
   const fileSystem = yield* FileSystem.FileSystem;
   const path = yield* Path.Path;
@@ -101,13 +62,6 @@ export const make = Effect.gen(function* () {
   const encodeDocument = Schema.encodeEffect(Schema.fromJsonString(TodoDocument));
   const storePath = path.join(config.stateDir, "todos.json");
 
-  /**
-   * The stored document, or `null` when there is nothing usable on disk.
-   *
-   * A missing file is the normal first read, and an unreadable one is treated
-   * the same rather than as an error, so a corrupt file leaves the panel usable
-   * and the next write repairs it.
-   */
   const readDocument = Effect.gen(function* () {
     const raw = yield* fileSystem
       .readFileString(storePath)
@@ -130,12 +84,6 @@ export const make = Effect.gen(function* () {
     return [...live, ...(document.archive ?? []).filter((item) => !liveIds.has(item.itemId))];
   });
 
-  /**
-   * Keeps the archive to the items a summary can still ask for.
-   *
-   * An item with no completion instant cannot be placed on a day, so it is
-   * dropped rather than kept forever.
-   */
   const pruneArchive = (items: ReadonlyArray<TodoItem>, nowMs: number): ReadonlyArray<TodoItem> => {
     const kept = items.filter((item) => {
       if (item.doneAt === undefined) return false;
@@ -204,22 +152,3 @@ export const make = Effect.gen(function* () {
 });
 
 export const layer = Layer.effect(TodoStore, make);
-
-/** An in-memory list, for suites that only need the RPC surface to resolve. */
-export const layerTest = Layer.sync(TodoStore, () => {
-  let items: ReadonlyArray<TodoItem> = [];
-  let updatedAt = "1970-01-01T00:00:00.000Z";
-  return TodoStore.of({
-    read: Effect.sync(() => ({ items, updatedAt })),
-    write: Effect.fn("TodoStore.write")(function* (next) {
-      const nowIso = DateTime.formatIso(yield* DateTime.now);
-      const previousById = new Map(items.map((item) => [item.itemId, item] as const));
-      items = next.map((item) =>
-        stampItem({ item, previous: previousById.get(item.itemId), nowIso }),
-      );
-      updatedAt = nowIso;
-      return { items, updatedAt };
-    }),
-    readCompleted: Effect.sync(() => items.filter((item) => item.done)),
-  });
-});

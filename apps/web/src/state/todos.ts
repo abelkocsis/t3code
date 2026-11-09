@@ -1,12 +1,3 @@
-/**
- * To-do list state for one environment.
- *
- * Every edit replaces the whole list, so the panel holds the result it just
- * sent until the server echoes it. Without that the list would flash back to
- * the stored order for one round trip on each reorder.
- *
- * @module state/todos
- */
 import { useAtomValue } from "@effect/atom-react";
 import type { EnvironmentId, TodoItem, TodoList } from "@t3tools/contracts";
 import * as Option from "effect/Option";
@@ -39,7 +30,7 @@ export interface TodoView {
 }
 
 /** Splits the stored list the way the panel draws it. */
-export function partitionTodos(items: readonly TodoItem[]): {
+function partitionTodos(items: readonly TodoItem[]): {
   open: readonly TodoItem[];
   done: readonly TodoItem[];
 } {

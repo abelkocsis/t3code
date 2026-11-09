@@ -1,24 +1,9 @@
-/**
- * The fork's own migration ledger.
- *
- * Upstream's migrator skips every id at or below the highest recorded one,
- * whatever name it carries, so a fork id inside `effect_sql_migrations` masks
- * whichever upstream migration later claims that number (see
- * docs/internals/legacy-orchestration-migration.md). These migrations record
- * themselves in `fork_sql_migrations` instead and only ever create tables
- * prefixed `fork_`, so the two ledgers never meet.
- *
- * Add a migration by appending to `forkMigrationEntries`. Never renumber or
- * remove one that has shipped.
- *
- * @module ForkMigrations
- */
 import * as Effect from "effect/Effect";
 import * as Migrator from "effect/sql/Migrator";
 import * as SqlClient from "effect/sql/SqlClient";
 import * as SqlError from "effect/sql/SqlError";
 
-export const FORK_MIGRATIONS_TABLE = "fork_sql_migrations";
+const FORK_MIGRATIONS_TABLE = "fork_sql_migrations";
 
 const ForkThreadState = Effect.gen(function* () {
   const sql = yield* SqlClient.SqlClient;
@@ -35,13 +20,6 @@ const ForkThreadState = Effect.gen(function* () {
   `;
 });
 
-/**
- * Carries the fork's per-thread columns over from the v1 `projection_threads`
- * table, which the v2 copy of the database still holds. The old fork added
- * `folder_id` there with its own migration, so the column exists only on a
- * database that ran the old fork; a pristine upstream database has nothing
- * to import.
- */
 const ImportLegacyThreadState = Effect.gen(function* () {
   const sql = yield* SqlClient.SqlClient;
   const tables = yield* sql<{ readonly name: string }>`
@@ -91,11 +69,6 @@ const ForkThreadStateSlackThread = Effect.gen(function* () {
   yield* sql`ALTER TABLE fork_thread_state ADD COLUMN slack_thread_json TEXT`;
 });
 
-/**
- * Carries the old fork's per-thread Slack link over from `projection_threads`,
- * which only a database that ran the old fork has a `slack_thread_json`
- * column on. A row the folder import already created keeps its folder.
- */
 const ImportLegacySlackThread = Effect.gen(function* () {
   const sql = yield* SqlClient.SqlClient;
   const tables = yield* sql<{ readonly name: string }>`
@@ -113,7 +86,7 @@ const ImportLegacySlackThread = Effect.gen(function* () {
   `;
 });
 
-export const forkMigrationEntries: ReadonlyArray<
+const forkMigrationEntries: ReadonlyArray<
   readonly [
     id: number,
     name: string,

@@ -244,6 +244,10 @@ html[data-mobile-composer-route-transition="true"]::view-transition-old(t3-mobil
   --color-update: var(--update);
   --color-success-foreground: var(--success-foreground);
   --color-success: var(--success);
+  --color-warning-button-foreground: var(--color-amber-950);
+  --color-success-button-foreground: var(--color-emerald-950);
+  --color-caution: var(--color-orange-400);
+  --color-caution-foreground: var(--color-orange-950);
   --color-diff-addition: var(--diff-addition);
   --color-diff-deletion: var(--diff-deletion);
   --color-diff-addition-foreground: var(--diff-addition-foreground);

@@ -273,7 +273,7 @@ export class SourceControlRepositoryError extends Schema.TaggedError<SourceContr
  * The most rows one issue search returns. GitHub's search API pages at 100, and
  * a picker that needs more than that needs a narrower search, not a longer list.
  */
-export const SOURCE_CONTROL_ISSUE_SEARCH_MAX_ROWS = 100;
+const SOURCE_CONTROL_ISSUE_SEARCH_MAX_ROWS = 100;
 
 /** How many characters of an issue body a search row carries. */
 export const SOURCE_CONTROL_ISSUE_SUMMARY_MAX_LENGTH = 280;
@@ -295,11 +295,6 @@ export const SourceControlIssueRef = Schema.Struct({
 });
 export type SourceControlIssueRef = typeof SourceControlIssueRef.Type;
 
-/**
- * One row of a search. Bodies are left out on purpose: fifty issue bodies is a
- * payload nobody reading a list needs, so a row carries only `summary`, and the
- * full text arrives from `sourceControl.issueDetails` for the few issues a user picks.
- */
 export const SourceControlIssueSummary = Schema.Struct({
   repository: TrimmedNonEmptyString,
   number: PositiveInt,
@@ -324,11 +319,6 @@ export const SourceControlIssueDetail = Schema.Struct({
 });
 export type SourceControlIssueDetail = typeof SourceControlIssueDetail.Type;
 
-/**
- * `assignedToViewer` is its own field rather than text the caller appends,
- * because the picker's filter must survive a user typing their own qualifiers
- * into `query` and must never be defeated by them.
- */
 export const SourceControlIssueSearchInput = Schema.Struct({
   provider: SourceControlProviderKind,
   query: TrimmedString,

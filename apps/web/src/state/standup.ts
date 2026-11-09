@@ -1,15 +1,3 @@
-/**
- * Daily summary state for one environment.
- *
- * The summary spans every project on one machine, so it is not merged across
- * environments. The panel reads the environment the active thread belongs to.
- *
- * Generating costs provider tokens, so it only ever happens on an explicit act:
- * opening the panel on a day with work and no stored summary, or pressing
- * Regenerate. Switching to another date never generates on its own.
- *
- * @module state/standup
- */
 import { useAtomValue } from "@effect/atom-react";
 import { StandupDay } from "@t3tools/contracts";
 import type { EnvironmentId, StandupItem, StandupState, StandupSummary } from "@t3tools/contracts";
@@ -25,7 +13,7 @@ import { useAtomQueryRunner } from "./use-atom-query-runner";
  * The zone the user experiences their day in, which the server buckets by.
  * Read once: a machine does not change zone mid-session.
  */
-export const REPORTING_TIME_ZONE: string = (() => {
+const REPORTING_TIME_ZONE: string = (() => {
   try {
     return Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC";
   } catch {
@@ -66,20 +54,13 @@ export interface StandupView {
 }
 
 /** Renders the kept items the way the user pastes them into a chat message. */
-export function formatStandupText(items: readonly StandupItem[]): string {
+function formatStandupText(items: readonly StandupItem[]): string {
   return items
     .filter((item) => !item.excluded)
     .map((item) => `• ${item.text}`)
     .join("\n");
 }
 
-/**
- * The same bullets as an HTML list, for the `text/html` clipboard flavor.
- *
- * Slack's composer pastes a plain-text bullet character as literal text, but
- * turns a pasted `<ul>` into one of its own lists. Carrying both flavors keeps
- * the plain text for terminals and editors and gives Slack real bullets.
- */
 export function formatStandupHtml(items: readonly StandupItem[]): string {
   const rows = items
     .filter((item) => !item.excluded)
@@ -206,11 +187,6 @@ export function useStandup(environmentId: EnvironmentId | null): StandupView {
   };
 }
 
-/**
- * The clock keeps a typed item distinct from a regenerated one, whose ids
- * restart at zero on every run. Kept out of the hook so the compiler sees no
- * impure call in render scope.
- */
 function newManualItemId(): string {
   return `manual-${Date.now()}`;
 }

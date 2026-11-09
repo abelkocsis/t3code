@@ -1,18 +1,3 @@
-/**
- * Assembles and generates the daily summary.
- *
- * The server does all the collecting, so the model call is one shot with no
- * tools: every provider adapter supports it, a generation takes seconds, and
- * each collector is testable on its own. The model only ever sees the evidence
- * assembled here, which is also why it cannot invent a repository or a number.
- *
- * Collection failures never fail a generation. A repository that has gone
- * missing, a pull request host that is signed out, or an unreadable transcript
- * directory each cost the summary one source; failing the whole summary over
- * one of them would cost the user the feature on the morning they need it.
- *
- * @module StandupService
- */
 import * as Clock from "effect/Clock";
 import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
@@ -88,7 +73,7 @@ export class StandupService extends Context.Service<
   }
 >()("t3/standup/StandupService") {}
 
-export const make = Effect.gen(function* () {
+const make = Effect.gen(function* () {
   const config = yield* ServerConfig.ServerConfig;
   const sql = yield* SqlClient.SqlClient;
   const fileSystem = yield* FileSystem.FileSystem;
@@ -134,13 +119,6 @@ export const make = Effect.gen(function* () {
         ),
     ).pipe(Effect.map((values) => values.filter((value) => value.length > 0)));
 
-  /**
-   * Commits the user authored in each project worktree during the window.
-   *
-   * `--all` also walks fetched remote branches, so a worktree holds the whole
-   * team's commits. The author filter matches the worktree's own git identity
-   * by email and by name, so a colleague's day is not reported as the user's.
-   */
   const collectCommits = Effect.fn("StandupService.collectCommits")(function* (window: {
     readonly startMs: number;
     readonly endMs: number;
@@ -216,14 +194,6 @@ export const make = Effect.gen(function* () {
       }));
   });
 
-  /**
-   * Prompts from Claude CLI sessions that ran during the window.
-   *
-   * Reads the default Claude home (honouring `CLAUDE_CONFIG_DIR`); a provider
-   * instance configured with its own home path is not followed. The transcript
-   * files are listed by modification time, which is a coarse filter; the
-   * per-line timestamp is what actually decides.
-   */
   const collectCliSessions = Effect.fn("StandupService.collectCliSessions")(function* (window: {
     readonly startMs: number;
     readonly endMs: number;
@@ -272,12 +242,6 @@ export const make = Effect.gen(function* () {
     });
   });
 
-  /**
-   * To-do items the user ticked off during the window.
-   *
-   * The store keeps a cleared item for a month, so a list the user tidied up
-   * still reports the day it was worked through.
-   */
   const collectTodos = Effect.fn("StandupService.collectTodos")(function* (window: {
     readonly startMs: number;
     readonly endMs: number;
@@ -321,25 +285,10 @@ export const make = Effect.gen(function* () {
     } satisfies StandupFacts;
   });
 
-  /**
-   * Where the provider CLI runs for a generation.
-   *
-   * The prompt already carries every fact, so the directory only decides which
-   * provider configuration the CLI picks up. A project root is the closest
-   * match to how the user runs that provider; the state directory is a readable
-   * fallback for an environment with no project yet.
-   */
   const resolveGenerationCwd = readProjectRoots.pipe(
     Effect.map((roots) => roots[0]?.workspaceRoot ?? config.stateDir),
   );
 
-  /**
-   * The day the panel opens on: the last day before today that recorded work.
-   *
-   * Today is excluded because a standup reports a finished day. An environment
-   * whose only work is today still gets that day, so a first run shows
-   * something rather than an empty panel.
-   */
   const resolveDefaultDay = Effect.fn("StandupService.resolveDefaultDay")(
     function* (timeZone: string) {
       const nowMs = yield* Clock.currentTimeMillis;

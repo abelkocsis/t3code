@@ -1,20 +1,6 @@
-/**
- * Pure day arithmetic for the daily summary, in the user's reporting zone.
- *
- * A standup covers a wall-clock day, not a UTC day: a turn that ran at 23:30
- * local belongs to that evening's work. `Intl.DateTimeFormat` is the only
- * reliable way to resolve a wall-clock day, so the offset is measured through
- * it rather than assumed.
- *
- * Days are plain `YYYY-MM-DD` strings and instants are epoch milliseconds, so
- * every function here is integer arithmetic with no date object in sight.
- *
- * @module standupDays
- */
-
 const DAY_PATTERN = /^(\d{4})-(\d{2})-(\d{2})$/;
 
-export const MS_PER_DAY = 86_400_000;
+const MS_PER_DAY = 86_400_000;
 
 export function isStandupDay(value: string): boolean {
   return DAY_PATTERN.test(value);
@@ -30,12 +16,6 @@ function pad(value: number, width: number): string {
   return String(value).padStart(width, "0");
 }
 
-/**
- * Formats a UTC instant as `YYYY-MM-DD`, by the civil-from-days algorithm.
- *
- * Written out rather than delegated to a date object because the Effect lint
- * rules forbid one, and because the arithmetic is exact for every year here.
- */
 function toUtcDay(timestampMs: number): string {
   const days = Math.floor(timestampMs / MS_PER_DAY);
   // Shift the epoch to 0000-03-01 so a leap day lands at the end of a cycle.
@@ -69,13 +49,6 @@ function utcMidnightMs(year: number, month: number, date: number): number {
   return (era * 146_097 + dayOfEra - 719_468) * MS_PER_DAY;
 }
 
-/**
- * Milliseconds to add to a UTC instant to get the wall-clock reading in
- * `timeZone`.
- *
- * Returns 0 for a zone the runtime rejects, which degrades the feature to UTC
- * days rather than failing a summary the user asked for.
- */
 function zoneOffsetMs(timestampMs: number, timeZone: string): number {
   let parts: ReadonlyArray<Intl.DateTimeFormatPart>;
   try {
@@ -104,13 +77,6 @@ function zoneOffsetMs(timestampMs: number, timeZone: string): number {
   return asUtc - timestampMs;
 }
 
-/**
- * The UTC instant at which `day` starts in `timeZone`.
- *
- * The offset is measured twice, because the offset that applies at the start of
- * a local day is not always the offset that applies at UTC midnight of the same
- * date.
- */
 export function zonedDayStartMs(day: string, timeZone: string): number {
   const { year, month, date } = parseDay(day);
   const utcMidnight = utcMidnightMs(year, month, date);
@@ -125,12 +91,6 @@ export interface StandupDayWindow {
   readonly endMs: number;
 }
 
-/**
- * The half-open UTC window covering `day` in `timeZone`.
- *
- * The end is the start of the next date rather than a fixed 24 hours, so a day
- * that gains or loses an hour to daylight saving stays whole.
- */
 export function standupDayWindow(day: string, timeZone: string): StandupDayWindow {
   return {
     startMs: zonedDayStartMs(day, timeZone),

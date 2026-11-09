@@ -843,7 +843,3 @@ export function StorageCleanupSections() {
     </>
   );
 }
-
-export function BitSafeStorageSettingsPanel() {
-  return <WorktreeCleanupSection bitsafeOnly />;
-}

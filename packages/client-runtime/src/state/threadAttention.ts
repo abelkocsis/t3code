@@ -1,11 +1,6 @@
 // @effect-diagnostics globalDate:off -- Compares wall-clock stamps from the shell against the visit watermark.
 
-/**
- * The phases that ask something of the user. Two of them block the agent
- * (approval, input) and two only report (failed, completed), but all four are
- * things a user who stepped away wants to hear about.
- */
-export const ATTENTION_PHASES = [
+const ATTENTION_PHASES = [
   "waiting_for_approval",
   "waiting_for_input",
   "failed",
@@ -14,11 +9,6 @@ export const ATTENTION_PHASES = [
 
 export type AttentionPhase = (typeof ATTENTION_PHASES)[number];
 
-/**
- * The sidebar's reading of a thread, which is the one attention derivation the
- * client has. The overlay reads the same value rather than walking the shell
- * itself, so the two surfaces can never disagree about what is waiting.
- */
 export type AttentionSourceStatus =
   | "approval"
   | "input"
@@ -40,14 +30,6 @@ export interface AttentionThreadInput {
   readonly archivedAt: string | null;
 }
 
-/**
- * A thread's current phase plus the timestamp that stamps it.
- *
- * The shell carries no dedicated "asked for approval at" field, so each phase
- * borrows the freshest timestamp that moves when the phase does: a finished
- * run stamps its own completion, and a pending request rides the thread's own
- * updatedAt, which the request bumps.
- */
 export interface ThreadAttention {
   readonly phase: AttentionPhase;
   readonly at: string;
@@ -89,14 +71,6 @@ export function resolveThreadAttention(
   }
 }
 
-/**
- * Whether the user has looked at the thread since it entered this phase.
- *
- * A finished run on a thread with no recorded visit counts as seen, the same
- * way the sidebar reads it: a thread nobody ever opened is history, not news.
- * A question, an approval, or a failure on such a thread still counts, because
- * it needs someone whether or not anyone has opened the thread yet.
- */
 export function isThreadAttentionUnseen(input: {
   readonly attention: ThreadAttention;
   readonly lastVisitedAt: string | null | undefined;
@@ -109,13 +83,6 @@ export function isThreadAttentionUnseen(input: {
   return attentionAtMs > lastVisitedAtMs;
 }
 
-/**
- * Whether the user hid this thread from the overlay.
- *
- * A dismissal is stamped with the attention time it hid, so it covers that
- * phase only: newer work on the thread raises the row again. Unlike a visit, a
- * dismissal says nothing about the main UI, which keeps its unread mark.
- */
 export function isThreadAttentionDismissed(input: {
   readonly attention: ThreadAttention;
   readonly dismissedAt: string | null | undefined;

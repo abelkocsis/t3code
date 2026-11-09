@@ -1,11 +1,3 @@
-/**
- * A factory task is a thread that runs the code-factory flow on its own. The Factory page
- * lists these threads by phase and shows when one waits on a human. The agent writes a
- * free-format report per phase for later agents; the page reads only the marker line.
- *
- * The state lives in the fork's own per-thread row (see fork.ts), never in upstream's
- * thread payload.
- */
 import * as Schema from "effect/Schema";
 
 import {
@@ -15,11 +7,6 @@ import {
   TrimmedString,
 } from "./baseSchemas.ts";
 
-/**
- * The phases in the order the flow runs them. A small task may skip the two spec phases. The
- * agent reports the first nine; the server moves a task through the review stages from the
- * pull request state, and the human marks "under-review" and merges.
- */
 export const FACTORY_PHASES = [
   "requirements",
   "product-spec",
@@ -188,14 +175,6 @@ export const ThreadFactory = Schema.Struct({
   pendingWork: Schema.optional(Schema.NullOr(FactoryPendingWork)),
 });
 export type ThreadFactory = typeof ThreadFactory.Type;
-
-/**
- * The factory state after the thread wakes. A wake from any source, such as a new message,
- * ends the wait on a blocking pull request, so the hourly merge check stops watching it.
- */
-export function factoryAfterWake<F extends ThreadFactory | null | undefined>(factory: F): F {
-  return factory?.blockedBy ? { ...factory, blockedBy: null } : factory;
-}
 
 /** The line an agent prints when it enters a phase. Only this line is parsed. */
 export const FACTORY_PHASE_MARKER = "FACTORY PHASE:";
