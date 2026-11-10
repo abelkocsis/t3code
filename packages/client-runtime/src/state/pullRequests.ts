@@ -1008,6 +1008,11 @@ export function createPullRequestEnvironmentAtoms<R, E>(
         }),
     }),
     reviewGuide,
+    assessComments: createEnvironmentRpcCommand(runtime, {
+      label: "environment-data:pull-requests:assess-comments",
+      tag: WS_METHODS.pullRequestsAssessComments,
+      execute: (input) => routedRequest(WS_METHODS.pullRequestsAssessComments, input),
+    }),
     generateReviewGuide: createEnvironmentRpcCommand(runtime, {
       label: "environment-data:pull-requests:generate-review-guide",
       tag: WS_METHODS.pullRequestsGenerateReviewGuide,

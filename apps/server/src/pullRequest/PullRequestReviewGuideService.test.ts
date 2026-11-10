@@ -12,6 +12,7 @@ import * as Queue from "effect/Queue";
 import * as Tracer from "effect/Tracer";
 import {
   ProjectId,
+  ProviderInstanceId,
   GitCommandError,
   type PullRequestActivity,
   type PullRequestDetail,
@@ -155,6 +156,9 @@ const makeLayer = (input: {
   readonly headSha: string;
   readonly lowerSha: string;
   readonly upperSha: string;
+  readonly assess?: NonNullable<
+    TextGeneration.TextGeneration["Service"]["assessPullRequestComments"]
+  >;
   readonly generate: TextGeneration.TextGeneration["Service"]["generateReviewGuide"];
   readonly stored: Deferred.Deferred<void>;
   readonly enabled?: boolean;
@@ -185,6 +189,7 @@ const makeLayer = (input: {
             : Ref.get(input.currentHead)
           ).pipe(Effect.map((head) => detail(input.workspace, head))),
         activity: () => Effect.succeed(activity),
+        diff: () => Effect.succeed({ patch: "diff evidence", truncated: false, nextCursor: null }),
         invalidate: () => Effect.void,
         stack: () => Effect.succeed(stack(input)),
       } as unknown as PullRequestService.PullRequestService["Service"]),
@@ -210,6 +215,7 @@ const makeLayer = (input: {
     Layer.provide(
       Layer.succeed(TextGeneration.TextGeneration, {
         generateReviewGuide: input.generate,
+        assessPullRequestComments: input.assess,
       } as unknown as TextGeneration.TextGeneration["Service"]),
     ),
     Layer.provide(ServerSettings.layerTest({ reviewGuidesEnabled: input.enabled ?? true })),
@@ -363,6 +369,38 @@ const startSingleBranchRun = (input: {
   });
 
 it.layer(layerBase, { excludeTestServices: true })("PullRequestReviewGuideService", (it) => {
+  it.effect("assesses current comments and diff using the supplied thread model options", () =>
+    Effect.gen(function* () {
+      const repositories = yield* makeRepositories;
+      const stored = yield* Deferred.make<void>();
+      const modelSelection = {
+        instanceId: ProviderInstanceId.make("codex"),
+        model: "test-model",
+        options: [{ id: "reasoningEffort", value: "high" }],
+      };
+      const result = yield* Effect.gen(function* () {
+        const service = yield* PullRequestReviewGuideService.PullRequestReviewGuideService;
+        return yield* service.assessComments({ ...reference, modelSelection, includeIssues: true });
+      }).pipe(
+        Effect.provide(
+          makeLayer({
+            ...repositories,
+            stored,
+            generate: () => Effect.die("guide generation must not run"),
+            assess: (input) => {
+              assert.deepStrictEqual(input.modelSelection, modelSelection);
+              const evidence = JSON.parse(input.evidence);
+              assert.strictEqual(evidence.diff.patch, "diff evidence");
+              assert.strictEqual(evidence.headSha, repositories.headSha);
+              assert.deepStrictEqual(evidence.comments, []);
+              return Effect.succeed({ summary: "A concise summary.", issues: [] });
+            },
+          }),
+        ),
+      );
+      assert.deepStrictEqual(result, { summary: "A concise summary.", issues: [] });
+    }),
+  );
   it.effect.each([
     {
       name: "a branch named like the short head",

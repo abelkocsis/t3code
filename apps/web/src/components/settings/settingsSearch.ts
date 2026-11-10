@@ -777,6 +777,18 @@ export const SETTINGS_SEARCH_ITEMS = [
     searchTerms: ["proactive automatically open diff pull request pr right panel agent completion"],
   },
   {
+    id: "automatic-pr-comment-assessment",
+    title: "Automatically assess PR comments",
+    to: "/settings/general",
+    searchTerms: ["bitsafe issues resolved comments agent analysis"],
+  },
+  {
+    id: "focused-pull-request-view",
+    title: "Focused pull request view",
+    to: "/settings/general",
+    searchTerms: ["bitsafe pr review checks conversations layout"],
+  },
+  {
     id: "pull-request-auto-merge",
     title: "Pull request auto-merge",
     to: "/settings/general",

@@ -1,3 +1,8 @@
+import * as Schema from "effect/Schema";
+import type {
+  PullRequestCommentAssessmentInput,
+  PullRequestCommentAssessment,
+} from "@t3tools/contracts";
 import * as Cause from "effect/Cause";
 import * as Clock from "effect/Clock";
 import * as Context from "effect/Context";
@@ -39,11 +44,16 @@ import { pullRequestSyncKey } from "./pullRequestSyncKey.ts";
 import { reviewGuideInputFromPullRequest } from "./pullRequestReviewGuideInput.ts";
 import { normalizeReviewGuide, parseReviewGuideChange } from "./pullRequestReviewGuideNormalize.ts";
 
+const encodeAssessmentEvidence = Schema.encodeEffect(Schema.fromJsonString(Schema.Unknown));
+
 const COMMIT_HASH_PATTERN = /^[0-9a-f]{7,64}$/;
 
 export class PullRequestReviewGuideService extends Context.Service<
   PullRequestReviewGuideService,
   {
+    readonly assessComments: (
+      input: PullRequestCommentAssessmentInput,
+    ) => Effect.Effect<PullRequestCommentAssessment, PullRequestService.PullRequestError>;
     readonly get: (
       input: PullRequestRef,
     ) => Effect.Effect<PullRequestReviewGuideResult, PullRequestService.PullRequestError>;
@@ -530,7 +540,46 @@ const make = Effect.gen(function* () {
     return { guide: stored, run: running, currentHeadSha, started: true };
   });
 
-  return PullRequestReviewGuideService.of({ get, generate });
+  const assessComments = Effect.fn("PullRequestReviewGuideService.assessComments")(function* (
+    input: PullRequestCommentAssessmentInput,
+  ) {
+    const detail = yield* pullRequests.detail(input);
+    const [activity, diff] = yield* Effect.all(
+      [pullRequests.activity(input), pullRequests.diff(input)],
+      { concurrency: "unbounded" },
+    );
+    const assess = textGeneration.assessPullRequestComments;
+    if (!assess)
+      return yield* new PullRequestOperationError({
+        operation: "assessComments",
+        detail: "Comment assessment is unavailable.",
+      });
+    return yield* assess({
+      cwd: detail.workspaceRoot,
+      includeIssues: input.includeIssues,
+      modelSelection: input.modelSelection,
+      evidence: yield* encodeAssessmentEvidence({
+        title: detail.title,
+        description: detail.body,
+        headSha: detail.headSha,
+        comments: activity.comments,
+        commentsTruncated: activity.commentsTruncated,
+        reviewThreads: activity.reviewThreads,
+        commits: activity.commits,
+        diff,
+      }).pipe(Effect.orDie),
+    }).pipe(
+      Effect.mapError(
+        (cause) =>
+          new PullRequestOperationError({
+            operation: "assessComments",
+            detail: "Could not assess PR comments.",
+            cause,
+          }),
+      ),
+    );
+  });
+  return PullRequestReviewGuideService.of({ get, generate, assessComments });
 });
 
 export const layer = Layer.effect(PullRequestReviewGuideService, make);

@@ -437,6 +437,10 @@ export function PullRequestSummaryTab({
   onAddToChat,
   onRefresh,
   onRefreshChecks = onRefresh,
+  focused = false,
+  summary,
+  summaryPending,
+  summaryError,
 }: {
   scrollerRef: (node: HTMLDivElement | null) => void;
   environmentId: EnvironmentId;
@@ -445,6 +449,10 @@ export function PullRequestSummaryTab({
   detail: PullRequestDetailView;
   activityPending: boolean;
   checksStale?: boolean;
+  focused?: boolean;
+  summary?: string | undefined;
+  summaryPending?: boolean;
+  summaryError?: string | undefined;
   activityError: string | null;
   pendingFinding?: string | null;
   fixFindingLabel?: string;
@@ -479,7 +487,9 @@ export function PullRequestSummaryTab({
     filteredItems,
     shownConversations,
   );
-  const [commentOrder, setCommentOrder] = useState<"newest" | "oldest">("newest");
+  const [commentOrder, setCommentOrder] = useState<"newest" | "oldest">(
+    focused ? "oldest" : "newest",
+  );
   const visibleItems = orderPullRequestComments(recentItems, commentOrder);
   const showOldestCommentsButton =
     hiddenConversationCount > 0 ? (
@@ -741,7 +751,9 @@ export function PullRequestSummaryTab({
               {reviewerEntries.length === 0 ? (
                 <span className="text-muted-foreground">None</span>
               ) : (
-                <span className="flex items-center -space-x-1">
+                <span
+                  className={cn("flex flex-wrap items-center", focused ? "gap-3" : "-space-x-1")}
+                >
                   {reviewerEntries.map((entry) => {
                     const login = entry.actor?.login ?? "ghost";
                     const named =
@@ -754,7 +766,9 @@ export function PullRequestSummaryTab({
                           render={
                             <span
                               className={cn(
-                                "relative rounded-full hover:z-10",
+                                focused
+                                  ? "relative inline-flex items-center gap-1.5"
+                                  : "relative rounded-full hover:z-10",
                                 entry.outcome
                                   ? pullRequestReviewOutcomeRingClassName(
                                       entry.outcome,
@@ -770,6 +784,16 @@ export function PullRequestSummaryTab({
                             tooltip={false}
                             variant="avatar"
                           />
+                          {focused ? (
+                            <span className="ml-1.5 text-xs">
+                              {login} ·{" "}
+                              {entry.outcome
+                                ? entry.stale
+                                  ? pullRequestReviewOutcomeStaleLabel(entry.outcome)
+                                  : pullRequestReviewOutcomeLabel(entry.outcome)
+                                : "Pending"}
+                            </span>
+                          ) : null}
                           {entry.outcome ? (
                             <>
                               <PullRequestReviewOutcomeAvatarBadge
@@ -838,7 +862,23 @@ export function PullRequestSummaryTab({
         </div>
       </section>
 
-      <Section key={`description:${detail.url}`} title="Description" keepMounted>
+      {focused ? (
+        <section className="px-4 py-4" aria-label="Summary">
+          <h3 className="mb-2 text-sm font-medium">Summary</h3>
+          <p role="status" className="text-sm text-muted-foreground">
+            {summary ??
+              (summaryPending
+                ? "Generating summary…"
+                : (summaryError ?? "Open this PR in a thread to generate its summary."))}
+          </p>
+        </section>
+      ) : null}
+      <Section
+        key={`description:${detail.url}`}
+        title="Description"
+        defaultOpen={!focused}
+        keepMounted
+      >
         <div className="group">
           {bodyScope?.url === detail.url ? (
             <PullRequestMarkdownEditor
@@ -875,160 +915,167 @@ export function PullRequestSummaryTab({
         </div>
       </Section>
 
-      <Section key={`checks:${detail.url}`} title="Checks" defaultOpen={false}>
-        {checksStale ? (
-          <div className="flex items-center gap-2 text-xs text-muted-foreground">
-            <span>Check details are out of date.</span>
-            <Button size="xs" variant="ghost" onClick={onRefreshChecks}>
-              Refresh
-            </Button>
-          </div>
-        ) : detail.checks.length === 0 ? (
-          <p className="text-xs text-muted-foreground">No checks reported.</p>
-        ) : (
-          detail.checks.map(
-            (
-              check,
-              index,
-            ) => /* oxlint-disable react/no-array-index-key -- Check names and URLs can repeat; these status rows have no local state. */ {
-                const finding = { kind: "check", check } as const;
-                const failing = check.status === "failure" || check.status === "cancelled";
-                return (
-                  <div
-                    key={`${index}:${check.name}:${check.url ?? ""}`}
-                    className="group flex items-center gap-2 rounded-md pr-1 hover:bg-accent/60"
-                  >
-                    <button
-                      type="button"
-                      disabled={!check.url}
-                      onClick={() => check.url && openCheck(check.url)}
-                      className={cn(
-                        "flex min-w-0 flex-1 items-start gap-2 rounded-md px-2 py-2 text-left text-xs leading-5 [&>svg]:mt-0.5",
-                        check.url ? "cursor-pointer" : "cursor-default",
-                      )}
+      {!focused ? (
+        <Section key={`checks:${detail.url}`} title="Checks" defaultOpen={false}>
+          {checksStale ? (
+            <div className="flex items-center gap-2 text-xs text-muted-foreground">
+              <span>Check details are out of date.</span>
+              <Button size="xs" variant="ghost" onClick={onRefreshChecks}>
+                Refresh
+              </Button>
+            </div>
+          ) : detail.checks.length === 0 ? (
+            <p className="text-xs text-muted-foreground">No checks reported.</p>
+          ) : (
+            detail.checks.map(
+              (
+                check,
+                index,
+              ) => /* oxlint-disable react/no-array-index-key -- Check names and URLs can repeat; these status rows have no local state. */ {
+                  const finding = { kind: "check", check } as const;
+                  const failing = check.status === "failure" || check.status === "cancelled";
+                  return (
+                    <div
+                      key={`${index}:${check.name}:${check.url ?? ""}`}
+                      className="group flex items-center gap-2 rounded-md pr-1 hover:bg-accent/60"
                     >
-                      <PullRequestCheckStatusIcon status={check.status} />
-                      <span className="min-w-0 flex-1 wrap-anywhere">{check.name}</span>
-                      <span className="shrink-0 text-muted-foreground">
-                        {pullRequestCheckStatusLabel(check)}
-                      </span>
-                    </button>
-                    {onFixFinding && failing ? (
-                      <Button
-                        size="xs"
-                        variant="ghost"
-                        className="shrink-0"
-                        disabled={pendingFinding !== null && pendingFinding !== undefined}
-                        onClick={() => onFixFinding(finding)}
+                      <button
+                        type="button"
+                        disabled={!check.url}
+                        onClick={() => check.url && openCheck(check.url)}
+                        className={cn(
+                          "flex min-w-0 flex-1 items-start gap-2 rounded-md px-2 py-2 text-left text-xs leading-5 [&>svg]:mt-0.5",
+                          check.url ? "cursor-pointer" : "cursor-default",
+                        )}
                       >
-                        <HammerIcon className="size-3" />
-                        {pendingFinding === pullRequestFindingKey(finding)
-                          ? "Preparing..."
-                          : fixCheckLabel}
-                      </Button>
-                    ) : null}
-                  </div>
-                );
-              } /* oxlint-enable react/no-array-index-key */,
-          )
-        )}
-      </Section>
+                        <PullRequestCheckStatusIcon status={check.status} />
+                        <span className="min-w-0 flex-1 wrap-anywhere">{check.name}</span>
+                        <span className="shrink-0 text-muted-foreground">
+                          {pullRequestCheckStatusLabel(check)}
+                        </span>
+                      </button>
+                      {onFixFinding && failing ? (
+                        <Button
+                          size="xs"
+                          variant="ghost"
+                          className="shrink-0"
+                          disabled={pendingFinding !== null && pendingFinding !== undefined}
+                          onClick={() => onFixFinding(finding)}
+                        >
+                          <HammerIcon className="size-3" />
+                          {pendingFinding === pullRequestFindingKey(finding)
+                            ? "Preparing..."
+                            : fixCheckLabel}
+                        </Button>
+                      ) : null}
+                    </div>
+                  );
+                } /* oxlint-enable react/no-array-index-key */,
+            )
+          )}
+        </Section>
+      ) : null}
 
-      <Section
-        title={`Comments (${detail.commentCount})`}
-        actions={
-          <div className="flex shrink-0 items-center gap-1">
-            <Menu>
-              <MenuTrigger
-                render={<Button size="xs" variant="ghost-muted" />}
-                aria-label="Filter comments"
+      {!focused ? (
+        <Section
+          title={`Comments (${detail.commentCount})`}
+          actions={
+            <div className="flex shrink-0 items-center gap-1">
+              <Menu>
+                <MenuTrigger
+                  render={<Button size="xs" variant="ghost-muted" />}
+                  aria-label="Filter comments"
+                >
+                  <ListFilterIcon aria-hidden className="size-3" />
+                  {filteredOutCount > 0 ? `${filteredOutCount} hidden` : "Filter"}
+                </MenuTrigger>
+                <MenuPopup align="end">
+                  <MenuGroup>
+                    <MenuGroupLabel>Show</MenuGroupLabel>
+                    <MenuCheckboxItem
+                      checked={commentFilter.bots}
+                      closeOnClick={false}
+                      onCheckedChange={(bots) => setCommentFilter((value) => ({ ...value, bots }))}
+                    >
+                      Bot comments
+                    </MenuCheckboxItem>
+                    <MenuCheckboxItem
+                      checked={commentFilter.resolved}
+                      closeOnClick={false}
+                      onCheckedChange={(resolved) =>
+                        setCommentFilter((value) => ({ ...value, resolved }))
+                      }
+                    >
+                      Resolved or dismissed
+                    </MenuCheckboxItem>
+                  </MenuGroup>
+                </MenuPopup>
+              </Menu>
+              <Button
+                size="xs"
+                variant="ghost-muted"
+                aria-label={
+                  commentOrder === "newest"
+                    ? "Show oldest comments first"
+                    : "Show newest comments first"
+                }
+                onClick={() =>
+                  setCommentOrder((value) => (value === "newest" ? "oldest" : "newest"))
+                }
               >
-                <ListFilterIcon aria-hidden className="size-3" />
-                {filteredOutCount > 0 ? `${filteredOutCount} hidden` : "Filter"}
-              </MenuTrigger>
-              <MenuPopup align="end">
-                <MenuGroup>
-                  <MenuGroupLabel>Show</MenuGroupLabel>
-                  <MenuCheckboxItem
-                    checked={commentFilter.bots}
-                    closeOnClick={false}
-                    onCheckedChange={(bots) => setCommentFilter((value) => ({ ...value, bots }))}
-                  >
-                    Bot comments
-                  </MenuCheckboxItem>
-                  <MenuCheckboxItem
-                    checked={commentFilter.resolved}
-                    closeOnClick={false}
-                    onCheckedChange={(resolved) =>
-                      setCommentFilter((value) => ({ ...value, resolved }))
-                    }
-                  >
-                    Resolved or dismissed
-                  </MenuCheckboxItem>
-                </MenuGroup>
-              </MenuPopup>
-            </Menu>
-            <Button
-              size="xs"
-              variant="ghost-muted"
-              aria-label={
-                commentOrder === "newest"
-                  ? "Show oldest comments first"
-                  : "Show newest comments first"
-              }
-              onClick={() => setCommentOrder((value) => (value === "newest" ? "oldest" : "newest"))}
-            >
-              <ArrowDownUpIcon aria-hidden className="size-3" />
-              {commentOrder === "newest" ? "Newest first" : "Oldest first"}
-            </Button>
-          </div>
-        }
-      >
-        {activityPending ? (
-          <PullRequestConversationGhost terminology={terminology} />
-        ) : activityError ? (
-          <PullRequestActivityUnavailableState
-            compact
-            error={activityError}
-            term={terminology.singular}
-            onRetry={onRefresh}
-          />
-        ) : (
-          <>
-            {detail.commentsTruncated ? (
-              <p className="mb-2 rounded-md border border-warning/30 bg-warning-surface px-2 py-1.5 text-xs">
-                This conversation is only partially loaded. {commentCount} comment
-                {commentCount === 1 ? " is" : "s are"} loaded; open it on the host to read the rest.
-              </p>
-            ) : null}
-            {items.length === 0 ? (
-              <p className="py-2 text-xs text-muted-foreground">No comments yet.</p>
-            ) : filteredItems.length === 0 ? (
-              <p className="py-2 text-xs text-muted-foreground">
-                {filteredOutCount === 1
-                  ? "The only comment is hidden by the filter."
-                  : `All ${filteredOutCount} comments are hidden by the filter.`}
-              </p>
-            ) : (
-              <div className="space-y-3">
-                {commentOrder === "oldest" ? showOldestCommentsButton : null}
-                {visibleItems.map(renderItem)}
-                {commentOrder === "newest" ? showOldestCommentsButton : null}
-                {shownConversations > COMMENT_PAGE ? (
-                  <Button
-                    size="sm"
-                    variant="ghost"
-                    className="w-full"
-                    onClick={() => setShown({ url: detail.url, count: COMMENT_PAGE })}
-                  >
-                    Show only {COMMENT_PAGE} recent conversations
-                  </Button>
-                ) : null}
-              </div>
-            )}
-          </>
-        )}
-      </Section>
+                <ArrowDownUpIcon aria-hidden className="size-3" />
+                {commentOrder === "newest" ? "Newest first" : "Oldest first"}
+              </Button>
+            </div>
+          }
+        >
+          {activityPending ? (
+            <PullRequestConversationGhost terminology={terminology} />
+          ) : activityError ? (
+            <PullRequestActivityUnavailableState
+              compact
+              error={activityError}
+              term={terminology.singular}
+              onRetry={onRefresh}
+            />
+          ) : (
+            <>
+              {detail.commentsTruncated ? (
+                <p className="mb-2 rounded-md border border-warning/30 bg-warning-surface px-2 py-1.5 text-xs">
+                  This conversation is only partially loaded. {commentCount} comment
+                  {commentCount === 1 ? " is" : "s are"} loaded; open it on the host to read the
+                  rest.
+                </p>
+              ) : null}
+              {items.length === 0 ? (
+                <p className="py-2 text-xs text-muted-foreground">No comments yet.</p>
+              ) : filteredItems.length === 0 ? (
+                <p className="py-2 text-xs text-muted-foreground">
+                  {filteredOutCount === 1
+                    ? "The only comment is hidden by the filter."
+                    : `All ${filteredOutCount} comments are hidden by the filter.`}
+                </p>
+              ) : (
+                <div className="space-y-3">
+                  {commentOrder === "oldest" ? showOldestCommentsButton : null}
+                  {visibleItems.map(renderItem)}
+                  {commentOrder === "newest" ? showOldestCommentsButton : null}
+                  {shownConversations > COMMENT_PAGE ? (
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      className="w-full"
+                      onClick={() => setShown({ url: detail.url, count: COMMENT_PAGE })}
+                    >
+                      Show only {COMMENT_PAGE} recent conversations
+                    </Button>
+                  ) : null}
+                </div>
+              )}
+            </>
+          )}
+        </Section>
+      ) : null}
     </div>
   );
 }

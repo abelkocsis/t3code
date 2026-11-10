@@ -1,3 +1,4 @@
+import type { PullRequestCommentAssessment } from "@t3tools/contracts";
 import type {
   BranchNamingOptions,
   ChatAttachment,
@@ -136,6 +137,12 @@ export interface TranscriptionPostProcessingResult {
 }
 
 export interface ProviderTextGeneration {
+  readonly assessPullRequestComments?: (input: {
+    cwd: string;
+    evidence: string;
+    includeIssues: boolean;
+    modelSelection: ModelSelection;
+  }) => Effect.Effect<PullRequestCommentAssessment, TextGenerationError>;
   readonly generateTranscriptionPostProcessing: (
     input: TranscriptionPostProcessingInput,
   ) => Effect.Effect<TranscriptionPostProcessingResult, TextGenerationError>;

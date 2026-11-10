@@ -26,7 +26,7 @@ import {
   SparklesIcon,
   Trash2Icon,
 } from "lucide-react";
-import { useId, useState } from "react";
+import { useId, useState, type ReactNode } from "react";
 
 import { shortcutLabelForCommand } from "~/keybindings";
 import { readLocalApi } from "~/localApi";
@@ -102,7 +102,9 @@ export function PullRequestActionsMenu({
   perform,
   openOnHostText,
   copyReference,
+  newFactoryThreadAction,
 }: {
+  newFactoryThreadAction?: ReactNode;
   environmentId: EnvironmentId;
   reference: PullRequestRef;
   pullRequestKey: string;
@@ -284,6 +286,7 @@ export function PullRequestActionsMenu({
             disabled={handoff !== null}
           />
         ) : null}
+        {newFactoryThreadAction}
         <MenuSeparator />
         {canEditPullRequestMaintainerEdits(detail) ? (
           <>

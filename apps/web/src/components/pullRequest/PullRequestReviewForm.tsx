@@ -61,7 +61,9 @@ export function PullRequestReviewForm({
   pending,
   onPendingChange,
   onSubmitted,
+  initialVerdict = "comment",
 }: {
+  initialVerdict?: PullRequestReviewVerdict;
   environmentId: EnvironmentId;
   /** False while the form stays mounted but hidden; dictation is cancelled then. */
   active: boolean;
@@ -76,7 +78,8 @@ export function PullRequestReviewForm({
   onPendingChange: (pending: boolean) => void;
   onSubmitted: () => void;
 }) {
-  const [requestedVerdict, setRequestedVerdict] = useState<PullRequestReviewVerdict>("comment");
+  const [requestedVerdict, setRequestedVerdict] =
+    useState<PullRequestReviewVerdict>(initialVerdict);
   const comments = usePendingReviewComments(reference);
   const reviewKey = pullRequestReviewKey(reference);
   const body = usePullRequestReviewStore((store) => store.summaries[reviewKey] ?? "");

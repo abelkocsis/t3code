@@ -6,6 +6,7 @@ import type { EnvironmentId, PullRequestDetailView, PullRequestRef } from "@t3to
 import { MessageSquareIcon, Trash2Icon, XIcon } from "lucide-react";
 import { useRef, useState } from "react";
 
+import { useClientSettings } from "~/hooks/useSettings";
 import { Button } from "../ui/button";
 import { Popover, PopoverClose, PopoverPopup, PopoverTitle, PopoverTrigger } from "../ui/popover";
 import { Toggle, ToggleGroup } from "../ui/toggle-group";
@@ -40,6 +41,7 @@ export function PullRequestComposer({
   onReviewSubmitted: () => void;
   openReviewRequest?: number | undefined;
 }) {
+  const focusedView = useClientSettings((settings) => settings.focusedPullRequestView);
   const term = sourceControlClients.get(detail.provider).changeRequest.singular;
   const [open, setOpen] = useState(false);
   const [reviewPending, setReviewPending] = useState(false);
@@ -152,6 +154,7 @@ export function PullRequestComposer({
         {verdicts.length > 0 ? (
           <div hidden={mode !== "review"}>
             <PullRequestReviewForm
+              initialVerdict={focusedView ? "approve" : "comment"}
               active={open && mode === "review"}
               environmentId={environmentId}
               reference={reference}

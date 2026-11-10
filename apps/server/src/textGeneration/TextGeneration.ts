@@ -44,6 +44,7 @@ export class TextGeneration extends Context.Service<TextGeneration, ProviderText
 ) {}
 
 type TextGenerationOp =
+  | "assessPullRequestComments"
   | "generateCommitMessage"
   | "generatePrContent"
   | "generateBranchName"
@@ -135,6 +136,26 @@ export const make = Effect.gen(function* () {
     );
   });
   return TextGeneration.of({
+    assessPullRequestComments: Effect.fn("TextGeneration.assessPullRequestComments")(
+      function (input) {
+        return resolveInstance(
+          registry,
+          "assessPullRequestComments",
+          input.modelSelection.instanceId,
+        ).pipe(
+          Effect.flatMap((service) =>
+            service.assessPullRequestComments
+              ? service.assessPullRequestComments(input)
+              : Effect.fail(
+                  new TextGenerationError({
+                    operation: "assessPullRequestComments",
+                    detail: "This provider does not support comment assessment.",
+                  }),
+                ),
+          ),
+        );
+      },
+    ),
     generateDailySummary: Effect.fn("TextGeneration.generateDailySummary")(function (input) {
       return generate("generateDailySummary", input.modelSelection, (service, modelSelection) =>
         service.generateDailySummary({ ...input, modelSelection }),

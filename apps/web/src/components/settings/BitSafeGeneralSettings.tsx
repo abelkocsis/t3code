@@ -122,6 +122,34 @@ export function BitSafeGeneralSettings({
       return (
         <>
           <SettingsRow
+            {...searchableSetting("focused-pull-request-view")}
+            description="Show prominent checks, unresolved conversations, and review actions. Applies to this device."
+            control={
+              <Switch
+                checked={settings.focusedPullRequestView}
+                onCheckedChange={(checked) =>
+                  updateSettings({ focusedPullRequestView: Boolean(checked) })
+                }
+                aria-label="Focused pull request view"
+              />
+            }
+          />
+
+          <SettingsRow
+            {...searchableSetting("automatic-pr-comment-assessment")}
+            description="Assess issues in PR comments while a thread and its focused pull request view are open. Uses the thread’s model and effort."
+            control={
+              <Switch
+                checked={settings.automaticPrCommentAssessment}
+                disabled={!settings.focusedPullRequestView}
+                onCheckedChange={(checked) =>
+                  updateSettings({ automaticPrCommentAssessment: Boolean(checked) })
+                }
+                aria-label="Automatically assess PR comments"
+              />
+            }
+          />
+          <SettingsRow
             {...searchableSetting("pull-request-auto-merge")}
             description="Offer auto-merge on pull requests whose merge is still blocked. An auto-merge that is already on always shows."
             resetAction={

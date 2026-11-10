@@ -1,3 +1,12 @@
+import { scopedThreadKey } from "@t3tools/client-runtime/environment";
+import { useForkThreadStates } from "~/state/fork";
+import { useCreateFactoryReviewThread } from "../factory/useCreateFactoryReviewThread";
+import { focusedReviewStatus } from "./focusedReviewStatus";
+import { MenuItem } from "../ui/menu";
+import { useCommentAssessment } from "./useCommentAssessment";
+import { useFactoryMembership } from "../factory/useFactoryMembership";
+import { useThreadShell } from "~/state/entities";
+import { useStartFactoryTask } from "../factory/useStartFactoryTask";
 import { projectChangeRequestUrl } from "@t3tools/client-runtime/change-request-links";
 import { normalizeThreadPullRequestKey } from "@t3tools/client-runtime/thread-pull-requests";
 import { useAtomValue } from "@effect/atom-react";
@@ -26,6 +35,8 @@ import {
   ArrowDownUpIcon,
   ArrowLeftIcon,
   CircleDotIcon,
+  CircleCheckIcon,
+  CircleXIcon,
   FileDiffIcon,
   GitCommitHorizontalIcon,
   MessageSquareIcon,
@@ -301,6 +312,18 @@ export function PullRequestDetailPanel({
   initialTab?: PullRequestDetailTab;
   onTabChange?: ((tab: PullRequestDetailTab) => void) | undefined;
 }) {
+  const focusedView = useClientSettings((settings) => settings.focusedPullRequestView);
+  const startFactoryTask = useStartFactoryTask();
+  const factoryThread = useThreadShell(
+    threadRef ?? (typeof composerDraftTarget === "object" ? composerDraftTarget : null),
+  );
+  const { addToFactory } = useFactoryMembership();
+  const createFactoryReviewThread = useCreateFactoryReviewThread(environmentId);
+  const forkStates = useForkThreadStates();
+  const factoryState = factoryThread
+    ? forkStates.get(scopedThreadKey(scopeThreadRef(factoryThread.environmentId, factoryThread.id)))
+    : null;
+  const [factoryStarting, setFactoryStarting] = useState(false);
   const environmentConfigs = useServerConfigs();
   const projects = useProjects();
   const project = projects.find(
@@ -376,7 +399,9 @@ export function PullRequestDetailPanel({
     else setTab(next);
     onTabChange?.(next);
   };
-  const [timelineOrder, setTimelineOrder] = useState<"newest" | "oldest">("newest");
+  const [timelineOrder, setTimelineOrder] = useState<"newest" | "oldest">(
+    focusedView ? "oldest" : "newest",
+  );
   const [codeCommitScope, setCodeCommitScope] = useState<{
     readonly pullRequestKey: string;
     readonly oid: string | null;
@@ -562,6 +587,18 @@ export function PullRequestDetailPanel({
       : "Checking stack membership…";
   const activityPending = activityQuery.isPending && activity === null;
   const activityError = activity === null ? activityQuery.error : null;
+  const automaticAssessment = useClientSettings(
+    (settings) => settings.automaticPrCommentAssessment,
+  );
+  const commentAssessment = useCommentAssessment({
+    enabled: focusedView && factoryThread !== null,
+    includeIssues: automaticAssessment,
+    reading: activityQuery.isPending,
+    detail,
+    environmentId,
+    reference,
+    modelSelection: factoryThread?.modelSelection ?? null,
+  });
   const refreshDetail = () => {
     detailQuery.refresh();
     activityQuery.refresh();
@@ -596,8 +633,12 @@ export function PullRequestDetailPanel({
   useLiveRefresh(
     () => {
       detailQuery.refresh();
+      if (focusedView) activityQuery.refresh();
     },
-    { key: `pull-request:${environmentId}:${pullRequestKey}` },
+    {
+      key: `pull-request:${environmentId}:${pullRequestKey}`,
+      ...(focusedView ? { intervalMs: 30_000 } : {}),
+    },
   );
   const invalidate = useAtomCommand(pullRequestEnvironment.invalidate, { reportFailure: false });
   const [isInvalidating, setIsInvalidating] = useState(false);
@@ -1286,6 +1327,102 @@ export function PullRequestDetailPanel({
     );
   }
 
+  const reviewStatus = focusedReviewStatus({
+    hasReview:
+      detail !== null &&
+      detail.comments.some(
+        (comment) => comment.kind === "review" && comment.reviewState?.toLowerCase() !== "pending",
+      ),
+    unresolvedThreads: detail?.reviewThreads.filter((thread) => !thread.isResolved).length ?? 0,
+    commentIssues:
+      automaticAssessment && commentAssessment.result
+        ? commentAssessment.result.issues.filter((issue) => issue.status !== "resolved").length
+        : null,
+    pending: activityPending || commentAssessment.stage !== null,
+    unavailable:
+      activityError !== null ||
+      commentAssessment.error !== undefined ||
+      detail?.commentsTruncated === true,
+  });
+  const primaryReviewAction = detail ? (
+    focusedView &&
+    detail.state === "open" &&
+    detail.viewer &&
+    detail.author?.login.toLowerCase() !== detail.viewer.toLowerCase() ? (
+      <Button
+        size="sm"
+        variant="success"
+        disabled={
+          actionPending ||
+          !canWriteSourceControl ||
+          !detail.viewerPermissions.verdicts.includes("approve")
+        }
+        onClick={() => setOpenReviewRequest((count) => count + 1)}
+      >
+        Approve
+      </Button>
+    ) : (
+      <PullRequestPrimaryAction
+        prominent={focusedView}
+        checksState={checksState}
+        mergeBlockedReason={mergeBlockedReason}
+        pullRequestKey={pullRequestKey}
+        primaryAction={primaryAction}
+        blockers={mergeBlockers}
+        autoMergeArmed={autoMergeArmed}
+        armedAutoMergeLabel={armedAutoMergeLabel}
+        pendingAutoMergeLabel={pendingAutoMergeLabel}
+        selectedMergeMethod={selectedMergeMethod}
+        selectedMergeMethodLabel={selectedMergeMethodLabel}
+        statePresentation={statePresentation}
+        pendingAction={pendingAction}
+        perform={perform}
+        resolveConflicts={resolveConflictsControl}
+      />
+    )
+  ) : null;
+  const factoryAction = detail ? (
+    detail.viewer &&
+    detail.author?.login.toLowerCase() === detail.viewer.toLowerCase() &&
+    project &&
+    !factoryState?.factory ? (
+      <div className="flex items-center gap-1">
+        <Button
+          size="sm"
+          variant="outline"
+          disabled={factoryStarting}
+          onClick={async () => {
+            setFactoryStarting(true);
+            try {
+              if (factoryThread) {
+                await addToFactory(factoryThread);
+              } else {
+                const result = await startFactoryTask(
+                  { kind: "pull-request", value: detail.url },
+                  project,
+                  { title: detail.title },
+                );
+                toastManager.add(
+                  result.ok
+                    ? { type: "success", title: "Added to factory" }
+                    : { type: "error", title: result.title, description: result.detail },
+                );
+              }
+            } catch (error) {
+              toastManager.add({
+                type: "error",
+                title: "Could not add to factory",
+                description: readableFailure(error, "Try again."),
+              });
+            }
+            setFactoryStarting(false);
+          }}
+        >
+          {factoryStarting ? "Adding…" : "Add to factory"}
+        </Button>
+      </div>
+    ) : null
+  ) : null;
   return (
     <div className="relative flex h-full min-h-0 w-full flex-col bg-background">
       {threadPickerOpen && detail ? (
@@ -1351,24 +1488,39 @@ export function PullRequestDetailPanel({
                   }}
                 />
               ) : null}
-              <PullRequestPrimaryAction
-                checksState={checksState}
-                mergeBlockedReason={mergeBlockedReason}
-                pullRequestKey={pullRequestKey}
-                primaryAction={primaryAction}
-                blockers={mergeBlockers}
-                autoMergeArmed={autoMergeArmed}
-                armedAutoMergeLabel={armedAutoMergeLabel}
-                pendingAutoMergeLabel={pendingAutoMergeLabel}
-                selectedMergeMethod={selectedMergeMethod}
-                selectedMergeMethodLabel={selectedMergeMethodLabel}
-                statePresentation={statePresentation}
-                pendingAction={pendingAction}
-                perform={perform}
-                resolveConflicts={resolveConflictsControl}
-              />
+              {focusedView ? factoryAction : null}
+              {primaryReviewAction}
               {checkoutControl}
               <PullRequestActionsMenu
+                newFactoryThreadAction={
+                  focusedView &&
+                  factoryThread &&
+                  detail.viewer &&
+                  detail.author?.login.toLowerCase() === detail.viewer.toLowerCase() ? (
+                    <MenuItem
+                      disabled={factoryStarting}
+                      onClick={async () => {
+                        setFactoryStarting(true);
+                        try {
+                          await createFactoryReviewThread(factoryThread, detail.url, detail.title);
+                          toastManager.add({
+                            type: "success",
+                            title: "Created factory review thread",
+                          });
+                        } catch (error) {
+                          toastManager.add({
+                            type: "error",
+                            title: "Could not create review thread",
+                            description: readableFailure(error, "Try again."),
+                          });
+                        }
+                        setFactoryStarting(false);
+                      }}
+                    >
+                      Add to factory as a new thread
+                    </MenuItem>
+                  ) : null
+                }
                 environmentId={environmentId}
                 reference={reference}
                 pullRequestKey={pullRequestKey}
@@ -1596,6 +1748,74 @@ export function PullRequestDetailPanel({
           </div>
         </div>
 
+        {detail && focusedView ? (
+          <div className="col-span-2 mx-4 my-3 grid grid-cols-2 gap-4 rounded-lg border border-border/60 bg-muted/20 p-4">
+            <div className="space-y-2">
+              <h3 className="text-sm font-medium">CI checks</h3>
+              <div className="flex items-center gap-2 text-lg font-semibold">
+                {checksState ? (
+                  <PullRequestChecksPopover
+                    checks={detail.checks}
+                    stale={checksStale}
+                    checksState={checksState}
+                    threadRef={threadRef}
+                  />
+                ) : null}
+                {checksSummary || "No checks"}
+              </div>
+              {checksStale ? (
+                <p className="text-xs text-muted-foreground">Refreshing checks…</p>
+              ) : null}
+            </div>
+            <div className="space-y-2 border-l border-border/60 pl-4">
+              <h3 className="text-sm font-medium">Review</h3>
+              <div className="flex items-center gap-2 text-lg font-semibold">
+                {reviewStatus.clear ? (
+                  <CircleCheckIcon className="size-5 shrink-0 text-success" />
+                ) : (
+                  <CircleXIcon className="size-5 shrink-0 text-destructive" />
+                )}
+                {reviewStatus.label}
+              </div>
+              <button
+                type="button"
+                className="text-left text-xs text-muted-foreground hover:underline"
+                onClick={() => selectTab("timeline")}
+              >
+                {activityPending
+                  ? "Loading…"
+                  : activityError
+                    ? "Unavailable"
+                    : `${detail.reviewThreads.filter((thread) => !thread.isResolved).length} unresolved review threads`}
+              </button>
+              <p role="status" aria-live="polite" className="text-xs text-muted-foreground">
+                {commentAssessment.stage
+                  ? `${commentAssessment.stage}…`
+                  : (commentAssessment.error ??
+                    (commentAssessment.result
+                      ? `${commentAssessment.result.issues.filter((issue) => issue.status !== "resolved").length} comment issues open or uncertain`
+                      : automaticAssessment
+                        ? "Comment analysis requires an open thread."
+                        : "Automatic comment analysis is off."))}
+              </p>
+              {commentAssessment.result?.issues.length ? (
+                <details className="text-xs">
+                  <summary>Comment issues ({commentAssessment.result.issues.length})</summary>
+                  <ul className="mt-2 space-y-2">
+                    {commentAssessment.result.issues.map((issue) => (
+                      <li key={`${issue.commentId}:${issue.title}`}>
+                        <span className="font-medium">
+                          {issue.title} · {issue.status}
+                        </span>
+                        <p className="text-muted-foreground">{issue.evidence}</p>
+                      </li>
+                    ))}
+                  </ul>
+                </details>
+              ) : null}
+            </div>
+          </div>
+        ) : null}
         {detail ? (
           <PullRequestDetailTabBar
             tabs={visibleTabs}
@@ -1605,7 +1825,7 @@ export function PullRequestDetailPanel({
               if (item === "code") void loadCodeTab();
             }}
           >
-            {tab === "summary" ? (
+            {tab === "summary" && !focusedView ? (
               showsApproveWorkflows ? (
                 <PullRequestApproveWorkflowsButton
                   pullRequestKey={pullRequestKey}
@@ -1761,6 +1981,10 @@ export function PullRequestDetailPanel({
             {mountedTabs.has("summary") ? (
               <div className={cn("absolute inset-0", tab !== "summary" && "invisible")}>
                 <PullRequestSummaryTab
+                  focused={focusedView}
+                  summary={commentAssessment.result?.summary}
+                  summaryPending={commentAssessment.stage !== null}
+                  summaryError={commentAssessment.error}
                   scrollerRef={scrollerRefs.summary}
                   environmentId={environmentId}
                   threadRef={threadRef}

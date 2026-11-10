@@ -1,4 +1,8 @@
 import {
+  PullRequestCommentAssessment,
+  PullRequestCommentAssessmentInput,
+} from "./pullRequestCommentAssessment.ts";
+import {
   OrchestrationV2SearchThreadError,
   OrchestrationV2SearchThreadInput,
   OrchestrationV2SearchThreadResult,
@@ -609,6 +613,7 @@ export const WS_METHODS = {
   pullRequestsPreview: "pullRequests.preview",
   pullRequestsChecks: "pullRequests.checks",
   pullRequestsActivity: "pullRequests.activity",
+  pullRequestsAssessComments: "pullRequests.assessComments",
   pullRequestsReviewGuide: "pullRequests.reviewGuide",
   pullRequestsGenerateReviewGuide: "pullRequests.generateReviewGuide",
   pullRequestsThreadComments: "pullRequests.threadComments",
@@ -1221,6 +1226,12 @@ const WsPullRequestsChecksRpc = Rpc.make(WS_METHODS.pullRequestsChecks, {
 const WsPullRequestsActivityRpc = Rpc.make(WS_METHODS.pullRequestsActivity, {
   payload: PullRequestRef,
   success: PullRequestActivity,
+  error: PullRequestRpcError,
+});
+
+const WsPullRequestsAssessCommentsRpc = Rpc.make(WS_METHODS.pullRequestsAssessComments, {
+  payload: PullRequestCommentAssessmentInput,
+  success: PullRequestCommentAssessment,
   error: PullRequestRpcError,
 });
 
@@ -2240,6 +2251,7 @@ export const UpstreamWsRpcGroup = RpcGroup.make(
   WsPullRequestsPreviewRpc,
   WsPullRequestsChecksRpc,
   WsPullRequestsActivityRpc,
+  WsPullRequestsAssessCommentsRpc,
   WsPullRequestsReviewGuideRpc,
   WsPullRequestsGenerateReviewGuideRpc,
   WsPullRequestsThreadCommentsRpc,
@@ -2373,14 +2385,7 @@ export const UpstreamWsRpcGroup = RpcGroup.make(
   WsOrchestrationV2SubscribeCommandOutputRpc,
 ).middleware(RpcScopeAuthorization);
 
-/**
- * The fork's own procedures, kept in a second group.
- *
- * The upstream group sits at TypeScript's type-instantiation depth limit; one
- * more handler in its `toLayer` call fails to compile. The server builds one
- * handler layer per group and serves the merged group, so the depth of each
- * stays where upstream left it.
- */
+/** Separate handler groups keep TypeScript below its type-instantiation depth limit. */
 export const ForkWsRpcGroup = RpcGroup.make(
   WsForkThreadSetFactoryRpc,
   WsSourceControlSearchIssuesRpc,

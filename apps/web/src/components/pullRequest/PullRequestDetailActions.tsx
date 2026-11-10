@@ -208,6 +208,7 @@ export function PullRequestPrimaryAction({
   resolveConflicts,
   blockers = [],
   checksState = null,
+  prominent = false,
 }: {
   pullRequestKey: string;
   primaryAction: ReturnType<typeof resolvePullRequestPrimaryControl> | null;
@@ -223,6 +224,7 @@ export function PullRequestPrimaryAction({
   resolveConflicts: ReactNode;
   blockers?: ReadonlyArray<PullRequestMergeBlocker>;
   checksState?: PullRequestChecksState | null;
+  prominent?: boolean;
 }) {
   const inlineConfirm = useInlineActionConfirm(pullRequestKey);
   const mergeWarning =
@@ -366,15 +368,17 @@ export function PullRequestPrimaryAction({
             render={
               <span className="inline-flex shrink-0">
                 <Button
-                  size="xs"
+                  size={prominent ? "sm" : "xs"}
                   variant={
-                    checksState === "passing"
+                    prominent
                       ? "success"
-                      : checksState === "pending"
-                        ? "warning"
-                        : checksState === "failing"
-                          ? "caution"
-                          : "outline"
+                      : checksState === "passing"
+                        ? "success"
+                        : checksState === "pending"
+                          ? "warning"
+                          : checksState === "failing"
+                            ? "caution"
+                            : "outline"
                   }
                   disabled={actionPending}
                   aria-disabled={mergeBlockedReason !== null || undefined}

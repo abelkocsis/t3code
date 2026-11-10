@@ -14,6 +14,16 @@ export const BITSAFE_SETTING_LOCATIONS: Readonly<
   },
   "compact-thread-rows": { to: "/settings/general", label: "General", hash: "compact-thread-rows" },
   "thread-details-card": { to: "/settings/general", label: "General", hash: "thread-details-card" },
+  "automatic-pr-comment-assessment": {
+    to: "/settings/general",
+    label: "General",
+    hash: "automatic-pr-comment-assessment",
+  },
+  "focused-pull-request-view": {
+    to: "/settings/general",
+    label: "General",
+    hash: "focused-pull-request-view",
+  },
   "pull-request-auto-merge": {
     to: "/settings/general",
     label: "General",
