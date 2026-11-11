@@ -4,7 +4,14 @@ export const BitSafeSettingsViewContext = createContext(false);
 export const useBitSafeSettingsView = () => useContext(BitSafeSettingsViewContext);
 
 export const BITSAFE_SETTING_LOCATIONS: Readonly<
-  Record<string, { to: "/settings/general" | "/settings/storage"; label: string; hash: string }>
+  Record<
+    string,
+    {
+      to: "/settings/general" | "/settings/diffs" | "/settings/worktrees";
+      label: string;
+      hash: string;
+    }
+  >
 > = {
   "usage-pace-weekends": { to: "/settings/general", label: "General", hash: "usage-pace-weekends" },
   "usage-bars-fill-used": {
@@ -15,18 +22,18 @@ export const BITSAFE_SETTING_LOCATIONS: Readonly<
   "compact-thread-rows": { to: "/settings/general", label: "General", hash: "compact-thread-rows" },
   "thread-details-card": { to: "/settings/general", label: "General", hash: "thread-details-card" },
   "automatic-pr-comment-assessment": {
-    to: "/settings/general",
-    label: "General",
+    to: "/settings/diffs",
+    label: "Diffs & pull requests",
     hash: "automatic-pr-comment-assessment",
   },
   "focused-pull-request-view": {
-    to: "/settings/general",
-    label: "General",
+    to: "/settings/diffs",
+    label: "Diffs & pull requests",
     hash: "focused-pull-request-view",
   },
   "pull-request-auto-merge": {
-    to: "/settings/general",
-    label: "General",
+    to: "/settings/diffs",
+    label: "Diffs & pull requests",
     hash: "pull-request-auto-merge",
   },
   "daily-summary-instructions": {
@@ -59,8 +66,8 @@ export const BITSAFE_SETTING_LOCATIONS: Readonly<
     hash: "factory-ignore-ci-enabled",
   },
   "storage-worktree-ignore-patterns": {
-    to: "/settings/storage",
-    label: "Storage",
+    to: "/settings/worktrees",
+    label: "Worktrees",
     hash: "storage-worktrees",
   },
 };

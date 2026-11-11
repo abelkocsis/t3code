@@ -822,6 +822,7 @@ export function GeneralSettingsPanel() {
             />
           }
         />
+        <BitSafeGeneralSettings section="desktop" />
       </SettingsSection>
 
       <SettingsSection id="sidebar" title="Sidebar">
@@ -1422,6 +1423,7 @@ export function DiffsSettingsPanel() {
       </SettingsSection>
 
       <SettingsSection id="pull-requests" title="Pull requests">
+        <BitSafeGeneralSettings section="behavior" />
         <SettingsRow
           {...searchableSetting("proactive-panels")}
           description="Open linked pull requests first. Otherwise, open Changes for edits to at least 3 files or 50 lines."

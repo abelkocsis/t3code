@@ -123,6 +123,7 @@ export const SETTINGS_NAV_GROUPS: ReadonlyArray<{
   {
     heading: null,
     paths: [
+      "/settings/bitsafe",
       "/settings/general",
       "/settings/appearance",
       "/settings/chat",
@@ -779,19 +780,19 @@ export const SETTINGS_SEARCH_ITEMS = [
   {
     id: "automatic-pr-comment-assessment",
     title: "Automatically assess PR comments",
-    to: "/settings/general",
+    to: "/settings/diffs",
     searchTerms: ["bitsafe issues resolved comments agent analysis"],
   },
   {
     id: "focused-pull-request-view",
     title: "Focused pull request view",
-    to: "/settings/general",
+    to: "/settings/diffs",
     searchTerms: ["bitsafe pr review checks conversations layout"],
   },
   {
     id: "pull-request-auto-merge",
     title: "Pull request auto-merge",
-    to: "/settings/general",
+    to: "/settings/diffs",
     searchTerms: ["pull request pr merge automatically auto merge blocked button"],
   },
   {
@@ -1445,7 +1446,7 @@ const SETTINGS_CATEGORY_SCOPES: Readonly<Record<SettingsPath, SettingsSearchScop
 
 const RENAMED_SETTINGS_PATHS: Readonly<Record<string, SettingsPath>> = {
   "/settings/integrations": "/settings/browser",
-  "/settings/worktrees": "/settings/maintenance",
+  "/settings/storage": "/settings/maintenance",
   "/settings/beta": "/settings/labs",
 };
 const SPLIT_SETTINGS_PATHS: ReadonlySet<string> = new Set([
