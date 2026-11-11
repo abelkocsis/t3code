@@ -147,6 +147,8 @@ For mobile verification, a missing or outdated native client is an install step,
 
 ## Pull requests
 
+- Sign every commit with `git commit -S`, including release changes in the Homebrew tap. GitHub's contents API does not guarantee signed commits.
+- Verify every pushed commit through GitHub's commit API: `commit.verification.verified` must be `true` before opening or merging its PR. Stop and fix any unsigned or unverified commit.
 - Never make a PR unless the developer explicitly asks you to do so.
 - If `origin` is git.cafe, follow [GitCafe mirror](docs/operations/development.md#gitcafe-mirror-optional): push to `origin`, open and track PRs with `cafe` and their git.cafe URLs, and keep `gh` for merging.
 - Conventional commit titles, plain language: `fix(web): new threads no longer spike CPU`.
