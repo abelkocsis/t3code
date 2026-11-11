@@ -1,3 +1,4 @@
+import * as ThreadFolderInheritance from "./fork/ThreadFolderInheritance.ts";
 import * as ProviderEventLoggers from "@t3tools/provider-core/server/ProviderEventLoggers";
 import type { RelayManagedEndpointRuntimeConfig } from "@t3tools/contracts/relay";
 import * as Random from "effect/Random";
@@ -612,6 +613,7 @@ const layerFactoryReviewWorker = Layer.effectDiscard(
   Effect.gen(function* () {
     const service = yield* FactoryReviewReactor.FactoryReviewReactor;
     yield* service.start();
+    yield* ThreadFolderInheritance.start();
   }),
 ).pipe(
   Layer.provide(FactoryReviewReactor.layer),
