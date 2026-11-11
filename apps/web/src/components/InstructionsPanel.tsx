@@ -53,7 +53,17 @@ export interface InstructionsPanelProps {
 export function InstructionsPanel(props: InstructionsPanelProps) {
   const { environmentId, instanceId, driver, workspaceRoot, worktreeBranch } = props;
   const globalFileName = driver === null ? null : agentInstructionsFileName(driver);
-  const [scope, setScope] = useState<InstructionsScope>("agents");
+  const [selectedScope, setScope] = useState<InstructionsScope>("agents");
+  const claudeResult = useAtomValue<RepoFileResult>(
+    workspaceRoot === null
+      ? NO_REPO_FILE
+      : projectEnvironment.readFile({
+          environmentId,
+          input: { cwd: workspaceRoot, relativePath: "CLAUDE.md", allowMissing: true },
+        }),
+  );
+  const hasClaudeFile = Option.getOrNull(AsyncResult.value(claudeResult))?.exists === true;
+  const scope = selectedScope === "claude" && !hasClaudeFile ? "agents" : selectedScope;
   const [drafts, setDrafts] = useState<Record<InstructionsScope, string | null>>({
     agents: null,
     claude: null,
@@ -229,7 +239,7 @@ export function InstructionsPanel(props: InstructionsPanelProps) {
     <div className="flex h-full min-w-0 flex-col">
       <div className="flex shrink-0 flex-col gap-1 border-b border-border px-2 py-1.5">
         <div className="flex min-w-0 flex-wrap items-center gap-1">
-          {(["agents", "claude"] as const).map((tab) => (
+          {(["agents", ...(hasClaudeFile ? ["claude" as const] : [])] as const).map((tab) => (
             <Button
               key={tab}
               size="xs"

@@ -117,6 +117,11 @@ import { Menu, MenuItem, MenuItemDetail, MenuPopup, MenuSeparator, MenuTrigger }
 import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
 import { MiddleTruncate } from "../ui/middle-truncate";
 import { useThreadHasUnsentDraft } from "../../composerDraftStore";
+import {
+  resolveSidebarUnseenPhase,
+  sidebarUnseenRowVariants,
+  sidebarUnseenTitleClassName,
+} from "./sidebarUnseenRow";
 
 // The fields thread rows show. Provider status pushes refresh `checkedAt`,
 // status and auth on every provider; leaving those out keeps each
@@ -723,6 +728,11 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThreadRowP
       isFactoryGateUnseen(attention.gateAt, lastVisitedAt)
     : hasUnseenCompletion({ ...thread, lastVisitedAt });
   const status = attention?.status ?? resolveSidebarThreadStatus(thread);
+  const unseenPhase = attention
+    ? isUnread
+      ? "completed"
+      : null
+    : resolveSidebarUnseenPhase({ thread: { ...thread, status }, lastVisitedAt });
   const lastVisitedDate = lastVisitedAt === undefined ? null : parseTimestampDate(lastVisitedAt);
   const wokeAtDate = props.wokeAt === null ? null : parseTimestampDate(props.wokeAt);
   const isWoke =
@@ -984,6 +994,7 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThreadRowP
     isFileDragOver && !props.isActive && !isSelected && "bg-sidebar-row-hover",
     props.sortable?.isDragging &&
       "bg-sidebar bg-linear-to-b from-sidebar-row-active to-sidebar-row-active text-sidebar-foreground opacity-100 shadow-lg",
+    unseenPhase !== null && sidebarUnseenRowVariants({ phase: unseenPhase }),
   );
   const sortable = props.sortable;
   const sortableRootProps = sortable
@@ -1036,7 +1047,11 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThreadRowP
       aria-hidden
       className={cn(
         "min-w-0 flex-1 text-start text-sm transition-opacity motion-reduce:transition-none",
-        shouldRecede ? "font-normal" : "font-medium",
+        unseenPhase !== null
+          ? sidebarUnseenTitleClassName
+          : shouldRecede
+            ? "font-normal"
+            : "font-medium",
         variant !== "slim"
           ? cn(
               "truncate",
