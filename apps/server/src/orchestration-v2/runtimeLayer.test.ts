@@ -4643,7 +4643,7 @@ it.layer(layerTest)("OrchestrationV2LayerLive lifecycle", (it) => {
       }),
   );
 
-  it.effect("rejects settling a thread while a run is active", () =>
+  it.effect("stops the active run and settles the thread", () =>
     Effect.gen(function* () {
       const orchestrator = yield* Orchestrator.OrchestratorV2;
       const threadId = ThreadId.make("runtime-layer-active-settle-thread");
@@ -4691,21 +4691,63 @@ it.layer(layerTest)("OrchestrationV2LayerLive lifecycle", (it) => {
         .pipe(Effect.flip);
       assert.instanceOf(nonEmptyClaim, Orchestrator.OrchestratorDispatchError);
 
-      const error = yield* orchestrator
-        .dispatch({
-          type: "thread.settle",
-          commandId: CommandId.make("runtime-layer-active-settle"),
-          threadId,
-        })
-        .pipe(Effect.flip);
-
-      assert.equal(error._tag, "OrchestratorDispatchError");
-      assert.equal(error.cause, `Thread ${threadId} is still running. Stop it before settling.`);
+      const before = yield* orchestrator.getThreadProjection(threadId);
+      const root = before.nodes[0]!;
+      const now = yield* DateTime.now;
+      const nodeId = NodeId.make("active-settle-approval-node");
+      const requestId = RuntimeRequestId.make("active-settle-approval");
+      const sink = yield* EventSink.EventSinkV2;
+      yield* sink.write({
+        commandId: CommandId.make("active-settle-approval-seed"),
+        events: [
+          {
+            id: EventId.make("active-settle-approval-node"),
+            type: "node.updated",
+            threadId,
+            nodeId,
+            occurredAt: now,
+            payload: {
+              ...root,
+              id: nodeId,
+              runId: null,
+              kind: "approval_request",
+              status: "waiting",
+              countsForRun: false,
+              runtimeRequestId: requestId,
+            },
+          },
+          {
+            id: EventId.make("active-settle-approval-request"),
+            type: "runtime-request.updated",
+            threadId,
+            nodeId,
+            occurredAt: now,
+            payload: {
+              id: requestId,
+              nodeId,
+              providerTurnId: null,
+              nativeRequestRef: null,
+              kind: "command",
+              status: "pending",
+              responseCapability: { type: "message" },
+              createdAt: now,
+              resolvedAt: null,
+            },
+          },
+        ],
+      });
+      yield* orchestrator.dispatch({
+        type: "thread.settle",
+        commandId: CommandId.make("runtime-layer-active-settle"),
+        threadId,
+      });
       const projection = yield* orchestrator.getThreadProjection(threadId);
-      assert.equal(projection.runs[0]?.status, "starting");
-      assert.isNull(projection.thread.settledOverride);
-      assert.isNull(projection.thread.settledAt);
-      assert.isNotNull(projection.thread.unsettledAt);
+      assert.equal(projection.runs[0]?.status, "interrupted");
+      assert.equal(projection.thread.settledOverride, "settled");
+      assert.isNotNull(projection.thread.settledAt);
+      assert.isNull(projection.thread.unsettledAt);
+      assert.equal(projection.runtimeRequests[0]?.status, "resolved");
+      assert.equal(projection.nodes.find((node) => node.id === nodeId)?.status, "cancelled");
     }),
   );
 

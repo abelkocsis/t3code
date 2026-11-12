@@ -140,7 +140,15 @@ function extractReleaseNoteItems(note: string | null | undefined): ExtractedRele
   if (summaryEnd >= 0) return extractReleaseNoteSummary(note.slice(0, summaryEnd));
   const items: string[] = [];
   let totalItems = 0;
+  const hasInstallSection = /^#{1,6}\s+(?:installing|installation|install)(?:\s|$)/im.test(
+    stripMarkup(note),
+  );
+  let installing = false;
   for (const rawLine of stripMarkup(note).split("\n")) {
+    const heading = /^#{1,6}\s+(.+)$/.exec(rawLine.trim());
+    if (heading) installing = /^(installing|installation|install)(?:\s|$)/i.test(heading[1]!);
+    if (installing) continue;
+    if (hasInstallSection && !/^\s*[-*]\s+/.test(rawLine)) continue;
     const item = rawLine
       .trim()
       .replace(/^[-*]\s+/, "")

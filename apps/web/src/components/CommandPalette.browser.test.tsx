@@ -1,4 +1,4 @@
-import { EnvironmentId, ProjectId, ThreadId } from "@t3tools/contracts";
+import { EnvironmentId, ProjectId, ThreadId, ThreadFolderId } from "@t3tools/contracts";
 import { describe, expect, it, vi } from "vite-plus/test";
 import { page } from "vite-plus/test/browser";
 
@@ -30,7 +30,12 @@ describe("CommandPalette open intents", () => {
     setup();
     await using _screen = await render(<CommandPalette>{null}</CommandPalette>);
 
-    openCommandPalette({ open: "new-thread-in" });
+    const folderId = ThreadFolderId.make("requested-folder");
+    openCommandPalette({ open: "new-thread-in", folderId });
+    expect(useCommandPaletteStore.getState().openIntent).toEqual({
+      kind: "new-thread-in",
+      folderId,
+    });
 
     await expect.element(page.getByPlaceholder("Search...")).toHaveFocus();
   });

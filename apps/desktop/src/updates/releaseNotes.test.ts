@@ -3,6 +3,15 @@ import { describe, expect, it } from "vite-plus/test";
 import { normalizeDesktopUpdateReleaseNotes } from "./releaseNotes.ts";
 
 describe("normalizeDesktopUpdateReleaseNotes", () => {
+  it("excludes installation instructions from release changes", () => {
+    const result = normalizeDesktopUpdateReleaseNotes(
+      "Bitsafe's fork of T3 Code, built on upstream v0.1.7.\n\n## Installing\n1. Download the .dmg.\n2. Clear the\n   quarantine flag:\n\n```\nxattr -dr com.apple.quarantine app\n```\nLater versions install themselves.",
+      "0.1.7-bitsafe.4",
+      "latest",
+    );
+    expect(result.releaseNotes).toEqual([]);
+  });
+
   it("shows the newest changes and counts all real changes", () => {
     const result = normalizeDesktopUpdateReleaseNotes(
       [

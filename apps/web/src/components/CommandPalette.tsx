@@ -483,7 +483,6 @@ function OpenCommandPaletteDialog(props: {
   const threadFolders = useThreadFolders();
   const setThreadFolder = useSetThreadFolder();
   // Set by a folder's "New thread in folder"; the picked project's thread joins it.
-  // A ref, because the pushed project view keeps the items of the render that opened it.
   const newThreadFolderId =
     props.openIntent?.kind === "new-thread-in" ? (props.openIntent.folderId ?? null) : null;
   const joinNewThreadFolder = async (

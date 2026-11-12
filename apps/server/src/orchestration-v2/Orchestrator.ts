@@ -3453,7 +3453,10 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
       }
     }
     if (command.type === "thread.settle") {
-      const projection = yield* loadProjectionForCommand(command, ["runs", "runtimeRequests"]);
+      const projection =
+        (yield* Ref.get(events)).length > 0
+          ? yield* getProjectionWithPendingEvents(command.threadId, events)
+          : yield* loadProjectionForCommand(command, ["runs", "runtimeRequests"]);
       if (
         command.expectedLatestRunId !== undefined &&
         projection.runs.reduce<OrchestrationV2Run | undefined>(
@@ -3497,13 +3500,14 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
       const blockingRequestExists = pendingRequests.some(
         (request) => request.kind !== "user_input" || request.responseCapability.type !== "message",
       );
-      const blocker = blockingRequestExists
-        ? "is waiting on an approval or question. Answer it before settling."
-        : runningRunExists
-          ? "is still running. Stop it before settling."
-          : queuedMessageExists
-            ? "has a queued message. Send it or remove it from the queue before settling."
-            : null;
+      const blocker =
+        blockingRequestExists && command.expectedLatestRunId !== undefined
+          ? "is waiting on an approval or question. Answer it before settling."
+          : runningRunExists && command.expectedLatestRunId !== undefined
+            ? "is still running. Stop it before settling."
+            : queuedMessageExists
+              ? "has a queued message. Send it or remove it from the queue before settling."
+              : null;
       if (blocker !== null) {
         return yield* new OrchestratorDispatchError({
           commandId: command.commandId,
@@ -13465,9 +13469,23 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
           effects: plans.flatMap((plan) => plan.effects),
         };
       }
+      case "thread.settle":
+        if (command.expectedLatestRunId === undefined) {
+          cancelUnsettledEffects = yield* dispatchThreadStop(
+            {
+              type: "thread.stop",
+              commandId: command.commandId,
+              threadId: command.threadId,
+              reason: "Thread settled.",
+            },
+            events,
+            effects,
+          );
+        }
+        yield* dispatchThreadMutation(command, events, effects);
+        break;
       case "thread.archive":
       case "thread.unarchive":
-      case "thread.settle":
       case "thread.unsettle":
       case "thread.snooze":
       case "thread.unsnooze":

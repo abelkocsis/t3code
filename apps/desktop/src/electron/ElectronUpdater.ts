@@ -7,11 +7,14 @@ import * as Schema from "effect/Schema";
 import * as Scope from "effect/Scope";
 
 import { app } from "electron";
-import { installHomebrewUpdate } from "../updates/homebrewUpdate.ts";
+import * as NodeEvents from "node:events";
+import {
+  checkHomebrewUpdate,
+  downloadHomebrewUpdate,
+  installHomebrewUpdate,
+} from "../updates/homebrewUpdate.ts";
 
 import { autoUpdater } from "electron-updater";
-
-let availableVersion: string | undefined;
 
 type AutoUpdater = typeof autoUpdater;
 
@@ -93,6 +96,10 @@ export const make = Effect.gen(function* () {
   const arch = yield* HostProcess.Architecture;
   const context = yield* Effect.context<ChildProcessSpawner.ChildProcessSpawner>();
   const runPromise = Effect.runPromiseWith(context);
+  const homebrew = platform === "darwin" && app.getVersion().includes("-bitsafe.");
+  const homebrewEvents = new NodeEvents.EventEmitter();
+  const events = homebrew ? homebrewEvents : autoUpdater;
+  let availableVersion: string | undefined;
   return ElectronUpdater.of({
     setFeedURL: Effect.fn("ElectronUpdater.setFeedURL")(function (options) {
       return Effect.suspend(() => {
@@ -149,6 +156,16 @@ export const make = Effect.gen(function* () {
       const channel = autoUpdater.channel;
       return Effect.tryPromise({
         try: async () => {
+          if (homebrew) {
+            availableVersion = undefined;
+            homebrewEvents.emit("checking-for-update");
+            const version = await runPromise(checkHomebrewUpdate(app.getVersion(), arch));
+            availableVersion = version ?? undefined;
+            homebrewEvents.emit(version ? "update-available" : "update-not-available", {
+              version: version ?? app.getVersion(),
+            });
+            return;
+          }
           const result = await autoUpdater.checkForUpdates();
           availableVersion = result?.updateInfo.version;
         },
@@ -158,7 +175,15 @@ export const make = Effect.gen(function* () {
     downloadUpdate: Effect.suspend(() => {
       const channel = autoUpdater.channel;
       return Effect.tryPromise({
-        try: () => autoUpdater.downloadUpdate(),
+        try: async () => {
+          if (homebrew) {
+            if (!availableVersion) throw new Error("Check for updates before downloading.");
+            await runPromise(downloadHomebrewUpdate(arch));
+            homebrewEvents.emit("update-downloaded", { version: availableVersion });
+          } else {
+            await autoUpdater.downloadUpdate();
+          }
+        },
         catch: (cause) => new ElectronUpdaterDownloadUpdateError({ channel, cause }),
       }).pipe(Effect.asVoid);
     }),
@@ -170,7 +195,7 @@ export const make = Effect.gen(function* () {
         const channel = autoUpdater.channel;
         return Effect.tryPromise({
           try: async () => {
-            if (platform === "darwin" && app.getVersion().includes("-bitsafe.")) {
+            if (homebrew) {
               if (!availableVersion) throw new Error("Check for updates before installing.");
               const bundle = app.getAppPath().split("/Contents/")[0]!;
               await runPromise(installHomebrewUpdate(bundle, availableVersion, arch));
@@ -191,7 +216,7 @@ export const make = Effect.gen(function* () {
       });
     }),
     on: Effect.fn("ElectronUpdater.on")(function (eventName, listener) {
-      const eventTarget = autoUpdater as unknown as {
+      const eventTarget = events as unknown as {
         on: (eventName: string, listener: (...args: Array<unknown>) => void) => void;
         removeListener: (eventName: string, listener: (...args: Array<unknown>) => void) => void;
       };
