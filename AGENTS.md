@@ -146,6 +146,11 @@ For mobile verification, a missing or outdated native client is an install step,
 
 `evals/` checks how real models behave with T3 Code's model-facing text: agent instructions, MCP tool descriptions and schemas, and generated titles. Before you change that text, read [evals/README.md](evals/README.md) and run the evals it names. When you fix a model behavior bug, add a case that fails before the fix.
 
+## Branches in this fork
+
+Unless the developer asks otherwise, make every change directly on the `bitsafe` branch and push
+it there. Do not create a feature branch or open a pull request for ordinary work.
+
 ## Pull requests
 
 - Sign every commit with `git commit -S`, including release changes in the Homebrew tap. GitHub's contents API does not guarantee signed commits.
