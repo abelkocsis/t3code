@@ -52,6 +52,7 @@ import {
   PullRequestReviewOutcomeBadge,
   pullRequestReviewOutcomeLabel,
   PullRequestReviewOutcomeAvatarBadge,
+  PullRequestReviewOutcomeIcon,
   pullRequestReviewOutcomeRingClassName,
   pullRequestReviewOutcomeStaleLabel,
 } from "./pullRequestPresentation";
@@ -769,7 +770,7 @@ export function PullRequestSummaryTab({
                                 focused
                                   ? "relative inline-flex items-center gap-1.5"
                                   : "relative rounded-full hover:z-10",
-                                entry.outcome
+                                entry.outcome && !focused
                                   ? pullRequestReviewOutcomeRingClassName(
                                       entry.outcome,
                                       entry.stale,
@@ -796,10 +797,17 @@ export function PullRequestSummaryTab({
                           ) : null}
                           {entry.outcome ? (
                             <>
-                              <PullRequestReviewOutcomeAvatarBadge
-                                outcome={entry.outcome}
-                                stale={entry.stale}
-                              />
+                              {focused ? (
+                                <PullRequestReviewOutcomeIcon
+                                  outcome={entry.outcome}
+                                  className={entry.stale ? "opacity-50" : undefined}
+                                />
+                              ) : (
+                                <PullRequestReviewOutcomeAvatarBadge
+                                  outcome={entry.outcome}
+                                  stale={entry.stale}
+                                />
+                              )}
                               <span className="sr-only">
                                 {entry.stale
                                   ? pullRequestReviewOutcomeStaleLabel(entry.outcome)

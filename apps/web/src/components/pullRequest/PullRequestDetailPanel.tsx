@@ -1278,6 +1278,15 @@ export function PullRequestDetailPanel({
         ).length
       : 0;
 
+  const viewerHasApproved =
+    detail !== null &&
+    latestPullRequestReviewOutcomes(detail.comments, detail.commits).some(
+      (entry) =>
+        entry.actor?.login.toLowerCase() === detail.viewer?.toLowerCase() &&
+        entry.outcome === "approved" &&
+        !entry.stale,
+    );
+
   const checkoutControl =
     context === "page" ? (
       <PullRequestCheckoutMenu
@@ -1347,7 +1356,10 @@ export function PullRequestDetailPanel({
   const primaryReviewAction = detail ? (
     focusedView &&
     detail.state === "open" &&
+    !detail.isDraft &&
+    !viewerHasApproved &&
     detail.viewer &&
+    detail.viewerPermissions.verdicts.includes("approve") &&
     detail.author?.login.toLowerCase() !== detail.viewer.toLowerCase() ? (
       <Button
         size="sm"
