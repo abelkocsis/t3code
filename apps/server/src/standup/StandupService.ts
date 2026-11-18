@@ -10,7 +10,11 @@ import {
   StandupDay,
   StandupError,
   type StandupGenerateInput,
+  type StandupInstructInput,
+  type StandupInstructResult,
   type StandupItem,
+  type StandupLearnInput,
+  type StandupLearnResult,
   type StandupSaveInput,
   type StandupState,
   type StandupStateInput,
@@ -52,6 +56,7 @@ import {
   type StandupPullRequestFact,
   type StandupTodoFact,
 } from "./standupFacts.ts";
+import { collectStandupEdits, reconcileInstructedItems } from "./standupEdits.ts";
 import { StandupStore } from "./StandupStore.ts";
 import { readLatestWorkInstantMs, readThreadFacts } from "./StandupWorkQuery.ts";
 
@@ -70,6 +75,12 @@ export class StandupService extends Context.Service<
       input: StandupUpdateItemsInput,
     ) => Effect.Effect<StandupSummary, StandupError>;
     readonly save: (input: StandupSaveInput) => Effect.Effect<StandupSummary, StandupError>;
+    /** A question or an instruction about the day's items. An instruction replaces the list. */
+    readonly instruct: (
+      input: StandupInstructInput,
+    ) => Effect.Effect<StandupInstructResult, StandupError>;
+    /** The lasting rules the day's edits show. Stores nothing. */
+    readonly learn: (input: StandupLearnInput) => Effect.Effect<StandupLearnResult, StandupError>;
   }
 >()("t3/standup/StandupService") {}
 
@@ -333,6 +344,20 @@ const make = Effect.gen(function* () {
     },
   );
 
+  const readSettings = settingsService.getSettings.pipe(
+    Effect.mapError(
+      (cause) =>
+        new StandupError({
+          reason: "generateFailed",
+          detail: "Server settings could not be read, so no model is selected.",
+          cause,
+        }),
+    ),
+  );
+
+  const learningTexts = (settings: { dailySummaryLearnings: ReadonlyArray<{ text: string }> }) =>
+    settings.dailySummaryLearnings.map((rule) => rule.text);
+
   const generate: StandupService["Service"]["generate"] = Effect.fn("StandupService.generate")(
     function* (input) {
       yield* assertDay(input.day);
@@ -345,16 +370,7 @@ const make = Effect.gen(function* () {
       }
 
       const previous = yield* store.read(input.day);
-      const settings = yield* settingsService.getSettings.pipe(
-        Effect.mapError(
-          (cause) =>
-            new StandupError({
-              reason: "generateFailed",
-              detail: "Server settings could not be read, so no model is selected.",
-              cause,
-            }),
-        ),
-      );
+      const settings = yield* readSettings;
 
       const evidence = renderStandupFacts(facts);
       const cwd = yield* resolveGenerationCwd;
@@ -370,6 +386,7 @@ const make = Effect.gen(function* () {
             .filter((item) => item.excluded)
             .map((item) => item.text),
           instructions: settings.dailySummaryInstructions,
+          learnings: learningTexts(settings),
           modelSelection: settings.textGenerationModelSelection,
         })
         .pipe(
@@ -411,6 +428,7 @@ const make = Effect.gen(function* () {
             text: item.text,
             source: item.source as StandupItem["source"],
             excluded: false,
+            generatedText: item.text,
           })),
           ...manualItems,
         ],
@@ -457,7 +475,128 @@ const make = Effect.gen(function* () {
     },
   );
 
-  return StandupService.of({ getState, generate, updateItems, save });
+  const instruct: StandupService["Service"]["instruct"] = Effect.fn("StandupService.instruct")(
+    function* (input) {
+      yield* assertDay(input.day);
+      const previous = yield* store.read(input.day);
+      if (previous === null) {
+        return yield* new StandupError({
+          reason: "noSummary",
+          detail: `No summary is stored for ${input.day}.`,
+        });
+      }
+      const settings = yield* readSettings;
+      const facts = yield* collectFacts(input.day, input.timeZone);
+      const evidence = renderStandupFacts(facts);
+      const cwd = yield* resolveGenerationCwd;
+      const result = yield* textGeneration
+        .instructDailySummary({
+          cwd,
+          day: input.day,
+          facts: evidence,
+          instructions: settings.dailySummaryInstructions,
+          learnings: learningTexts(settings),
+          items: previous.items,
+          instruction: input.instruction,
+          modelSelection: settings.textGenerationModelSelection,
+        })
+        .pipe(
+          Effect.mapError(
+            (cause) =>
+              new StandupError({
+                reason: "generateFailed",
+                detail: "The model could not answer.",
+                cause,
+              }),
+          ),
+        );
+
+      if (result.items === undefined) {
+        return {
+          reply: result.reply,
+          changed: false,
+          summary: previous,
+          ...(result.suggestedRule !== undefined ? { suggestedRule: result.suggestedRule } : {}),
+        };
+      }
+
+      // New wording gets the same guard as a generation. A row the user already
+      // had is theirs and passes as it is.
+      const knownNames = (yield* readProjectRoots).map((project) => project.title);
+      const previousTexts = new Set(previous.items.map((item) => item.text));
+      const supported: Array<(typeof result.items)[number]> = [];
+      for (const row of result.items) {
+        const reasons = previousTexts.has(row.text)
+          ? []
+          : findUnsupportedClaims({ text: row.text, evidence, knownNames });
+        if (reasons.length === 0) {
+          supported.push(row);
+          continue;
+        }
+        yield* Effect.logWarning(
+          "dropped an instructed standup item the evidence does not support",
+          {
+            day: input.day,
+            text: row.text,
+            reasons,
+          },
+        );
+      }
+      const stamp = yield* Clock.currentTimeMillis;
+      const items = reconcileInstructedItems({
+        previous: previous.items,
+        instructed: supported,
+        newId: (index) => `${input.day}-i${stamp}-${index}`,
+      });
+      const summary: StandupSummary = { ...previous, items };
+      yield* store.write(summary);
+      return {
+        reply: result.reply,
+        changed: true,
+        summary,
+        ...(result.suggestedRule !== undefined ? { suggestedRule: result.suggestedRule } : {}),
+      };
+    },
+  );
+
+  const learn: StandupService["Service"]["learn"] = Effect.fn("StandupService.learn")(
+    function* (input) {
+      yield* assertDay(input.day);
+      const stored = yield* store.read(input.day);
+      if (stored === null) {
+        return yield* new StandupError({
+          reason: "noSummary",
+          detail: `No summary is stored for ${input.day}.`,
+        });
+      }
+      const settings = yield* readSettings;
+      const edits = collectStandupEdits(stored.items);
+      const cwd = yield* resolveGenerationCwd;
+      const result = yield* textGeneration
+        .learnDailySummary({
+          cwd,
+          day: input.day,
+          instructions: settings.dailySummaryInstructions,
+          learnings: learningTexts(settings),
+          ...edits,
+          modelSelection: settings.textGenerationModelSelection,
+        })
+        .pipe(
+          Effect.mapError(
+            (cause) =>
+              new StandupError({
+                reason: "generateFailed",
+                detail: "The model could not read the edits.",
+                cause,
+              }),
+          ),
+        );
+      const known = new Set(settings.dailySummaryLearnings.map((rule) => rule.text.toLowerCase()));
+      return { proposals: result.rules.filter((rule) => !known.has(rule.text.toLowerCase())) };
+    },
+  );
+
+  return StandupService.of({ getState, generate, updateItems, save, instruct, learn });
 });
 
 export const layer = Layer.effect(StandupService, make);

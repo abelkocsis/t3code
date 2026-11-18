@@ -10,6 +10,8 @@ import type { ProviderTextGeneration } from "./textGeneration.ts";
 import {
   buildBranchNamePrompt,
   buildCommitMessagePrompt,
+  buildDailySummaryInstructPrompt,
+  buildDailySummaryLearnPrompt,
   buildDailySummaryPrompt,
   buildPrContentPrompt,
   buildReviewGuidePrompt,
@@ -17,7 +19,9 @@ import {
 } from "./textGenerationPrompts.ts";
 import {
   sanitizeCommitSubject,
+  sanitizeDailySummaryInstructItems,
   sanitizeDailySummaryItems,
+  sanitizeDailySummaryRules,
   sanitizePrTitle,
   sanitizeThreadTitle,
 } from "./textGenerationUtils.ts";
@@ -196,9 +200,56 @@ export function fromRunner(name: string, run: Runner): ProviderTextGeneration {
         keptItems: input.keptItems,
         excludedItems: input.excludedItems,
         instructions: input.instructions,
+        learnings: input.learnings,
       }),
     });
     return { items: sanitizeDailySummaryItems(generated.items) };
+  });
+
+  const instructDailySummary: ProviderTextGeneration["instructDailySummary"] = Effect.fn(
+    `${name}.instructDailySummary`,
+  )(function* (input) {
+    const generated = yield* run({
+      operation: "instructDailySummary",
+      cwd: input.cwd,
+      modelSelection: input.modelSelection,
+      ...buildDailySummaryInstructPrompt({
+        day: input.day,
+        facts: input.facts,
+        instructions: input.instructions,
+        learnings: input.learnings,
+        items: input.items,
+        instruction: input.instruction,
+      }),
+    });
+    const suggestedRule = generated.suggestedRule?.trim();
+    return {
+      reply: generated.reply.trim(),
+      ...(generated.items !== undefined
+        ? { items: sanitizeDailySummaryInstructItems(generated.items) }
+        : {}),
+      ...(suggestedRule !== undefined && suggestedRule.length > 0 ? { suggestedRule } : {}),
+    };
+  });
+
+  const learnDailySummary: ProviderTextGeneration["learnDailySummary"] = Effect.fn(
+    `${name}.learnDailySummary`,
+  )(function* (input) {
+    const generated = yield* run({
+      operation: "learnDailySummary",
+      cwd: input.cwd,
+      modelSelection: input.modelSelection,
+      ...buildDailySummaryLearnPrompt({
+        day: input.day,
+        instructions: input.instructions,
+        learnings: input.learnings,
+        edited: input.edited,
+        removed: input.removed,
+        added: input.added,
+        finalOrder: input.finalOrder,
+      }),
+    });
+    return { rules: sanitizeDailySummaryRules(generated.rules) };
   });
 
   return {
@@ -220,6 +271,8 @@ ${input.evidence}`,
     generateThreadTitle,
     generateReviewGuide,
     generateDailySummary,
+    instructDailySummary,
+    learnDailySummary,
     generateTranscriptionPostProcessing,
   } satisfies ProviderTextGeneration;
 }

@@ -29,13 +29,17 @@ import {
 import {
   buildBranchNamePrompt,
   buildCommitMessagePrompt,
+  buildDailySummaryInstructPrompt,
+  buildDailySummaryLearnPrompt,
   buildDailySummaryPrompt,
   buildPrContentPrompt,
   buildThreadTitlePrompt,
 } from "@t3tools/provider-core/server/textGenerationPrompts";
 import {
   sanitizeCommitSubject,
+  sanitizeDailySummaryInstructItems,
   sanitizeDailySummaryItems,
+  sanitizeDailySummaryRules,
   sanitizePrTitle,
   sanitizeThreadTitle,
   toJsonSchemaObject,
@@ -373,6 +377,33 @@ export const makeMuseTextGeneration = Effect.fn("makeMuseTextGeneration")(functi
     });
     return { items: sanitizeDailySummaryItems(generated.items) };
   });
+  const instructDailySummary: ProviderTextGeneration["instructDailySummary"] = Effect.fn(
+    "MuseTextGeneration.instructDailySummary",
+  )(function* (input) {
+    const generated = yield* runMuseJson({
+      operation: "instructDailySummary",
+      ...buildDailySummaryInstructPrompt(input),
+      modelSelection: input.modelSelection,
+    });
+    const suggestedRule = generated.suggestedRule?.trim();
+    return {
+      reply: generated.reply.trim(),
+      ...(generated.items !== undefined
+        ? { items: sanitizeDailySummaryInstructItems(generated.items) }
+        : {}),
+      ...(suggestedRule !== undefined && suggestedRule.length > 0 ? { suggestedRule } : {}),
+    };
+  });
+  const learnDailySummary: ProviderTextGeneration["learnDailySummary"] = Effect.fn(
+    "MuseTextGeneration.learnDailySummary",
+  )(function* (input) {
+    const generated = yield* runMuseJson({
+      operation: "learnDailySummary",
+      ...buildDailySummaryLearnPrompt(input),
+      modelSelection: input.modelSelection,
+    });
+    return { rules: sanitizeDailySummaryRules(generated.rules) };
+  });
   return {
     generateCommitMessage,
     generatePrContent,
@@ -380,6 +411,8 @@ export const makeMuseTextGeneration = Effect.fn("makeMuseTextGeneration")(functi
     generateThreadTitle,
     generateReviewGuide,
     generateDailySummary,
+    instructDailySummary,
+    learnDailySummary,
     generateTranscriptionPostProcessing,
   } satisfies ProviderTextGeneration;
 });

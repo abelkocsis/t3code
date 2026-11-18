@@ -51,6 +51,10 @@ import * as Schema from "effect/Schema";
 import {
   StandupError,
   StandupGenerateInput,
+  StandupInstructInput,
+  StandupInstructResult,
+  StandupLearnInput,
+  StandupLearnResult,
   StandupSaveInput,
   StandupState,
   StandupStateInput,
@@ -552,6 +556,8 @@ export const WS_METHODS = {
   serverGenerateStandupSummary: "server.generateStandupSummary",
   serverUpdateStandupItems: "server.updateStandupItems",
   serverSaveStandupSummary: "server.saveStandupSummary",
+  serverInstructStandupSummary: "server.instructStandupSummary",
+  serverLearnStandupSummary: "server.learnStandupSummary",
   serverGetTodoList: "server.getTodoList",
   serverSetTodoList: "server.setTodoList",
   forkReadGlobalAgentInstructions: "fork.agentInstructions.readGlobal",
@@ -908,6 +914,23 @@ const WsServerUpdateStandupItemsRpc = Rpc.make(WS_METHODS.serverUpdateStandupIte
 const WsServerSaveStandupSummaryRpc = Rpc.make(WS_METHODS.serverSaveStandupSummary, {
   payload: StandupSaveInput,
   success: StandupSummary,
+  error: Schema.Union([EnvironmentAuthorizationError, StandupError]),
+});
+
+/**
+ * Sends a question or an instruction to the model with the day's items and
+ * evidence. An instruction replaces the item list; a question leaves it alone.
+ */
+const WsServerInstructStandupSummaryRpc = Rpc.make(WS_METHODS.serverInstructStandupSummary, {
+  payload: StandupInstructInput,
+  success: StandupInstructResult,
+  error: Schema.Union([EnvironmentAuthorizationError, StandupError]),
+});
+
+/** Asks the model which lasting rules the day's edits show. Stores nothing. */
+const WsServerLearnStandupSummaryRpc = Rpc.make(WS_METHODS.serverLearnStandupSummary, {
+  payload: StandupLearnInput,
+  success: StandupLearnResult,
   error: Schema.Union([EnvironmentAuthorizationError, StandupError]),
 });
 
@@ -2398,6 +2421,8 @@ export const ForkWsRpcGroup = RpcGroup.make(
   WsServerGenerateStandupSummaryRpc,
   WsServerUpdateStandupItemsRpc,
   WsServerSaveStandupSummaryRpc,
+  WsServerInstructStandupSummaryRpc,
+  WsServerLearnStandupSummaryRpc,
   WsServerGetTodoListRpc,
   WsServerSetTodoListRpc,
   WsForkReadGlobalAgentInstructionsRpc,

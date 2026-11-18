@@ -752,6 +752,13 @@ export const SETTINGS_SEARCH_ITEMS = [
     searchTerms: ["daily summary standup recap prompt rules instructions"],
   },
   {
+    id: "daily-summary-learnings",
+    title: "Daily summary learned rules",
+    to: "/settings/general",
+    scope: "environment-defaults",
+    searchTerms: ["daily summary standup learned rules learnings preferences taught"],
+  },
+  {
     id: "factory-ignore-ci-enabled",
     title: "Enable Ignore CI in Code Factory",
     to: "/settings/general",

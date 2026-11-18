@@ -3,6 +3,8 @@ import { describe, expect, it } from "vite-plus/test";
 import {
   buildBranchNamePrompt,
   buildCommitMessagePrompt,
+  buildDailySummaryInstructPrompt,
+  buildDailySummaryLearnPrompt,
   buildDailySummaryPrompt,
   buildPrContentPrompt,
   buildReviewGuidePrompt,
@@ -13,7 +15,6 @@ import {
   sanitizeThreadTitle,
   toJsonSchemaObject,
 } from "./textGenerationUtils.ts";
-import { TextGenerationError } from "@t3tools/contracts";
 
 describe("buildCommitMessagePrompt", () => {
   it("includes staged patch and summary in the prompt", () => {
@@ -390,5 +391,65 @@ describe("buildDailySummaryPrompt", () => {
     expect(result.prompt).toContain("Return a JSON object with key: items.");
     expect(result.prompt).toContain("The day is 2026-10-26.");
     expect(result.prompt).toContain("commit abc fix cursor");
+  });
+
+  it("places the learned rules after the base rules and says they win", () => {
+    const result = buildDailySummaryPrompt({
+      day: "2026-10-26",
+      facts: "commit abc",
+      keptItems: [],
+      excludedItems: [],
+      instructions: "Base rules.",
+      learnings: ["Lead with the repository name."],
+    });
+
+    const base = result.prompt.indexOf("Base rules.");
+    const learned = result.prompt.indexOf("- Lead with the repository name.");
+    expect(base).toBeGreaterThanOrEqual(0);
+    expect(learned).toBeGreaterThan(base);
+    expect(result.prompt).toContain("these win");
+  });
+});
+
+describe("buildDailySummaryInstructPrompt", () => {
+  it("carries the item ids, the message and the evidence, and asks for reply, items and suggestedRule", () => {
+    const result = buildDailySummaryInstructPrompt({
+      day: "2026-10-26",
+      facts: "commit abc fix cursor",
+      instructions: "Base rules.",
+      items: [
+        { itemId: "2026-10-26-0", text: "Fixed the cursor", excluded: false },
+        { itemId: "2026-10-26-1", text: "Old item", excluded: true },
+      ],
+      instruction: "Merge these into one item",
+    });
+
+    expect(result.prompt).toContain("- [2026-10-26-0] Fixed the cursor");
+    expect(result.prompt).toContain("- [2026-10-26-1] (left out) Old item");
+    expect(result.prompt).toContain("Merge these into one item");
+    expect(result.prompt).toContain("commit abc fix cursor");
+    expect(result.prompt).toContain("Return a JSON object with keys: reply, items, suggestedRule.");
+  });
+});
+
+describe("buildDailySummaryLearnPrompt", () => {
+  it("renders the edit pairs, removals, additions, final order and the existing rules", () => {
+    const result = buildDailySummaryLearnPrompt({
+      day: "2026-10-26",
+      instructions: "Base rules.",
+      learnings: ["Existing rule."],
+      edited: [{ before: "Fixed cursor", after: "t3code: fixed the cursor" }],
+      removed: ["Internal refactor"],
+      added: ["Reviewed PR #12"],
+      finalOrder: ["t3code: fixed the cursor", "Reviewed PR #12"],
+    });
+
+    expect(result.prompt).toContain("- Existing rule.");
+    expect(result.prompt).toContain("- Before: Fixed cursor");
+    expect(result.prompt).toContain("  After: t3code: fixed the cursor");
+    expect(result.prompt).toContain("Items the user left out:\n- Internal refactor");
+    expect(result.prompt).toContain("Items the user added by hand:\n- Reviewed PR #12");
+    expect(result.prompt).toContain("1. t3code: fixed the cursor\n2. Reviewed PR #12");
+    expect(result.prompt).toContain("Return a JSON object with key: rules.");
   });
 });

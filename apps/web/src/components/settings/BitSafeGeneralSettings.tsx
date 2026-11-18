@@ -1,5 +1,9 @@
 import { useState } from "react";
 import { DEFAULT_UNIFIED_SETTINGS } from "@t3tools/contracts/settings";
+import type { DailySummaryLearning } from "@t3tools/contracts";
+import { Plus, X } from "lucide-react";
+import { Button } from "../ui/button";
+import { Input } from "../ui/input";
 import { Switch } from "../ui/switch";
 import { Textarea } from "../ui/textarea";
 import { SettingsRow, SettingResetButton } from "./settingsLayout";
@@ -37,6 +41,89 @@ function PromptTemplateField({
         setDraft(null);
       }}
     />
+  );
+}
+
+/**
+ * The rules the daily summary learned. Each row is deletable on its own, and a
+ * typed rule joins the list with the `manual` origin.
+ */
+function LearnedRulesField({
+  rules,
+  onChange,
+}: {
+  rules: readonly DailySummaryLearning[];
+  onChange: (next: readonly DailySummaryLearning[]) => void;
+}) {
+  const [draft, setDraft] = useState("");
+  const add = () => {
+    const text = draft.trim();
+    if (text.length === 0) return;
+    if (rules.some((rule) => rule.text.toLowerCase() === text.toLowerCase())) {
+      setDraft("");
+      return;
+    }
+    onChange([...rules, { text, addedAt: new Date().toISOString(), origin: "manual" }]);
+    setDraft("");
+  };
+  return (
+    <div className="flex w-full flex-col gap-1 sm:w-96">
+      {rules.length === 0 ? (
+        <p className="py-1 text-muted-foreground text-sm">
+          No learned rules yet. The daily summary panel offers them after you edit a summary.
+        </p>
+      ) : (
+        <ul className="flex flex-col gap-px">
+          {rules.map((rule, index) => (
+            <li
+              key={`${rule.addedAt}-${rule.text}`}
+              className="group flex items-start gap-1 py-0.5"
+            >
+              <span className="min-w-0 flex-1 text-sm leading-relaxed">
+                {rule.text}
+                <span className="ml-1 text-muted-foreground text-xs">
+                  {rule.origin === "learned"
+                    ? "learned"
+                    : rule.origin === "taught"
+                      ? "from the ask box"
+                      : "typed"}
+                  , {rule.addedAt.slice(0, 10)}
+                </span>
+              </span>
+              <span className="flex shrink-0 opacity-0 transition-opacity group-hover:opacity-100 has-focus-visible:opacity-100">
+                <Button
+                  variant="ghost"
+                  size="icon-sm"
+                  aria-label="Delete this rule"
+                  onClick={() => onChange(rules.filter((_, at) => at !== index))}
+                >
+                  <X className="size-3.5" />
+                </Button>
+              </span>
+            </li>
+          ))}
+        </ul>
+      )}
+      <form
+        className="flex items-center gap-1"
+        onSubmit={(event) => {
+          event.preventDefault();
+          add();
+        }}
+      >
+        <Input
+          size="sm"
+          className="min-w-0 flex-1"
+          placeholder="Add a rule"
+          aria-label="New rule"
+          value={draft}
+          onChange={(event) => setDraft(event.target.value)}
+        />
+        <Button type="submit" variant="ghost" size="icon-sm" aria-label="Add this rule">
+          <Plus className="size-4" />
+        </Button>
+      </form>
+    </div>
   );
 }
 
@@ -204,6 +291,18 @@ export function BitSafeGeneralSettings({
                 label="Daily summary prompt"
                 value={settings.dailySummaryInstructions}
                 onCommit={(next) => updateSettings({ dailySummaryInstructions: next })}
+              />
+            }
+          />
+          <SettingsRow
+            serverScoped
+            settingKeys={["dailySummaryLearnings"]}
+            {...searchableSetting("daily-summary-learnings")}
+            description="Rules the daily summary learned from your edits. They follow the prompt above and win where the two conflict. Resetting the prompt keeps them."
+            control={
+              <LearnedRulesField
+                rules={settings.dailySummaryLearnings}
+                onChange={(next) => updateSettings({ dailySummaryLearnings: next })}
               />
             }
           />

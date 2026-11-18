@@ -1,10 +1,18 @@
 import { useAtomValue } from "@effect/atom-react";
 import { StandupDay } from "@t3tools/contracts";
-import type { EnvironmentId, StandupItem, StandupState, StandupSummary } from "@t3tools/contracts";
+import type {
+  DailySummaryLearning,
+  EnvironmentId,
+  StandupItem,
+  StandupLearnProposal,
+  StandupState,
+  StandupSummary,
+} from "@t3tools/contracts";
 import * as Option from "effect/Option";
 import { AsyncResult, Atom } from "effect/reactivity";
 import { useState } from "react";
 
+import { useServerConfigs } from "./entities";
 import { serverEnvironment } from "./server";
 import { useAtomCommand } from "./use-atom-command";
 import { useAtomQueryRunner } from "./use-atom-query-runner";
@@ -51,6 +59,28 @@ export interface StandupView {
   /** Stores a new bullet order. The panel shows the drag result immediately. */
   readonly reorderItems: (items: readonly StandupItem[]) => Promise<void>;
   readonly save: () => Promise<void>;
+  /**
+   * Sends a question or an instruction to the model. The list changes in
+   * place when the model returns one; `undoInstruct` puts the old list back.
+   */
+  readonly instruct: (instruction: string) => Promise<InstructOutcome | null>;
+  readonly canUndoInstruct: boolean;
+  readonly undoInstruct: () => Promise<void>;
+  readonly isInstructing: boolean;
+  /** Asks the model which lasting rules the day's edits show. Saves nothing. */
+  readonly learn: () => Promise<readonly StandupLearnProposal[] | null>;
+  readonly isLearning: boolean;
+  /** Appends rules to the environment's learned-rules setting. */
+  readonly addLearnings: (
+    rules: readonly string[],
+    origin: DailySummaryLearning["origin"],
+  ) => Promise<void>;
+}
+
+export interface InstructOutcome {
+  readonly reply: string;
+  readonly changed: boolean;
+  readonly suggestedRule: string | null;
 }
 
 /** Renders the kept items the way the user pastes them into a chat message. */
@@ -81,6 +111,11 @@ export function useStandup(environmentId: EnvironmentId | null): StandupView {
   const timeZone = REPORTING_TIME_ZONE;
   const [requestedDay, setRequestedDay] = useState<StandupDay | null>(null);
   const [isGenerating, setIsGenerating] = useState(false);
+  const [isInstructing, setIsInstructing] = useState(false);
+  const [isLearning, setIsLearning] = useState(false);
+  /** The list before the last instruct that changed it, keyed by day so a day change drops it. */
+  const [undo, setUndo] = useState<{ day: StandupDay; items: readonly StandupItem[] } | null>(null);
+  const serverConfigs = useServerConfigs();
 
   const input = requestedDay === null ? { timeZone } : { timeZone, day: requestedDay };
   const key = environmentId === null ? null : JSON.stringify({ environmentId, input });
@@ -105,6 +140,15 @@ export function useStandup(environmentId: EnvironmentId | null): StandupView {
   });
   const runSave = useAtomCommand(serverEnvironment.saveStandupSummary, {
     label: "web-standup:save",
+  });
+  const runInstruct = useAtomCommand(serverEnvironment.instructStandupSummary, {
+    label: "web-standup:instruct",
+  });
+  const runLearn = useAtomCommand(serverEnvironment.learnStandupSummary, {
+    label: "web-standup:learn",
+  });
+  const runUpdateSettings = useAtomCommand(serverEnvironment.updateSettings, {
+    label: "web-standup:update-settings",
   });
 
   const reload = async () => {
@@ -162,6 +206,62 @@ export function useStandup(environmentId: EnvironmentId | null): StandupView {
 
   const text = formatStandupText(items);
 
+  const instruct = async (instruction: string): Promise<InstructOutcome | null> => {
+    const trimmed = instruction.trim();
+    if (environmentId === null || day === null || trimmed.length === 0) return null;
+    const before = items;
+    setIsInstructing(true);
+    const result = await runInstruct({
+      environmentId,
+      input: { day, timeZone, instruction: trimmed },
+    });
+    if (result._tag !== "Success") {
+      setIsInstructing(false);
+      return null;
+    }
+    if (result.value.changed) setUndo({ day, items: before });
+    await reload();
+    setIsInstructing(false);
+    return {
+      reply: result.value.reply,
+      changed: result.value.changed,
+      suggestedRule: result.value.suggestedRule ?? null,
+    };
+  };
+
+  const canUndoInstruct = undo !== null && undo.day === day;
+
+  const undoInstruct = async () => {
+    if (undo === null || undo.day !== day) return;
+    setUndo(null);
+    await writeItems(undo.items);
+  };
+
+  const learn = async () => {
+    if (environmentId === null || day === null) return null;
+    setIsLearning(true);
+    const result = await runLearn({ environmentId, input: { day, timeZone } });
+    setIsLearning(false);
+    return result._tag === "Success" ? result.value.proposals : null;
+  };
+
+  const addLearnings = async (rules: readonly string[], origin: DailySummaryLearning["origin"]) => {
+    if (environmentId === null) return;
+    const cleaned = rules.map((rule) => rule.trim()).filter((rule) => rule.length > 0);
+    if (cleaned.length === 0) return;
+    const current = serverConfigs.get(environmentId)?.settings.dailySummaryLearnings ?? [];
+    const known = new Set(current.map((rule) => rule.text.toLowerCase()));
+    const addedAt = new Date().toISOString();
+    const additions = cleaned
+      .filter((rule) => !known.has(rule.toLowerCase()))
+      .map((rule): DailySummaryLearning => ({ text: rule, addedAt, origin }));
+    if (additions.length === 0) return;
+    await runUpdateSettings({
+      environmentId,
+      input: { patch: { dailySummaryLearnings: [...current, ...additions] } },
+    });
+  };
+
   const save = async () => {
     if (environmentId === null || day === null) return;
     await runSave({ environmentId, input: { day, timeZone, text } });
@@ -184,6 +284,13 @@ export function useStandup(environmentId: EnvironmentId | null): StandupView {
     addItem,
     reorderItems: writeItems,
     save,
+    instruct,
+    canUndoInstruct,
+    undoInstruct,
+    isInstructing,
+    learn,
+    isLearning,
+    addLearnings,
   };
 }
 

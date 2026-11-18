@@ -41,6 +41,11 @@ export const BITSAFE_SETTING_LOCATIONS: Readonly<
     label: "General",
     hash: "daily-summary-instructions",
   },
+  "daily-summary-learnings": {
+    to: "/settings/general",
+    label: "General",
+    hash: "daily-summary-learnings",
+  },
   "factory-prompt-template": {
     to: "/settings/general",
     label: "General",

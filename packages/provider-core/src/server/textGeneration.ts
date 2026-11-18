@@ -114,7 +114,55 @@ export interface DailySummaryGenerationInput {
   excludedItems: ReadonlyArray<string>;
   /** The user's rules for the summary, from settings. */
   instructions: string;
+  /** Rules the user taught later. */
+  learnings?: ReadonlyArray<string> | undefined;
   modelSelection: ModelSelection;
+}
+
+export interface DailySummaryInstructInput {
+  cwd: string;
+  day: string;
+  facts: string;
+  instructions: string;
+  learnings?: ReadonlyArray<string> | undefined;
+  items: ReadonlyArray<{
+    readonly itemId: string;
+    readonly text: string;
+    readonly excluded: boolean;
+  }>;
+  instruction: string;
+  modelSelection: ModelSelection;
+}
+
+export interface DailySummaryInstructItem {
+  /** Empty for an item the model wrote new. */
+  itemId: string;
+  text: string;
+  source: string;
+  excluded: boolean;
+}
+
+export interface DailySummaryInstructResult {
+  reply: string;
+  /** Absent when the message was a question. */
+  items?: ReadonlyArray<DailySummaryInstructItem> | undefined;
+  suggestedRule?: string | undefined;
+}
+
+export interface DailySummaryLearnInput {
+  cwd: string;
+  day: string;
+  instructions: string;
+  learnings: ReadonlyArray<string>;
+  edited: ReadonlyArray<{ readonly before: string; readonly after: string }>;
+  removed: ReadonlyArray<string>;
+  added: ReadonlyArray<string>;
+  finalOrder: ReadonlyArray<string>;
+  modelSelection: ModelSelection;
+}
+
+export interface DailySummaryLearnResult {
+  rules: ReadonlyArray<{ readonly text: string; readonly basis: string }>;
 }
 
 export interface DailySummaryGenerationItem {
@@ -171,4 +219,14 @@ export interface ProviderTextGeneration {
   readonly generateDailySummary: (
     input: DailySummaryGenerationInput,
   ) => Effect.Effect<DailySummaryGenerationResult, TextGenerationError>;
+
+  /** A question or an instruction about one day's bullets. */
+  readonly instructDailySummary: (
+    input: DailySummaryInstructInput,
+  ) => Effect.Effect<DailySummaryInstructResult, TextGenerationError>;
+
+  /** The lasting rules one day's edits show. */
+  readonly learnDailySummary: (
+    input: DailySummaryLearnInput,
+  ) => Effect.Effect<DailySummaryLearnResult, TextGenerationError>;
 }

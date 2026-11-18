@@ -1248,6 +1248,14 @@ export function createServerEnvironmentAtoms<R, E>(
       label: "environment-data:server:save-standup-summary",
       tag: WS_METHODS.serverSaveStandupSummary,
     }),
+    instructStandupSummary: createEnvironmentRpcCommand(runtime, {
+      label: "environment-data:server:instruct-standup-summary",
+      tag: WS_METHODS.serverInstructStandupSummary,
+    }),
+    learnStandupSummary: createEnvironmentRpcCommand(runtime, {
+      label: "environment-data:server:learn-standup-summary",
+      tag: WS_METHODS.serverLearnStandupSummary,
+    }),
     // A short list read from one file. Another device may have changed it, so
     // the panel re-reads rather than trusting what it last wrote.
     todoList: createEnvironmentRpcQueryAtomFamily(runtime, {

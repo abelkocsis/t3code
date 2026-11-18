@@ -288,6 +288,10 @@ export const makeManagedCodexProvider = Effect.fn("makeManagedCodexProvider")(fu
       protect("generateReviewGuide", nativeGeneration.generateReviewGuide(value)),
     generateDailySummary: (value) =>
       protect("generateDailySummary", nativeGeneration.generateDailySummary(value)),
+    instructDailySummary: (value) =>
+      protect("instructDailySummary", nativeGeneration.instructDailySummary(value)),
+    learnDailySummary: (value) =>
+      protect("learnDailySummary", nativeGeneration.learnDailySummary(value)),
     generateTranscriptionPostProcessing: (value) =>
       protect(
         "generateTranscriptionPostProcessing",

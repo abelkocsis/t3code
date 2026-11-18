@@ -1,17 +1,7 @@
 /**
- * Daily summary contract.
- *
- * The server assembles one day of work from every source it can already read -
- * its own orchestration projections, `git log` in each project worktree, the
- * repositories' pull requests and issues, and the provider CLIs' on-disk
- * session transcripts - and asks the model to write it up as standup bullets.
- *
- * A summary is a list of items rather than one blob of text, so the client can
- * drop a bullet or add one without asking the model again. The text the user
- * finally saves is kept, and later generations receive the most recent saved
- * texts as style examples.
- *
- * @module standup
+ * A summary is a list of items, not one text, so the client can drop, edit or
+ * add a bullet without the model. No saved text feeds a later day: the model
+ * reads it as evidence and reports old work again. Style travels as rules.
  */
 import * as Schema from "effect/Schema";
 
@@ -77,8 +67,34 @@ export const StandupItem = Schema.Struct({
    * can put it back and so a regeneration can keep the same choice.
    */
   excluded: Schema.Boolean,
+  /**
+   * The text the model wrote, kept when the user edits `text`. The learn step
+   * compares the two. Absent on typed items and on items stored before this
+   * field existed.
+   */
+  generatedText: Schema.optional(TrimmedNonEmptyString),
 });
 export type StandupItem = typeof StandupItem.Type;
+
+/** True when the user changed, dropped or added a bullet since the model wrote the list. */
+export function hasStandupEdits(items: ReadonlyArray<StandupItem>): boolean {
+  return items.some(
+    (item) =>
+      item.source === "manual" ||
+      item.excluded ||
+      (item.generatedText !== undefined && item.generatedText !== item.text),
+  );
+}
+
+/** A rule the user taught the daily summary. It lives beside the base prompt, never inside it. */
+export const DailySummaryLearning = Schema.Struct({
+  text: TrimmedNonEmptyString,
+  /** UTC instant the rule was saved. */
+  addedAt: TrimmedNonEmptyString,
+  /** `learned` from the learn step, `taught` from the ask box, `manual` from settings. */
+  origin: Schema.Literals(["learned", "taught", "manual"]),
+});
+export type DailySummaryLearning = typeof DailySummaryLearning.Type;
 
 export const StandupSummary = Schema.Struct({
   day: StandupDay,
@@ -147,6 +163,43 @@ export const StandupSaveInput = Schema.Struct({
 });
 export type StandupSaveInput = typeof StandupSaveInput.Type;
 
+export const StandupInstructInput = Schema.Struct({
+  day: StandupDay,
+  timeZone: TrimmedNonEmptyString,
+  /** A question about the day, or an instruction that changes the list. */
+  instruction: TrimmedNonEmptyString.check(Schema.isMaxLength(4_000)),
+});
+export type StandupInstructInput = typeof StandupInstructInput.Type;
+
+export const StandupInstructResult = Schema.Struct({
+  /** The model's answer, or one line that says what it changed. */
+  reply: Schema.String,
+  /** True when `summary.items` differ from before the instruction. */
+  changed: Schema.Boolean,
+  summary: StandupSummary,
+  /** A lasting rule the model read in the instruction, offered for the learnings list. */
+  suggestedRule: Schema.optional(TrimmedNonEmptyString),
+});
+export type StandupInstructResult = typeof StandupInstructResult.Type;
+
+export const StandupLearnInput = Schema.Struct({
+  day: StandupDay,
+  timeZone: TrimmedNonEmptyString,
+});
+export type StandupLearnInput = typeof StandupLearnInput.Type;
+
+export const StandupLearnProposal = Schema.Struct({
+  text: TrimmedNonEmptyString,
+  /** The edit the rule was read from, so the user can judge it. */
+  basis: Schema.String,
+});
+export type StandupLearnProposal = typeof StandupLearnProposal.Type;
+
+export const StandupLearnResult = Schema.Struct({
+  proposals: Schema.Array(StandupLearnProposal),
+});
+export type StandupLearnResult = typeof StandupLearnResult.Type;
+
 export class StandupError extends Schema.TaggedError<StandupError>()("StandupError", {
   reason: Schema.Literals([
     "collectFailed",
@@ -154,6 +207,7 @@ export class StandupError extends Schema.TaggedError<StandupError>()("StandupErr
     "storeFailed",
     "invalidDay",
     "noWork",
+    "noSummary",
   ]),
   /** Stable, bounded description. The underlying failure travels in `cause`. */
   detail: TrimmedNonEmptyString,

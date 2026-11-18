@@ -37,6 +37,27 @@ you, so you can lead with the work that matters most.
 Type into the box at the bottom to add a bullet the summary missed. Your own bullets survive a
 regeneration word for word.
 
+## Asking the model
+
+Switch the box at the bottom from **Add** to **Ask** to talk to the model about the day. A
+question, such as "what did I do in the API repo?", gets an answer under the list. An instruction,
+such as "merge the first two bullets" or "add a bullet about the release", changes the list at
+once. **Undo** under the reply puts the previous list back.
+
+When an instruction reads like a lasting preference, such as "always lead with the repository
+name", the reply offers **Remember**. Pressing it saves the rule for every later summary.
+
+## Teaching it your style
+
+After you rewrite, drop, add or reorder bullets, press the **Learn from my edits** button in the
+panel header. The model reads what you changed and proposes rules it could follow on other days.
+Tick the ones you want, change their wording if you like, and save. It never saves a rule on its
+own, and it only reads the day on screen.
+
+Saved rules live under **Settings → General → Daily summary learned rules**, where you can delete
+them one by one or type a new one. They follow the daily summary prompt and win where the two
+conflict. Resetting the prompt keeps them.
+
 ## Other days
 
 Use the arrows in the panel header to step to another date. Another day shows its stored summary

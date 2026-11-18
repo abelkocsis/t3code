@@ -51,6 +51,8 @@ type TextGenerationOp =
   | "generateThreadTitle"
   | "generateReviewGuide"
   | "generateDailySummary"
+  | "instructDailySummary"
+  | "learnDailySummary"
   | "generateTranscriptionPostProcessing";
 
 const resolveInstance = (
@@ -159,6 +161,16 @@ export const make = Effect.gen(function* () {
     generateDailySummary: Effect.fn("TextGeneration.generateDailySummary")(function (input) {
       return generate("generateDailySummary", input.modelSelection, (service, modelSelection) =>
         service.generateDailySummary({ ...input, modelSelection }),
+      );
+    }),
+    instructDailySummary: Effect.fn("TextGeneration.instructDailySummary")(function (input) {
+      return generate("instructDailySummary", input.modelSelection, (service, modelSelection) =>
+        service.instructDailySummary({ ...input, modelSelection }),
+      );
+    }),
+    learnDailySummary: Effect.fn("TextGeneration.learnDailySummary")(function (input) {
+      return generate("learnDailySummary", input.modelSelection, (service, modelSelection) =>
+        service.learnDailySummary({ ...input, modelSelection }),
       );
     }),
     generateCommitMessage: Effect.fn("TextGeneration.generateCommitMessage")(function (input) {

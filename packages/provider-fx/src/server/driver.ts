@@ -58,6 +58,8 @@ const unsupportedTextGeneration: ProviderTextGeneration = (() => {
     generateThreadTitle: () => unsupported("generateThreadTitle"),
     generateReviewGuide: () => unsupported("generateReviewGuide"),
     generateDailySummary: () => unsupported("generateDailySummary"),
+    instructDailySummary: () => unsupported("instructDailySummary"),
+    learnDailySummary: () => unsupported("learnDailySummary"),
     generateTranscriptionPostProcessing: () => unsupported("generateTranscriptionPostProcessing"),
   };
 })();

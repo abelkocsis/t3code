@@ -165,6 +165,16 @@ function selectOpenCodeRuntimeTextGeneration(
         v1: v1.generateDailySummary(input),
         v2: v2.generateDailySummary(input),
       }),
+    instructDailySummary: (input) =>
+      byOpenCodeRuntime(probe.get, {
+        v1: v1.instructDailySummary(input),
+        v2: v2.instructDailySummary(input),
+      }),
+    learnDailySummary: (input) =>
+      byOpenCodeRuntime(probe.get, {
+        v1: v1.learnDailySummary(input),
+        v2: v2.learnDailySummary(input),
+      }),
     generateTranscriptionPostProcessing: (input) =>
       byOpenCodeRuntime(probe.get, {
         v1: v1.generateTranscriptionPostProcessing(input),

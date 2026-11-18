@@ -94,6 +94,72 @@ const MAX_DAILY_SUMMARY_ITEM_CHARS = 500;
  * bullet character and quotes, drops blanks and duplicates, caps the length of
  * each item and the count, and maps an unknown source back to `thread`.
  */
+/** One bullet as the model wrote it, cleaned the way `sanitizeDailySummaryItems` cleans. Empty when nothing is left. */
+function cleanDailySummaryText(raw: string): string {
+  const text = raw
+    .replace(/\s+/g, " ")
+    .trim()
+    .replace(/^[-*•]\s*/, "")
+    .replace(/^['"`]+|['"`]+$/g, "")
+    .trim();
+  return text.length <= MAX_DAILY_SUMMARY_ITEM_CHARS
+    ? text
+    : `${text.slice(0, MAX_DAILY_SUMMARY_ITEM_CHARS - 3).trimEnd()}...`;
+}
+
+/**
+ * The list an instruction produced. Unlike a generation, it may keep an
+ * excluded item and a manual one, so only blank and duplicate rows go.
+ */
+export function sanitizeDailySummaryInstructItems(
+  raw: ReadonlyArray<{
+    readonly itemId?: string | undefined;
+    readonly text: string;
+    readonly source?: string | undefined;
+    readonly excluded?: boolean | undefined;
+  }>,
+): ReadonlyArray<{
+  readonly itemId: string;
+  readonly text: string;
+  readonly source: string;
+  readonly excluded: boolean;
+}> {
+  const seen = new Set<string>();
+  const items: Array<{ itemId: string; text: string; source: string; excluded: boolean }> = [];
+  for (const candidate of raw) {
+    const text = cleanDailySummaryText(candidate.text);
+    if (text.length === 0) continue;
+    const key = text.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    const source = candidate.source ?? "";
+    items.push({
+      itemId: candidate.itemId?.trim() ?? "",
+      text,
+      source: source === "manual" || DAILY_SUMMARY_SOURCES.has(source) ? source : "thread",
+      excluded: candidate.excluded === true,
+    });
+  }
+  return items;
+}
+
+/** Rules the learn step proposed. Blank and duplicate rules go. */
+export function sanitizeDailySummaryRules(
+  raw: ReadonlyArray<{ readonly text: string; readonly basis?: string | undefined }>,
+): ReadonlyArray<{ readonly text: string; readonly basis: string }> {
+  const seen = new Set<string>();
+  const rules: Array<{ text: string; basis: string }> = [];
+  for (const candidate of raw) {
+    const text = cleanDailySummaryText(candidate.text);
+    if (text.length === 0) continue;
+    const key = text.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    rules.push({ text, basis: candidate.basis?.replace(/\s+/g, " ").trim() ?? "" });
+  }
+  return rules;
+}
+
 export function sanitizeDailySummaryItems(
   raw: ReadonlyArray<{ readonly text: string; readonly source: string }>,
 ): ReadonlyArray<{ readonly text: string; readonly source: string }> {

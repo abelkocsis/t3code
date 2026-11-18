@@ -53,7 +53,7 @@ import {
   ProviderDriverKind,
 } from "./providerInstance.ts";
 import { DEFAULT_FACTORY_PROMPT_TEMPLATE, FactoryFolder } from "./factory.ts";
-import { DEFAULT_DAILY_SUMMARY_INSTRUCTIONS } from "./standup.ts";
+import { DEFAULT_DAILY_SUMMARY_INSTRUCTIONS, DailySummaryLearning } from "./standup.ts";
 import { PullRequestMergeMethod } from "./pullRequest.ts";
 import {
   SpeechAcceleration,
@@ -1418,6 +1418,10 @@ export const ServerSettings = Schema.Struct({
   dailySummaryInstructions: TrimmedString.pipe(
     Schema.withDecodingDefault(Effect.succeed(DEFAULT_DAILY_SUMMARY_INSTRUCTIONS)),
   ),
+  /** Rules the user taught the daily summary. They follow the base prompt and win on conflict. */
+  dailySummaryLearnings: Schema.Array(DailySummaryLearning).pipe(
+    Schema.withDecodingDefault(Effect.succeed([])),
+  ),
   compactIdleThreads: LegacyCompactIdleThreads.pipe(
     Schema.withDecodingDefault(Effect.succeed(false)),
   ),
@@ -1841,6 +1845,7 @@ export const ServerSettingsPatch = Schema.Struct({
   factoryIgnoreCiEnabled: Schema.optionalKey(Schema.Boolean),
   factoryIgnoreCi: Schema.optionalKey(Schema.Boolean),
   dailySummaryInstructions: Schema.optionalKey(TrimmedString),
+  dailySummaryLearnings: Schema.optionalKey(Schema.Array(DailySummaryLearning)),
   compactIdleThreads: Schema.optionalKey(LegacyCompactIdleThreads),
   idleCompaction: Schema.optionalKey(IdleCompactionMode),
   sidebarAutoSettleKeepPullRequests: Schema.optionalKey(Schema.Boolean),

@@ -20,6 +20,8 @@ const OpenCodeTextGenerationOperation = Schema.Literals([
   "generateThreadTitle",
   "generateReviewGuide",
   "generateDailySummary",
+  "instructDailySummary",
+  "learnDailySummary",
   "generateTranscriptionPostProcessing",
 ]);
 
