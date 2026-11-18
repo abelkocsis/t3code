@@ -604,6 +604,8 @@ it.effect.each(PREFLIGHT_PRIMARY_STATES)("text generation preflight: %s", (prima
           generateBranchName: () => Effect.die("unused"),
           generateReviewGuide: () => Effect.die("unused"),
           generateDailySummary: () => Effect.die("Daily summary not configured"),
+          instructDailySummary: () => Effect.die("Daily summary not configured"),
+          learnDailySummary: () => Effect.die("Daily summary not configured"),
           generateTranscriptionPostProcessing: () => Effect.die("unused"),
           generateThreadTitle: (input) =>
             Effect.sync(() => {

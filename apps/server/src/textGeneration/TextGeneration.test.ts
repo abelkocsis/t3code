@@ -29,6 +29,9 @@ const makeStubTextGeneration = (
     generateTranscriptionPostProcessing: () => Effect.die("Transcription not configured"),
     generateDailySummary: () =>
       Effect.die("generateDailySummary stub not configured for this test"),
+    instructDailySummary: () =>
+      Effect.die("instructDailySummary stub not configured for this test"),
+    learnDailySummary: () => Effect.die("learnDailySummary stub not configured for this test"),
     ...overrides,
   });
 

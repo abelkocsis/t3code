@@ -44,6 +44,8 @@ const dependencies = Layer.mergeAll(
       generateThreadTitle: () => Effect.die("not used"),
       generateReviewGuide: () => Effect.die("not used"),
       generateDailySummary: () => Effect.die("Daily summary not configured"),
+      instructDailySummary: () => Effect.die("Daily summary not configured"),
+      learnDailySummary: () => Effect.die("Daily summary not configured"),
       generateTranscriptionPostProcessing: () => Effect.die("not used"),
     }),
   ),

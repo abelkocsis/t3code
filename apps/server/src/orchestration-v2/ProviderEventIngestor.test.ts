@@ -259,6 +259,8 @@ it.effect("refreshes the failing instance snapshot after a committed usage_limit
           generateThreadTitle: () => Effect.die("unused"),
           generateReviewGuide: () => Effect.die("unused"),
           generateDailySummary: () => Effect.die("Daily summary not configured"),
+          instructDailySummary: () => Effect.die("Daily summary not configured"),
+          learnDailySummary: () => Effect.die("Daily summary not configured"),
           generateTranscriptionPostProcessing: () => Effect.die("unused"),
         },
         snapshot: {

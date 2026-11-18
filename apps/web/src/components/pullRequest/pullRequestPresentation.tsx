@@ -336,7 +336,7 @@ export function PullRequestReviewOutcomeIcon({
   className,
 }: {
   outcome: PullRequestReviewOutcome;
-  className?: string;
+  className?: string | undefined;
 }) {
   const presentation = REVIEW_OUTCOME_PRESENTATION[outcome];
   return (

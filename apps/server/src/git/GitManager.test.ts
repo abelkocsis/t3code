@@ -292,6 +292,8 @@ function createTextGeneration(
       }),
     generateReviewGuide: () => Effect.succeed({ stops: [] }),
     generateDailySummary: () => Effect.succeed({ items: [] }),
+    instructDailySummary: () => Effect.succeed({ reply: "" }),
+    learnDailySummary: () => Effect.succeed({ rules: [] }),
     generateTranscriptionPostProcessing: () =>
       Effect.succeed({ transcription: "processed transcript" }),
     ...overrides,
@@ -344,6 +346,8 @@ function createTextGeneration(
       ),
     generateReviewGuide: (input) => implementation.generateReviewGuide(input),
     generateDailySummary: (input) => implementation.generateDailySummary(input),
+    instructDailySummary: (input) => implementation.instructDailySummary(input),
+    learnDailySummary: (input) => implementation.learnDailySummary(input),
     generateTranscriptionPostProcessing: (input) =>
       implementation.generateTranscriptionPostProcessing(input),
   };
