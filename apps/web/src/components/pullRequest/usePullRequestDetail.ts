@@ -134,6 +134,11 @@ export function usePullRequestDetail(
           deletions: sharedSummary.deletions ?? resolvedCoreDetail.deletions,
           changedFiles: sharedSummary.changedFiles ?? resolvedCoreDetail.changedFiles,
           mergeability: sharedSummary.mergeability ?? resolvedCoreDetail.mergeability,
+          mergeState: sharedSummary.mergeState ?? resolvedCoreDetail.mergeState,
+          reviewDecision:
+            sharedSummary.reviewDecision === undefined
+              ? resolvedCoreDetail.reviewDecision
+              : sharedSummary.reviewDecision,
           closedAt:
             sharedSummary.closedAt === undefined
               ? resolvedCoreDetail.closedAt
