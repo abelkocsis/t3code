@@ -359,6 +359,7 @@ const cleanupFixture = (
     let fullStatusCalls = 0;
     let snapshotReads = 0;
     let pullRequest: GitManager.GitBranchPullRequest | null = null;
+    const pullRequestBranches: string[] = [];
     let terminalListener: ((event: TerminalMetadataStreamEvent) => Effect.Effect<void>) | undefined;
     let events: Stream.Stream<OrchestrationV2DomainEvent> = Stream.empty;
     const activated = yield* Deferred.make<void>();
@@ -469,7 +470,11 @@ const cleanupFixture = (
         )) as unknown as SqlClient.SqlClient),
       Effect.provideService(GitManager.GitManager, {
         invalidateStatus: () => Effect.void,
-        branchPullRequest: () => Effect.sync(() => pullRequest),
+        branchPullRequest: (input: { branch: string }) =>
+          Effect.sync(() => {
+            pullRequestBranches.push(input.branch);
+            return pullRequest;
+          }),
       } as unknown as GitManager.GitManager["Service"]),
       Effect.provideService(TerminalManager.TerminalManager, {
         subscribeMetadata: (
@@ -485,6 +490,7 @@ const cleanupFixture = (
     return {
       service: Context.get(context, StorageCleanup.StorageCleanup),
       repo,
+      pullRequestBranches,
       setTerminals: (terminals: TerminalSummary[]) =>
         terminalListener?.({ type: "snapshot", terminals }) ?? Effect.void,
       editBeforeRemoval: () => {
@@ -2297,14 +2303,15 @@ describe("storage cleanup reports and local file policies", () => {
       Effect.gen(function* () {
         const { service, fs, repo, worktree, command, setThreads, fullStatusCalls } =
           yield* cleanupFixture();
-        const changed = { outcome: "kept", reason: "Repository or branch changed" };
+        // A switched or detached checkout still goes through the rules; a running thread keeps it.
+        const active = { outcome: "kept", reason: "Thread is running or has pending work" };
+        setThreads([shell({ branch: "feature", worktreePath: worktree, status: "running" })]);
         yield* command(worktree, ["checkout", "--detach"]);
-        expect((yield* service.runNow).entries[0]).toMatchObject(changed);
+        expect((yield* service.runNow).entries[0]).toMatchObject(active);
         yield* command(worktree, ["switch", "--orphan", "other"]);
-        expect((yield* service.runNow).entries[0]).toMatchObject(changed);
+        expect((yield* service.runNow).entries[0]).toMatchObject(active);
         yield* command(worktree, ["switch", "-c", "(feature)", "feature"]);
-        setThreads([shell({ branch: "(feature)", worktreePath: worktree })]);
-        expect((yield* service.runNow).entries[0]).toMatchObject(changed);
+        expect((yield* service.runNow).entries[0]).toMatchObject(active);
         setThreads([shell({ branch: "feature", worktreePath: worktree })]);
         yield* command(worktree, ["tag", "feature", "feature"]);
         // Newer Git refuses to create a tag named HEAD, but still reads one.
@@ -2325,7 +2332,10 @@ describe("storage cleanup reports and local file policies", () => {
         yield* fs.remove(`${index.trim()}.lock`);
         const gitFile = yield* fs.readFileString(`${worktree}/.git`);
         yield* fs.writeFileString(`${worktree}/.git`, "gitdir: /missing-git-directory\n");
-        expect((yield* service.runNow).entries[0]).toMatchObject(changed);
+        expect((yield* service.runNow).entries[0]).toMatchObject({
+          outcome: "kept",
+          reason: "Repository changed",
+        });
         yield* fs.writeFileString(`${worktree}/.git`, gitFile);
         expect((yield* service.runNow).entries[0]).toMatchObject({ outcome: "removed" });
         expect(fullStatusCalls()).toBe(0);
@@ -2471,6 +2481,57 @@ describe("storage cleanup reports and local file policies", () => {
           reason: outcome === "removed" ? "Pull request was merged" : "Not merged",
         });
         expect(yield* fs.exists(worktree)).toBe(outcome === "kept");
+      }),
+    ),
+  );
+  it.live("judges the branch the agent switched to, not the recorded one", () =>
+    runCleanupTest(
+      Effect.gen(function* () {
+        const { service, fs, repo, worktree, command, setPullRequest, pullRequestBranches } =
+          yield* cleanupFixture({ ...OFF_CLEANUP, worktreeOnDelete: false, worktreeOnMerge: true });
+        const remote = yield* fs.makeTempDirectoryScoped({ prefix: "cleanup-remote-" });
+        yield* command(remote, ["init", "--bare", "-b", "main"]);
+        yield* command(repo, ["remote", "add", "origin", remote]);
+        yield* command(worktree, ["switch", "-c", "other"]);
+        yield* fs.writeFileString(`${worktree}/tracked.txt`, "other work\n");
+        yield* command(worktree, ["commit", "-am", "other work"]);
+        yield* command(repo, ["merge", "--squash", "other"]);
+        yield* command(repo, ["commit", "-m", "other (#1)"]);
+        yield* command(repo, ["push", "origin", "main"]);
+        setPullRequest({
+          number: 1,
+          title: "other",
+          url: "https://example.test/pr/1",
+          baseRef: "main",
+          headRef: "other",
+          state: "merged",
+          repositoryKey: null,
+          updatedAt: null,
+          headSha: null,
+        });
+        const report = yield* service.runNow;
+        yield* service.drain;
+        expect(report.entries[0]).toMatchObject({
+          outcome: "removed",
+          reason: "Pull request was merged",
+        });
+        expect(pullRequestBranches).toEqual(["other"]);
+        expect(yield* fs.exists(worktree)).toBe(false);
+      }),
+    ),
+  );
+  it.live("removes an inactive worktree left on a detached HEAD", () =>
+    runCleanupTest(
+      Effect.gen(function* () {
+        const { service, fs, worktree, command } = yield* cleanupFixture();
+        yield* command(worktree, ["checkout", "--detach"]);
+        const report = yield* service.runNow;
+        yield* service.drain;
+        expect(report.entries[0]).toMatchObject({
+          outcome: "removed",
+          reason: expect.stringMatching(/^Inactive for \d+ days$/),
+        });
+        expect(yield* fs.exists(worktree)).toBe(false);
       }),
     ),
   );
