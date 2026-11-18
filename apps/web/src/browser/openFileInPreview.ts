@@ -82,7 +82,7 @@ export async function openUrlInPreview<E>(input: {
 }
 
 /**
- * Opens a browser document in the integrated browser. Inside the workspace the
+ * Opens a browser document, using the external opener when supplied. Inside the workspace the
  * page may load sibling assets; a file outside it is served on its own.
  */
 export async function openFileInPreview<AssetError, PreviewError>(input: {
@@ -95,13 +95,14 @@ export async function openFileInPreview<AssetError, PreviewError>(input: {
     readonly input: { readonly resource: AssetResource };
   }) => Promise<AtomCommandResult<AssetCreateUrlResult, AssetError>>;
   readonly openPreview: OpenPreviewMutation<PreviewError>;
+  readonly openExternal?: (url: string) => Promise<unknown>;
 }): Promise<
   AtomCommandResult<
     void,
     AssetError | PreviewError | BrowserPreviewUnavailableError | BrowserSettingsReadError
   >
 > {
-  if (!isPreviewSupportedInRuntime()) {
+  if (!input.openExternal && !isPreviewSupportedInRuntime()) {
     return AsyncResult.failure(
       Cause.fail(
         new BrowserPreviewUnavailableError({
@@ -130,6 +131,10 @@ export async function openFileInPreview<AssetError, PreviewError>(input: {
     return AsyncResult.failure(
       Cause.die(new Error("The environment returned an invalid asset URL.")),
     );
+  }
+  if (input.openExternal) {
+    await input.openExternal(assetUrl);
+    return AsyncResult.success(undefined);
   }
   return openUrlInPreview({
     threadRef: input.threadRef,

@@ -23,6 +23,8 @@ import { Code2, Eye, FolderTree, Globe2 } from "lucide-react";
 import * as Schema from "effect/Schema";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
+import { readLocalApi } from "~/localApi";
+import { resolveBrowserLinkTargetPreference } from "~/browser/browserLinkTarget";
 import { isBrowserPreviewFile, openFileInPreview } from "~/browser/openFileInPreview";
 import { useAssetUrlRefresh, useAssetUrlState } from "~/assets/assetUrls";
 import { OpenInPicker } from "~/components/chat/OpenInPicker";
@@ -1036,7 +1038,6 @@ export default function FilePreviewPanel({
     relativePath !== null &&
     attachment === undefined &&
     !isVideo &&
-    isPreviewSupportedInRuntime() &&
     isBrowserPreviewFile(relativePath);
   const absolutePath =
     relativePath && attachment === undefined ? resolvePathLinkTarget(relativePath, cwd) : null;
@@ -1075,6 +1076,7 @@ export default function FilePreviewPanel({
   const handleOpenInBrowser = useCallback(() => {
     if (!absolutePath || !environmentHttpBaseUrl) return;
     void (async () => {
+      const preference = await resolveBrowserLinkTargetPreference();
       const result = await openFileInPreview({
         threadRef,
         filePath: absolutePath,
@@ -1082,6 +1084,15 @@ export default function FilePreviewPanel({
         httpBaseUrl: environmentHttpBaseUrl,
         createAssetUrl,
         openPreview,
+        ...(preference === "system" || !isPreviewSupportedInRuntime()
+          ? {
+              openExternal: async (url: string) => {
+                const api = readLocalApi();
+                if (!api) throw new Error("The browser opener is unavailable.");
+                await api.shell.openExternal(url);
+              },
+            }
+          : {}),
       });
       if (result._tag === "Success" || isAtomCommandInterrupted(result)) {
         return;
@@ -1094,7 +1105,15 @@ export default function FilePreviewPanel({
           description: error instanceof Error ? error.message : "An error occurred.",
         }),
       );
-    })();
+    })().catch((error: unknown) => {
+      toastManager.add(
+        stackedThreadToast({
+          type: "error",
+          title: "Unable to open file in browser",
+          description: error instanceof Error ? error.message : "An error occurred.",
+        }),
+      );
+    });
   }, [absolutePath, createAssetUrl, cwd, environmentHttpBaseUrl, openPreview, threadRef]);
 
   return (
@@ -1179,7 +1198,7 @@ export default function FilePreviewPanel({
                     className="shrink-0"
                     pressed={false}
                     onPressedChange={handleOpenInBrowser}
-                    aria-label="Open file in preview browser"
+                    aria-label="Open file in browser"
                     variant="ghost"
                     size="sm"
                   >
@@ -1187,7 +1206,7 @@ export default function FilePreviewPanel({
                   </Toggle>
                 }
               />
-              <TooltipPopup>Open file in preview browser</TooltipPopup>
+              <TooltipPopup>Open file in browser</TooltipPopup>
             </Tooltip>
           ) : null}
           {!isHostFile ? (
